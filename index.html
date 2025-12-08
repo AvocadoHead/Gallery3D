@@ -504,7 +504,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 5000);
-    camera.position.set(0, 0, 320);
+    camera.position.set(0, 0, 120);
 
     const renderer = new CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -523,8 +523,8 @@
     controls.target.set(0, 0, 0);
     controls.update();
 
-    const radius = 1200;
-    const jitter = 160;
+    const radius = 1400;
+    const jitter = 220;
     let firstReady = false;
 
     const addTile = (id, index) => {
@@ -548,7 +548,13 @@
       });
 
       img.addEventListener('error', () => {
-        img.src = fullUrl(id);
+        element.classList.add('ready');
+        if (img.dataset.fallback !== 'full') {
+          img.dataset.fallback = 'full';
+          img.src = fullUrl(id);
+        } else {
+          img.src = previewUrl(id);
+        }
       });
 
       element.appendChild(img);
@@ -562,7 +568,7 @@
       const theta = Math.PI * (1 + Math.sqrt(5)) * (index + 0.5);
       const r = radius + (Math.random() - 0.5) * jitter;
       object.position.setFromSphericalCoords(r, phi, theta);
-      object.lookAt(new THREE.Vector3(0, 0, 0));
+      object.lookAt(camera.position);
       scene.add(object);
     };
 
@@ -599,8 +605,12 @@
       overlay.classList.add('active');
       overlay.setAttribute('aria-hidden', 'false');
       overlayImg.classList.remove('visible');
+      overlayImg.referrerPolicy = 'no-referrer';
       overlayImg.src = fullUrl(id);
       overlayImg.onload = () => overlayImg.classList.add('visible');
+      overlayImg.onerror = () => {
+        overlayImg.src = previewUrl(id);
+      };
     };
 
     const closeViewer = () => {
@@ -618,6 +628,13 @@
       controls.update();
       driftTarget.set(Math.sin(Date.now() * 0.00007) * 40, Math.cos(Date.now() * 0.00006) * 40, 0);
       scene.position.lerp(driftTarget, 0.005);
+
+      scene.children.forEach((child) => {
+        if (child instanceof CSS3DObject) {
+          child.lookAt(camera.position);
+        }
+      });
+
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
     };
