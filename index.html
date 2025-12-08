@@ -48,24 +48,34 @@
       text-decoration: underline;
     }
   </style>
+
+  <!-- Import map so "three" resolves correctly -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
+    }
+  }
+  </script>
 </head>
 <body>
   <div id="app"></div>
 
-  <!-- simple footer with WhatsApp link – edit href/text if you like -->
+  <!-- Minimal footer with your WhatsApp -->
   <div class="footer">
     <a href="https://wa.me/97236030603" target="_blank" rel="noopener">
-      WhatsApp
+      WhatsApp: +972 3 6030603
     </a>
   </div>
 
-  <!-- 3D cloud (ES modules) -->
+  <!-- 3D cloud -->
   <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-    import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+    import * as THREE from "three";
+    import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
     // All your links – already quoted & comma-separated
-    const rawLinks = [
+    const links = [
       "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
       "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
       "https://drive.google.com/file/d/1XLTys10VbfYx3rFIZkvdXPEDdt8VFkOs/view?usp=drive_link",
@@ -352,10 +362,8 @@
       "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
     ];
 
-    const links = rawLinks.slice(); // copy
-
-    // Basic Three.js setup
-    const container = document.getElementById('app');
+    // ---- Three.js basic setup ----
+    const container = document.getElementById("app");
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x02030a, 0.018);
 
@@ -382,7 +390,6 @@
     controls.minDistance = 35;
     controls.maxDistance = 150;
 
-    // Lights
     const ambient = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambient);
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -393,7 +400,7 @@
     const cloud = new THREE.Group();
     scene.add(cloud);
 
-    // Subtle inner glow sphere
+    // Inner glow
     const glowGeom = new THREE.SphereGeometry(30, 40, 40);
     const glowMat = new THREE.MeshBasicMaterial({
       color: 0x102a52,
@@ -415,15 +422,14 @@
     });
 
     const nodes = [];
-
-    // Fibonacci sphere distribution
     const radius = 32;
     const N = links.length;
     const offset = 2 / N;
     const increment = Math.PI * (3 - Math.sqrt(5));
 
+    // Fibonacci sphere distribution
     for (let i = 0; i < N; i++) {
-      const y = ((i * offset) - 1) + (offset / 2);
+      const y = (i * offset - 1) + offset / 2;
       const r = Math.sqrt(1 - y * y);
       const phi = i * increment;
 
@@ -432,19 +438,16 @@
 
       const mesh = new THREE.Mesh(nodeGeom, nodeMat.clone());
       mesh.position.set(x * radius, y * radius, z * radius);
-      mesh.userData = {
-        url: links[i],
-        index: i
-      };
+      mesh.userData = { url: links[i], index: i };
 
-      const s = 0.8 + (Math.random() * 0.5);
+      const s = 0.8 + Math.random() * 0.5;
       mesh.scale.setScalar(s);
 
       cloud.add(mesh);
       nodes.push(mesh);
     }
 
-    // Background starfield
+    // Background stars
     const starGeom = new THREE.BufferGeometry();
     const starCount = 2000;
     const starPositions = new Float32Array(starCount * 3);
@@ -456,7 +459,10 @@
       starPositions[i + 2] = (Math.random() - 0.5) * sr * 2;
     }
 
-    starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeom.setAttribute(
+      "position",
+      new THREE.BufferAttribute(starPositions, 3)
+    );
     const starMat = new THREE.PointsMaterial({
       size: 0.7,
       color: 0x9aa5b1,
@@ -464,11 +470,10 @@
       opacity: 0.7,
       depthWrite: false
     });
-
     const stars = new THREE.Points(starGeom, starMat);
     scene.add(stars);
 
-    // Raycaster for clicking nodes
+    // Raycasting & pointer
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let hovered = null;
@@ -477,7 +482,7 @@
       const rect = renderer.domElement.getBoundingClientRect();
       const x = (event.clientX - rect.left) / rect.width;
       const y = (event.clientY - rect.top) / rect.height;
-      pointer.x = (x * 2) - 1;
+      pointer.x = x * 2 - 1;
       pointer.y = -(y * 2) + 1;
     }
 
@@ -490,18 +495,17 @@
       raycaster.setFromCamera(pointer, camera);
       const intersects = raycaster.intersectObjects(nodes, false);
       if (intersects.length > 0) {
-        const first = intersects[0].object;
-        const url = first.userData.url;
+        const obj = intersects[0].object;
+        const url = obj.userData.url;
         if (url) {
-          window.open(url, '_blank', 'noopener');
+          window.open(url, "_blank", "noopener");
         }
       }
     }
 
-    renderer.domElement.addEventListener('pointermove', handleMove);
-    renderer.domElement.addEventListener('click', handleClick);
+    renderer.domElement.addEventListener("pointermove", handleMove);
+    renderer.domElement.addEventListener("click", handleClick);
 
-    // Hover feedback
     function updateHover() {
       raycaster.setFromCamera(pointer, camera);
       const intersects = raycaster.intersectObjects(nodes, false);
@@ -526,13 +530,11 @@
       }
     }
 
-    // Animation
     let t = 0;
     function animate() {
       requestAnimationFrame(animate);
       t += 0.0025;
 
-      // Slow autonomous rotation
       cloud.rotation.y += 0.0018;
       cloud.rotation.x = Math.sin(t * 0.7) * 0.12;
 
@@ -547,7 +549,7 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
-    window.addEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
   </script>
 </body>
 </html>
