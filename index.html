@@ -7,11 +7,11 @@
   <style>
     :root {
       --bg-start: #fdfefe;
-      --bg-mid: #f7fbff;
-      --bg-end: #ebf2ff;
-      --panel: rgba(255, 255, 255, 0.75);
-      --shadow: rgba(27, 73, 140, 0.18);
-      --glow: rgba(107, 148, 255, 0.35);
+      --bg-mid: #f6fbff;
+      --bg-end: #e7f2ff;
+      --panel: rgba(255, 255, 255, 0.78);
+      --shadow: rgba(24, 62, 122, 0.18);
+      --glow: rgba(96, 165, 250, 0.35);
     }
 
     * { box-sizing: border-box; }
@@ -19,32 +19,32 @@
     body {
       margin: 0;
       overflow: hidden;
-      background: radial-gradient(circle at 20% 25%, var(--bg-start), var(--bg-mid) 40%, var(--bg-end));
+      background: radial-gradient(circle at 20% 25%, var(--bg-start), var(--bg-mid) 42%, var(--bg-end));
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      color: #10233f;
+      color: #0f1f35;
     }
 
     #scene { position: fixed; inset: 0; }
 
     .tile {
       position: relative;
-      width: 160px;
-      height: 160px;
+      width: 170px;
+      height: 170px;
       border-radius: 22px;
       overflow: hidden;
       box-shadow:
         0 12px 32px var(--shadow),
-        0 0 0 1px rgba(255, 255, 255, 0.7),
+        0 0 0 1px rgba(255, 255, 255, 0.85),
         0 0 30px var(--glow);
       background: linear-gradient(135deg, #f6f9ff, #e7edff);
-      will-change: transform, opacity;
-      pointer-events: none;
-      opacity: 0;
+      pointer-events: auto;
       transform: scale(0.9);
-      transition: transform 0.35s ease, opacity 0.5s ease, filter 0.35s ease;
+      opacity: 0;
+      filter: saturate(0.9);
+      transition: transform 0.35s ease, opacity 0.5s ease, filter 0.35s ease, box-shadow 0.35s ease;
     }
 
-    .tile.ready { opacity: 1; transform: scale(1); pointer-events: auto; }
+    .tile.ready { opacity: 1; transform: scale(1); }
 
     .tile img {
       position: absolute;
@@ -52,21 +52,17 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      filter: saturate(0.92);
+      transition: opacity 0.45s ease, filter 0.4s ease;
       opacity: 0.9;
-      transition: opacity 0.4s ease, filter 0.4s ease;
     }
 
-    .tile.hovered {
-      transform: scale(1.08);
-      filter: saturate(1.02);
-      box-shadow:
+    .tile:hover { transform: scale(1.08); filter: saturate(1); box-shadow:
         0 16px 44px rgba(27, 73, 140, 0.28),
-        0 0 0 1px rgba(255, 255, 255, 0.8),
-        0 0 40px rgba(107, 148, 255, 0.45);
+        0 0 0 1px rgba(255, 255, 255, 0.9),
+        0 0 42px rgba(107, 148, 255, 0.45);
     }
 
-    .tile.hovered img { opacity: 1; filter: saturate(1); }
+    .tile:hover img { opacity: 1; }
 
     .overlay {
       position: fixed;
@@ -88,7 +84,7 @@
       box-shadow: 0 22px 60px rgba(20, 60, 128, 0.35);
       background: #fff;
       opacity: 0;
-      transition: opacity 0.4s ease;
+      transition: opacity 0.45s ease;
     }
 
     .overlay img.visible { opacity: 1; }
@@ -132,7 +128,10 @@
       place-items: center;
       z-index: 4;
       pointer-events: none;
+      transition: opacity 0.45s ease;
     }
+
+    .loader.hidden { opacity: 0; }
 
     .loader .dot {
       width: 14px;
@@ -178,7 +177,8 @@
     {
       "imports": {
         "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
-        "three/examples/jsm/controls/OrbitControls.js": "https://unpkg.com/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+        "three/examples/jsm/controls/OrbitControls.js": "https://unpkg.com/three@0.165.0/examples/jsm/controls/OrbitControls.js",
+        "three/examples/jsm/renderers/CSS3DRenderer.js": "https://unpkg.com/three@0.165.0/examples/jsm/renderers/CSS3DRenderer.js"
       }
     }
   </script>
@@ -195,8 +195,10 @@
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+    import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 
-    const rawLinks = ["https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
+    const rawLinks = [
+"https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
       "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
       "https://drive.google.com/file/d/1XLTys10VbfYx3rFIZkvdXPEDdt8VFkOs/view?usp=drive_link",
       "https://drive.google.com/file/d/1ag-sRtn2snQkCQKIQd47VMP0YVvrBNFF/view?usp=drive_link",
@@ -479,261 +481,148 @@
       "https://drive.google.com/file/d/1I92aAlUZYbySOS2I1vvKbs3dBgaeTLng/view?usp=drive_link",
       "https://drive.google.com/file/d/1XJ_u_J2rslbKbDcs2ysq99_sXAHOa9zJ/view?usp=drive_link",
       "https://drive.google.com/file/d/1rboDD4Fki6XOi0PWmEgP6WYSnkSLMhMy/view?usp=drive_link",
-      "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"];
+      "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
+    ];
 
-    const driveView = (id) => `https://drive.google.com/uc?export=view&id=${id}`;
-    const driveDownload = (id) => `https://drive.google.com/uc?export=download&id=${id}`;
-    const proxyImage = (url, size) => {
-      const stripped = url.replace(/^https?:\/\//, '');
-      const params = new URLSearchParams({ url: stripped, output: 'jpg' });
-      if (size) {
-        params.set('w', size);
-        params.set('h', size);
-        params.set('fit', 'cover');
-        params.set('af', '1');
-        params.set('q', '85');
-      }
-      return `https://images.weserv.nl/?${params.toString()}`;
+    const toId = (url) => {
+      const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (m && m[1]) return m[1].split('?', 1)[0];
+      const alt = url.match(/id=([a-zA-Z0-9_-]+)/);
+      return alt ? alt[1].split('?', 1)[0] : '';
     };
 
-    const entries = rawLinks
-      .map((url) => {
-        const match = url.match(/\/d\/([^/]+)\//);
-        if (!match) return null;
-        const id = match[1];
-        const view = driveView(id);
-        const full = driveDownload(id);
-        return {
-          id,
-          preview: proxyImage(view, 520),
-          crisp: proxyImage(view, 1500),
-          full: proxyImage(full),
-          download: full,
-        };
-      })
-      .filter(Boolean);
+    const ids = rawLinks.map((l) => l && l.trim()).filter(Boolean).map(toId).filter(Boolean);
+
+    const previewUrl = (id) => `https://drive.google.com/uc?export=view&id=${id}`;
+    const fullUrl = (id) => `https://drive.google.com/uc?export=download&id=${id}`;
 
     const sceneEl = document.getElementById('scene');
-    const loader = document.querySelector('.loader');
     const overlay = document.getElementById('viewer');
     const overlayImg = overlay.querySelector('img');
     const closeBtn = overlay.querySelector('.close');
+    const loader = document.querySelector('.loader');
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 8000);
-    camera.position.set(0, 0, 1400);
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 5000);
+    camera.position.set(0, 0, 320);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0);
+    renderer.domElement.style.position = 'fixed';
+    renderer.domElement.style.inset = '0';
     sceneEl.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.enablePan = false;
-    controls.minDistance = 40;
-    controls.maxDistance = 4200;
-    controls.zoomSpeed = 1.15;
+    controls.dampingFactor = 0.08;
+    controls.enableZoom = true;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.35;
+    controls.minDistance = 160;
+    controls.maxDistance = 2200;
     controls.target.set(0, 0, 0);
     controls.update();
 
-    const radius = 2600;
-    const golden = Math.PI * (3 - Math.sqrt(5));
-    const tiles = [];
-    let readyCount = 0;
-    let hovered = null;
+    const radius = 1200;
+    const jitter = 160;
+    let firstReady = false;
 
-    const planeGeo = new THREE.PlaneGeometry(1, 1);
-    const loader3 = new THREE.TextureLoader();
-    loader3.setCrossOrigin('anonymous');
+    const addTile = (id, index) => {
+      const element = document.createElement('div');
+      element.className = 'tile';
 
-    entries.forEach((entry, i) => {
-      const y = 1 - (i / (entries.length - 1)) * 2;
-      const r = Math.sqrt(1 - y * y);
-      const theta = golden * i;
-      const x = Math.cos(theta) * r;
-      const z = Math.sin(theta) * r;
-      const jitter = 420 + Math.random() * 360;
-      const pos = new THREE.Vector3(x, y, z).multiplyScalar(radius + jitter);
+      const img = document.createElement('img');
+      img.alt = 'Artwork';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.src = previewUrl(id);
 
-      const material = new THREE.MeshBasicMaterial({
-        color: 0xf1f5ff,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide,
-        depthTest: false,
-        depthWrite: false,
+      img.addEventListener('load', () => {
+        element.classList.add('ready');
+        if (!firstReady) {
+          loader.classList.add('hidden');
+          setTimeout(() => loader.remove(), 600);
+          firstReady = true;
+        }
       });
 
-      const mesh = new THREE.Mesh(planeGeo, material);
-      const size = 170 + Math.random() * 48;
-      mesh.scale.set(size, size, 1);
-      mesh.position.copy(pos);
-      mesh.lookAt(camera.position);
-      mesh.renderOrder = i;
-      scene.add(mesh);
+      img.addEventListener('error', () => {
+        img.src = fullUrl(id);
+      });
 
-      const tile = { mesh, entry, material, baseSize: size, highRes: false, targetOpacity: 0 };
-      mesh.userData = { tile, entry };
-      tiles.push(tile);
+      element.appendChild(img);
 
-      loader3.load(
-        entry.preview,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          material.map = tex;
-          material.needsUpdate = true;
-          material.opacity = 0;
-          requestAnimationFrame(() => {
-            material.opacity = 1;
-            tile.targetOpacity = 1;
-            readyCount++;
-            if (readyCount > 10) loader.style.opacity = '0';
-          });
-        },
-        undefined,
-        () => {
-          material.color = new THREE.Color('#dbeafe');
-        }
-      );
-    });
+      element.addEventListener('pointerenter', () => element.classList.add('hovered'));
+      element.addEventListener('pointerleave', () => element.classList.remove('hovered'));
+      element.addEventListener('click', () => launchViewer(id, element));
 
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
+      const object = new CSS3DObject(element);
+      const phi = Math.acos(1 - 2 * (index + 0.5) / ids.length);
+      const theta = Math.PI * (1 + Math.sqrt(5)) * (index + 0.5);
+      const r = radius + (Math.random() - 0.5) * jitter;
+      object.position.setFromSphericalCoords(r, phi, theta);
+      object.lookAt(new THREE.Vector3(0, 0, 0));
+      scene.add(object);
+    };
 
-    function handlePointerMove(event) {
-      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    }
+    ids.forEach((id, i) => addTile(id, i));
 
-    window.addEventListener('pointermove', handlePointerMove);
+    const resize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', resize);
 
-    let pointerDownAt = { x: 0, y: 0 };
-    renderer.domElement.addEventListener('pointerdown', (e) => {
-      pointerDownAt = { x: e.clientX, y: e.clientY };
-    });
-
-    function openViewer(mesh) {
-      const entry = mesh.userData.entry;
-      const screenPos = mesh.position.clone().project(camera);
-      const rectX = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
-      const rectY = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
-      const ghost = document.createElement('div');
+    let ghost;
+    const launchViewer = (id, el) => {
+      const rect = el.getBoundingClientRect();
+      ghost?.remove();
+      ghost = document.createElement('div');
       ghost.className = 'launch-ghost';
-      const size = Math.max(mesh.scale.x, mesh.scale.y);
-      ghost.style.width = `${size}px`;
-      ghost.style.height = `${size}px`;
-      ghost.style.left = `${rectX - size / 2}px`;
-      ghost.style.top = `${rectY - size / 2}px`;
-      ghost.style.backgroundImage = `url(${mesh.material.map?.image?.src || entry.preview})`;
-      ghost.style.transform = 'translate(0,0) scale(1)';
+      ghost.style.width = `${rect.width}px`;
+      ghost.style.height = `${rect.height}px`;
+      ghost.style.left = `${rect.left}px`;
+      ghost.style.top = `${rect.top}px`;
+      ghost.style.backgroundImage = `url(${el.querySelector('img').src})`;
       document.body.appendChild(ghost);
 
+      const centerX = window.innerWidth / 2 - rect.left - rect.width / 2;
+      const centerY = window.innerHeight / 2 - rect.top - rect.height / 2;
       requestAnimationFrame(() => {
-        const targetW = Math.min(window.innerWidth * 0.9, 1400);
-        const targetH = Math.min(window.innerHeight * 0.9, 900);
-        const scaleX = targetW / size;
-        const scaleY = targetH / size;
-        const scale = Math.min(scaleX, scaleY);
-        const tx = window.innerWidth / 2 - (rectX);
-        const ty = window.innerHeight / 2 - (rectY);
-        ghost.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+        ghost.style.transform = `translate(${centerX}px, ${centerY}px) scale(6)`;
+        ghost.style.opacity = '0';
       });
-
-      ghost.addEventListener('transitionend', () => ghost.remove(), { once: true });
+      setTimeout(() => ghost.remove(), 650);
 
       overlay.classList.add('active');
       overlay.setAttribute('aria-hidden', 'false');
       overlayImg.classList.remove('visible');
-      overlayImg.src = entry.full;
+      overlayImg.src = fullUrl(id);
       overlayImg.onload = () => overlayImg.classList.add('visible');
-    }
+    };
 
-    function closeViewer() {
+    const closeViewer = () => {
       overlay.classList.remove('active');
       overlay.setAttribute('aria-hidden', 'true');
       overlayImg.classList.remove('visible');
-      overlayImg.src = '';
-    }
+    };
 
     closeBtn.addEventListener('click', closeViewer);
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeViewer();
-    });
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeViewer();
-    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeViewer(); });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeViewer(); });
 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    function updateTiles() {
-      const camDir = camera.position.clone().normalize();
-      raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObjects(tiles.map((t) => t.mesh));
-      const top = intersects[0]?.object || null;
-
-      if (hovered && hovered !== top) {
-        const base = hovered.userData.tile.baseSize;
-        hovered.scale.set(base, base, 1);
-      }
-
-      if (top) {
-        hovered = top;
-        const base = hovered.userData.tile.baseSize;
-        hovered.scale.set(base * 1.08, base * 1.08, 1);
-      } else {
-        hovered = null;
-      }
-
-      tiles.forEach((tile) => {
-        tile.mesh.lookAt(camera.position);
-        const normal = tile.mesh.position.clone().normalize();
-        const facing = Math.max(0, normal.dot(camDir));
-        const dist = camera.position.distanceTo(tile.mesh.position);
-        tile.targetOpacity = 0.22 + facing * 0.78;
-        tile.material.opacity = THREE.MathUtils.lerp(tile.material.opacity, tile.targetOpacity, 0.1);
-
-        if (!tile.highRes && (dist < 750 || facing > 0.7)) {
-          tile.highRes = true;
-          loader3.load(tile.entry.crisp, (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            tile.material.map = tex;
-            tile.material.needsUpdate = true;
-          });
-        }
-      });
-    }
-
-    renderer.domElement.addEventListener('pointerup', (e) => {
-      const moveDelta = Math.hypot(e.clientX - pointerDownAt.x, e.clientY - pointerDownAt.y);
-      if (moveDelta > 6) return;
-      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObjects(tiles.map((t) => t.mesh));
-      if (intersects.length) {
-        const mesh = intersects[0].object;
-        openViewer(mesh);
-      }
-    });
-
-    function animate() {
-      requestAnimationFrame(animate);
+    const driftTarget = new THREE.Vector3();
+    const animate = () => {
       controls.update();
-      updateTiles();
+      driftTarget.set(Math.sin(Date.now() * 0.00007) * 40, Math.cos(Date.now() * 0.00006) * 40, 0);
+      scene.position.lerp(driftTarget, 0.005);
       renderer.render(scene, camera);
-    }
+      requestAnimationFrame(animate);
+    };
 
     animate();
-    setTimeout(() => (loader.style.opacity = '0'), 4500);
   </script>
 </body>
 </html>
