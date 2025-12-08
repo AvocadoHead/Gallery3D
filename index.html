@@ -4,187 +4,166 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Floating Cloud Gallery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: radial-gradient(circle at 20% 20%, #f5f7ff, #e2eeff 45%, #d5e8ff 70%),
-        radial-gradient(circle at 80% 30%, #fef6ff, #f4e7ff 45%, #e2ddff 70%),
-        radial-gradient(circle at 50% 80%, #f7fbff, #e9f6ff 55%, #dfefff 70%);
-      --card-size: 160px;
-      --glow: 0 22px 40px rgba(109, 165, 255, 0.35);
+      --bg-start: #f8fbff;
+      --bg-end: #eef2ff;
+      --glow: rgba(80, 132, 255, 0.25);
+      --panel: rgba(255, 255, 255, 0.7);
+      --text: #1d2a3a;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      min-height: 100vh;
-      background: #eef5ff;
-      background-image: var(--bg);
-      color: #1c2a3f;
-      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--text);
       overflow: hidden;
+      background: radial-gradient(circle at 20% 20%, #ffffff 0%, #f4f7ff 25%, #eef2ff 55%, #e9edff 100%);
     }
 
-    #hud {
+    .hud {
       position: fixed;
-      top: 18px;
-      left: 18px;
-      padding: 12px 14px;
-      background: rgba(255, 255, 255, 0.78);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(44, 75, 125, 0.12);
+      top: 16px;
+      left: 16px;
+      padding: 12px 16px;
+      background: var(--panel);
       border-radius: 14px;
-      box-shadow: 0 10px 30px rgba(72, 112, 185, 0.15);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 35px rgba(24, 62, 122, 0.12);
+      display: flex;
+      align-items: center;
+      gap: 10px;
       z-index: 5;
     }
 
-    #hud h1 {
-      margin: 0 0 4px;
-      font-size: 16px;
-      letter-spacing: 0.03em;
-    }
-
-    #hud p {
-      margin: 0;
-      color: #4c5a74;
-      font-size: 13px;
-    }
-
-    #space {
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
-      perspective: 1600px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(217, 230, 255, 0.55));
-    }
-
-    #cloud {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate3d(-50%, -50%, 0) scale(1);
-      transform-style: preserve-3d;
-      will-change: transform;
-    }
-
-    .card {
-      position: absolute;
-      width: var(--card-size);
-      height: var(--card-size);
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 12px 30px rgba(63, 123, 255, 0.18);
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(240, 246, 255, 0.7));
-      transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
-      transform-style: preserve-3d;
-      cursor: pointer;
-    }
-
-    .card img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      filter: saturate(1.04);
-      transition: transform 220ms ease, filter 220ms ease;
-    }
-
-    .card:hover {
-      box-shadow: var(--glow);
-      transform: translate3d(var(--x), var(--y), var(--z)) scale(1.08);
-      filter: drop-shadow(0 8px 20px rgba(120, 170, 255, 0.35));
-      z-index: 2;
-    }
-
-    .card:hover img {
-      transform: scale(1.08);
-      filter: saturate(1.2) brightness(1.05);
-    }
-
-    #overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(255, 255, 255, 0.6);
-      backdrop-filter: blur(16px);
-      display: grid;
-      place-items: center;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 200ms ease;
-      z-index: 20;
-    }
-
-    #overlay.visible {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    #overlay figure {
-      margin: 0;
-      max-width: min(90vw, 1100px);
-      max-height: 82vh;
-      width: 100%;
-      border-radius: 22px;
-      overflow: hidden;
-      box-shadow: 0 22px 60px rgba(64, 107, 181, 0.25);
-      background: #fff;
-      position: relative;
-      display: grid;
-      place-items: center;
-    }
-
-    #overlay img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      background: #f6f8ff;
-    }
-
-    #closeOverlay {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      border: none;
-      background: rgba(255, 255, 255, 0.85);
+    .hud .dot {
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      width: 38px;
-      height: 38px;
-      display: grid;
-      place-items: center;
-      cursor: pointer;
-      box-shadow: 0 8px 20px rgba(52, 90, 162, 0.2);
-      font-size: 16px;
-      color: #2b3b5c;
+      background: linear-gradient(135deg, #7dd3fc, #60a5fa);
+      box-shadow: 0 0 0 6px rgba(124, 181, 255, 0.35);
     }
 
-    @keyframes float {
-      from {
-        transform: translate3d(var(--x), var(--y), var(--z));
-      }
-      to {
-        transform: translate3d(calc(var(--x) + var(--driftX)), calc(var(--y) + var(--driftY)), calc(var(--z) + var(--driftZ)));
-      }
+    .hud strong { font-weight: 600; }
+
+    #scene-container {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .tile {
+      width: 180px;
+      height: 180px;
+      border-radius: 24px;
+      background-size: cover;
+      background-position: center;
+      background-color: #f3f6ff;
+      box-shadow:
+        0 10px 25px rgba(51, 94, 186, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.35),
+        0 0 25px var(--glow);
+      transition: transform 0.35s ease, box-shadow 0.35s ease, filter 0.35s ease;
+      pointer-events: auto;
+      will-change: transform;
+      overflow: hidden;
+    }
+
+    .tile::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0));
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+
+    .tile:hover {
+      transform: scale(1.14) translateZ(40px);
+      box-shadow:
+        0 16px 40px rgba(51, 94, 186, 0.18),
+        0 0 0 1px rgba(255, 255, 255, 0.6),
+        0 0 40px rgba(96, 165, 250, 0.3);
+      filter: saturate(1.08);
+    }
+
+    .tile:hover::after { opacity: 1; }
+
+    #viewer {
+      position: fixed;
+      inset: 0;
+      background: rgba(240, 245, 255, 0.7);
+      backdrop-filter: blur(18px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    #viewer.active { display: flex; }
+
+    #viewer img {
+      max-width: min(90vw, 1200px);
+      max-height: 90vh;
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(32, 64, 128, 0.35);
+      background: #fff;
+    }
+
+    #viewer .close {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      background: #fff;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 14px;
+      box-shadow: 0 12px 30px rgba(44, 87, 176, 0.25);
+      cursor: pointer;
+      color: #1b2d4a;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 4;
+      pointer-events: none;
+      color: #4a607c;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
   </style>
 </head>
 <body>
-  <div id="hud">
-    <h1>Floating Cloud</h1>
-    <p>Drag to pan • Scroll to zoom • Click to open</p>
+  <div class="hud">
+    <div class="dot"></div>
+    <div>
+      <strong>Floating Cloud</strong><br>
+      Drag to pan · Scroll to zoom · Click to open
+    </div>
   </div>
-  <div id="space">
-    <div id="cloud"></div>
+  <div id="scene-container"></div>
+  <div id="viewer">
+    <button class="close" aria-label="Close">Close</button>
+    <img alt="Artwork" />
   </div>
-  <div id="overlay" aria-hidden="true">
-    <figure>
-      <img id="overlayImg" alt="Expanded artwork" />
-      <button id="closeOverlay" aria-label="Close">✕</button>
-    </figure>
-  </div>
+  <div class="loading">Loading artworks…</div>
 
-  <script>
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+    import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.160.1/examples/jsm/renderers/CSS3DRenderer.js';
+
     const rawLinks = [
       "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
       "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
@@ -472,145 +451,140 @@
       "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
     ];
 
-    const space = document.getElementById("space");
-    const cloud = document.getElementById("cloud");
-    const overlay = document.getElementById("overlay");
-    const overlayImg = document.getElementById("overlayImg");
-    const closeOverlay = document.getElementById("closeOverlay");
-
-    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
-
-    function extractId(url) {
-      const byPath = url.match(/\/d\/([^/]+)\//);
-      if (byPath?.[1]) return byPath[1];
-      const byQuery = url.match(/[?&]id=([^&]+)/);
-      return byQuery?.[1] || url;
-    }
-
-    function driveImage(id) {
-      return `https://drive.google.com/uc?export=view&id=${id}`;
-    }
-
-    function driveThumb(id) {
-      return `https://drive.google.com/uc?export=thumbnail&id=${id}`;
-    }
-
-    function buildPositions(count) {
-      const positions = [];
-      const maxR = 780;
-      const golden = Math.PI * (3 - Math.sqrt(5));
-      for (let i = 0; i < count; i++) {
-        const radius = Math.sqrt(i / count) * maxR * (0.8 + Math.random() * 0.2);
-        const angle = i * golden;
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius;
-        const z = (Math.random() * 2 - 1) * 380;
-        positions.push({ x, y, z });
-      }
-      return positions;
-    }
-
-    function createCard(src, full, position, drift) {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.setProperty("--x", `${position.x}px`);
-      card.style.setProperty("--y", `${position.y}px`);
-      card.style.setProperty("--z", `${position.z}px`);
-      card.style.setProperty("--driftX", `${drift.x}px`);
-      card.style.setProperty("--driftY", `${drift.y}px`);
-      card.style.setProperty("--driftZ", `${drift.z}px`);
-      card.style.transform = `translate3d(${position.x}px, ${position.y}px, ${position.z}px)`;
-      card.style.animation = `float ${8 + Math.random() * 6}s ease-in-out infinite alternate`;
-      card.style.animationDelay = `${Math.random() * -6}s`;
-
-      const img = document.createElement("img");
-      img.src = src;
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.alt = "Artwork";
-      img.dataset.full = full;
-      img.addEventListener("error", () => {
-        if (img.src !== full) img.src = full;
-      });
-      card.appendChild(img);
-
-      card.addEventListener("click", () => openOverlay(img.dataset.full || img.src));
-      return card;
-    }
-
-    function openOverlay(src) {
-      overlayImg.src = src;
-      overlay.classList.add("visible");
-      overlay.setAttribute("aria-hidden", "false");
-    }
-
-    function close() {
-      overlay.classList.remove("visible");
-      overlay.setAttribute("aria-hidden", "true");
-    }
-
-    closeOverlay.addEventListener("click", close);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") close();
-    });
-
-    function init() {
-      const ids = rawLinks.map(extractId);
-      const positions = buildPositions(ids.length);
-      positions.forEach((pos, i) => {
-        const id = ids[i];
-        const thumb = driveThumb(id);
-        const full = driveImage(id);
-        const drift = {
-          x: (Math.random() * 14 - 7),
-          y: (Math.random() * 14 - 7),
-          z: (Math.random() * 20 - 10),
+    const entries = rawLinks
+      .map((url) => {
+        const match = url.match(/\/d\/([^/]+)\//);
+        if (!match) return null;
+        const id = match[1];
+        return {
+          id,
+          thumb: `https://drive.google.com/thumbnail?id=${id}`,
+          full: `https://drive.google.com/uc?export=view&id=${id}`,
         };
-        const card = createCard(thumb, full, pos, drift);
-        cloud.appendChild(card);
+      })
+      .filter(Boolean);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
+    camera.position.set(0, 0, 1100);
+
+    const renderer = new CSS3DRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const sceneContainer = document.getElementById('scene-container');
+    sceneContainer.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableRotate = false;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.enableZoom = true;
+    controls.zoomSpeed = 1.1;
+    controls.panSpeed = 0.7;
+
+    const tiles = [];
+    const spherical = new THREE.Spherical();
+
+    const floatParams = entries.map(() => ({
+      offset: Math.random() * Math.PI * 2,
+      speed: 0.3 + Math.random() * 0.35,
+      amp: 14 + Math.random() * 16,
+    }));
+
+    const basePositions = [];
+
+    entries.forEach((entry, idx) => {
+      const div = document.createElement('div');
+      div.className = 'tile';
+
+      const preview = new Image();
+      preview.referrerPolicy = 'no-referrer';
+      preview.src = entry.thumb;
+      preview.onload = () => {
+        div.style.backgroundImage = `url(${entry.thumb})`;
+      };
+      preview.onerror = () => {
+        const full = new Image();
+        full.referrerPolicy = 'no-referrer';
+        full.src = entry.full;
+        full.onload = () => (div.style.backgroundImage = `url(${entry.full})`);
+      };
+
+      const obj = new CSS3DObject(div);
+      const phi = Math.acos(2 * Math.random() - 1);
+      const theta = Math.random() * Math.PI * 2;
+      const radius = 1600 + Math.random() * 450;
+      spherical.set(radius, phi, theta);
+      obj.position.setFromSpherical(spherical);
+
+      obj.lookAt(camera.position);
+      obj.userData = { entry, idx };
+
+      basePositions.push(obj.position.clone());
+
+      div.addEventListener('click', () => openViewer(entry.full));
+
+      scene.add(obj);
+      tiles.push(obj);
+    });
+
+    const viewer = document.getElementById('viewer');
+    const viewerImg = viewer.querySelector('img');
+    const closeBtn = viewer.querySelector('.close');
+    function openViewer(src) {
+      viewerImg.src = src;
+      viewer.classList.add('active');
+    }
+    function closeViewer() {
+      viewer.classList.remove('active');
+      viewerImg.src = '';
+    }
+    closeBtn.addEventListener('click', closeViewer);
+    viewer.addEventListener('click', (e) => {
+      if (e.target === viewer) closeViewer();
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeViewer();
+    });
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+      tiles.forEach((tile, i) => {
+        const data = floatParams[i];
+        const wobble = Math.sin(t * data.speed + data.offset) * data.amp;
+        const base = basePositions[i];
+        tile.position.set(base.x, base.y, base.z + wobble);
+        tile.lookAt(camera.position);
       });
+      controls.update();
+      renderer.render(scene, camera);
     }
 
-    init();
-    updateTransform();
+    animate();
 
-    let isPanning = false;
-    let last = { x: 0, y: 0 };
-    let translate = { x: 0, y: 0 };
-    let scale = 1;
-
-    space.addEventListener("pointerdown", (e) => {
-      isPanning = true;
-      last = { x: e.clientX, y: e.clientY };
-      space.setPointerCapture(e.pointerId);
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    space.addEventListener("pointermove", (e) => {
-      if (!isPanning) return;
-      const dx = e.clientX - last.x;
-      const dy = e.clientY - last.y;
-      translate.x += dx;
-      translate.y += dy;
-      last = { x: e.clientX, y: e.clientY };
-      updateTransform();
+    const loading = document.querySelector('.loading');
+    Promise.all(
+      entries.slice(0, 12).map(
+        (entry) =>
+          new Promise((resolve) => {
+            const img = new Image();
+            img.src = entry.thumb;
+            img.onload = img.onerror = () => resolve();
+          })
+      )
+    ).finally(() => {
+      loading.style.display = 'none';
     });
-
-    space.addEventListener("pointerup", () => (isPanning = false));
-    space.addEventListener("pointercancel", () => (isPanning = false));
-
-    space.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.08 : 0.08;
-      scale = clamp(scale + delta, 0.35, 2.2);
-      updateTransform();
-    }, { passive: false });
-
-    function updateTransform() {
-      cloud.style.transform = `translate3d(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px), 0) scale(${scale})`;
-    }
   </script>
 </body>
 </html>
