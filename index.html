@@ -58,8 +58,8 @@
     }
 
     .tile {
-      width: 180px;
-      height: 180px;
+      width: 176px;
+      height: 176px;
       border-radius: 24px;
       background: linear-gradient(135deg, #f8fbff, #e7edff);
       box-shadow:
@@ -103,7 +103,7 @@
     }
 
     .tile:hover {
-      transform: scale(1.14) translateZ(40px);
+      transform: scale(1.08) translateZ(30px);
       box-shadow:
         0 16px 40px rgba(51, 94, 186, 0.18),
         0 0 0 1px rgba(255, 255, 255, 0.6),
@@ -165,6 +165,22 @@
 
     .loading.done {
       opacity: 0;
+    }
+
+    .launch-preview {
+      position: fixed;
+      border-radius: 24px;
+      box-shadow:
+        0 18px 50px rgba(46, 83, 159, 0.28),
+        0 0 0 1px rgba(255, 255, 255, 0.6);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      z-index: 12;
+      pointer-events: none;
+      transform-origin: top left;
+      transition: transform 0.55s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.55s ease;
+      opacity: 0.95;
     }
   </style>
 </head>
@@ -500,7 +516,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
-    camera.position.set(0, 0, 1300);
+    camera.position.set(0, 0, 1450);
 
     const renderer = new CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -517,11 +533,11 @@
     controls.screenSpacePanning = true;
     controls.enableZoom = true;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.5;
-    controls.zoomSpeed = 1.1;
+    controls.autoRotateSpeed = 0.55;
+    controls.zoomSpeed = 1.05;
     controls.panSpeed = 0.7;
-    controls.minDistance = 600;
-    controls.maxDistance = 1900;
+    controls.minDistance = 950;
+    controls.maxDistance = 2100;
     controls.target.set(0, 0, 0);
     controls.update();
 
@@ -530,11 +546,17 @@
 
     const floatParams = entries.map(() => ({
       offset: Math.random() * Math.PI * 2,
-      speed: 0.3 + Math.random() * 0.35,
-      amp: 14 + Math.random() * 16,
+      speed: 0.22 + Math.random() * 0.25,
+      amp: 10 + Math.random() * 10,
+      hovered: false,
+      current: 0,
+      hires: false,
     }));
 
     const basePositions = [];
+
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const baseRadius = 1600;
 
     entries.forEach((entry, idx) => {
       const div = document.createElement('div');
@@ -559,18 +581,22 @@
       div.appendChild(img);
 
       const obj = new CSS3DObject(div);
-      const phi = Math.acos(2 * Math.random() - 1);
-      const theta = Math.random() * Math.PI * 2;
-      const radius = 1050 + Math.random() * 320;
-      spherical.set(radius, phi, theta);
-      obj.position.setFromSpherical(spherical);
+      const y = 1 - (idx / entries.length) * 2 + (Math.random() - 0.5) * 0.08;
+      const radiusJitter = baseRadius + (Math.random() - 0.5) * 160;
+      const theta = goldenAngle * idx + (Math.random() - 0.5) * 0.1;
+      const r = Math.sqrt(1 - y * y);
+      const x = Math.cos(theta) * r;
+      const z = Math.sin(theta) * r;
+      obj.position.set(x * radiusJitter, y * radiusJitter, z * radiusJitter);
 
       obj.lookAt(camera.position);
       obj.userData = { entry, idx };
 
       basePositions.push(obj.position.clone());
 
-      div.addEventListener('click', () => openViewer(entry.full, entry.fallback));
+      div.addEventListener('mouseenter', () => (floatParams[idx].hovered = true));
+      div.addEventListener('mouseleave', () => (floatParams[idx].hovered = false));
+      div.addEventListener('click', () => launchToViewer(obj, entry, idx));
 
       scene.add(obj);
       tiles.push(obj);
@@ -584,6 +610,37 @@
       viewerImg.dataset.fallback = fallback;
       viewerImg.src = src;
       viewer.classList.add('active');
+    }
+
+    function launchToViewer(obj, entry, idx) {
+      const rect = obj.element.getBoundingClientRect();
+      const overlay = document.createElement('div');
+      overlay.className = 'launch-preview';
+      overlay.style.width = `${rect.width}px`;
+      overlay.style.height = `${rect.height}px`;
+      overlay.style.left = `${rect.left}px`;
+      overlay.style.top = `${rect.top}px`;
+      const img = obj.element.querySelector('img');
+      overlay.style.backgroundImage = `url(${img.src})`;
+      overlay.style.transform = 'translate(0px, 0px) scale(1)';
+      document.body.appendChild(overlay);
+
+      const targetSize = Math.min(window.innerWidth * 0.72, 960);
+      const targetX = (window.innerWidth - targetSize) / 2;
+      const targetY = (window.innerHeight - targetSize) / 2;
+      const dx = targetX - rect.left;
+      const dy = targetY - rect.top;
+      const scale = targetSize / rect.width;
+
+      requestAnimationFrame(() => {
+        overlay.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+      });
+
+      setTimeout(() => {
+        openViewer(entry.full, entry.fallback);
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 200);
+      }, 520);
     }
     function closeViewer() {
       viewer.classList.remove('active');
@@ -605,17 +662,54 @@
       if (e.key === 'Escape') closeViewer();
     });
 
+    function upgradeTile(i) {
+      const state = floatParams[i];
+      if (state.hires) return;
+      const img = tiles[i].element.querySelector('img');
+      const target = entries[i].fallback;
+      if (img.src === target) {
+        state.hires = true;
+        return;
+      }
+      const swapIn = new Image();
+      swapIn.referrerPolicy = 'no-referrer';
+      swapIn.src = target;
+      swapIn.onload = () => {
+        state.hires = true;
+        img.style.opacity = '0.35';
+        requestAnimationFrame(() => {
+          img.src = target;
+          requestAnimationFrame(() => {
+            img.style.opacity = '1';
+          });
+        });
+      };
+    }
+
+    const forward = new THREE.Vector3();
+    const toTile = new THREE.Vector3();
     const clock = new THREE.Clock();
 
     function animate() {
       requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
+      camera.getWorldDirection(forward);
       tiles.forEach((tile, i) => {
         const data = floatParams[i];
-        const wobble = Math.sin(t * data.speed + data.offset) * data.amp;
+        const wobbleTarget = data.hovered
+          ? 0
+          : Math.sin(t * data.speed + data.offset) * data.amp;
+        data.current += (wobbleTarget - data.current) * 0.08;
         const base = basePositions[i];
-        tile.position.set(base.x, base.y, base.z + wobble);
+        tile.position.set(base.x, base.y, base.z + data.current);
         tile.lookAt(camera.position);
+
+        const dist = camera.position.distanceTo(tile.position);
+        toTile.copy(tile.position).sub(camera.position).normalize();
+        const facingScore = forward.dot(toTile);
+        if (facingScore > 0.965 && dist < 1850) {
+          upgradeTile(i);
+        }
       });
       controls.update();
       renderer.render(scene, camera);
