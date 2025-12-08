@@ -80,16 +80,24 @@
       text-decoration: underline;
     }
 
-    /* Fullscreen viewer overlay */
+    /* Fullscreen viewer overlay (smooth) */
     #viewer-overlay {
       position: fixed;
       inset: 0;
       background: rgba(3, 6, 18, 0.9);
       backdrop-filter: blur(10px);
-      display: none; /* toggled via JS */
+      display: flex;
       align-items: center;
       justify-content: center;
       z-index: 30;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-out;
+    }
+
+    #viewer-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     #viewer-inner {
@@ -103,6 +111,14 @@
       box-shadow: 0 30px 120px rgba(15, 23, 42, 0.9);
       background: #020617;
       border: 1px solid rgba(148, 163, 184, 0.7);
+      transform: scale(0.96);
+      opacity: 0;
+      transition: transform 0.25s ease-out, opacity 0.25s ease-out;
+    }
+
+    #viewer-overlay.open #viewer-inner {
+      transform: scale(1);
+      opacity: 1;
     }
 
     #viewer-frame {
@@ -135,16 +151,6 @@
       background: rgba(30, 64, 175, 0.9);
     }
   </style>
-
-  <!-- Import map for Three + CSS3DRenderer -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/examples/jsm/renderers/CSS3DRenderer": "https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS3DRenderer.js"
-    }
-  }
-  </script>
 </head>
 <body>
   <div id="app"></div>
@@ -166,10 +172,10 @@
 
   <!-- 3D gallery script -->
   <script type="module">
-    import * as THREE from "three";
-    import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer";
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    import { CSS3DRenderer } from "https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS3DRenderer.js";
 
-    // ---- Drive links array (your URLs, quoted) ----
+    // ---- Drive links array (all your URLs, quoted) ----
     const links = [
       "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
       "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
@@ -472,11 +478,11 @@
       if (!id) return;
       const previewUrl = `https://drive.google.com/file/d/${id}/preview`;
       viewerFrame.src = previewUrl;
-      viewerOverlay.style.display = "flex";
+      viewerOverlay.classList.add("open");
     }
 
     function closeViewer() {
-      viewerOverlay.style.display = "none";
+      viewerOverlay.classList.remove("open");
       viewerFrame.src = "";
     }
 
@@ -496,6 +502,7 @@
       2000
     );
     camera.position.set(0, 0, 80);
+    camera.lookAt(0, 0, 0);
 
     const renderer = new CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -526,7 +533,6 @@
       img.loading = "lazy";
 
       img.addEventListener("load", () => {
-        // Fade-in when loaded
         div.classList.add("loaded");
       });
 
@@ -543,8 +549,6 @@
       const z = Math.sin(phi) * r;
 
       object.position.set(x * radius, y * radius, z * radius);
-
-      // Face roughly towards the center
       object.lookAt(new THREE.Vector3(
         x * radius * 2,
         y * radius * 2,
