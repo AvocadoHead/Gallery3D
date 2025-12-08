@@ -58,8 +58,8 @@
     }
 
     .tile {
-      width: 176px;
-      height: 176px;
+      width: 168px;
+      height: 168px;
       border-radius: 24px;
       background: linear-gradient(135deg, #f8fbff, #e7edff);
       box-shadow:
@@ -516,7 +516,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
-    camera.position.set(0, 0, 1450);
+    camera.position.set(0, 0, 900);
 
     const renderer = new CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -533,11 +533,11 @@
     controls.screenSpacePanning = true;
     controls.enableZoom = true;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.55;
-    controls.zoomSpeed = 1.05;
-    controls.panSpeed = 0.7;
-    controls.minDistance = 950;
-    controls.maxDistance = 2100;
+    controls.autoRotateSpeed = 0.5;
+    controls.zoomSpeed = 1.1;
+    controls.panSpeed = 0.65;
+    controls.minDistance = 480;
+    controls.maxDistance = 2600;
     controls.target.set(0, 0, 0);
     controls.update();
 
@@ -546,8 +546,8 @@
 
     const floatParams = entries.map(() => ({
       offset: Math.random() * Math.PI * 2,
-      speed: 0.22 + Math.random() * 0.25,
-      amp: 10 + Math.random() * 10,
+      speed: 0.22 + Math.random() * 0.22,
+      amp: 6 + Math.random() * 6,
       hovered: false,
       current: 0,
       hires: false,
@@ -556,7 +556,7 @@
     const basePositions = [];
 
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-    const baseRadius = 1600;
+    const baseRadius = 2100;
 
     entries.forEach((entry, idx) => {
       const div = document.createElement('div');
@@ -582,8 +582,8 @@
 
       const obj = new CSS3DObject(div);
       const y = 1 - (idx / entries.length) * 2 + (Math.random() - 0.5) * 0.08;
-      const radiusJitter = baseRadius + (Math.random() - 0.5) * 160;
-      const theta = goldenAngle * idx + (Math.random() - 0.5) * 0.1;
+      const radiusJitter = baseRadius + (Math.random() - 0.5) * 120;
+      const theta = goldenAngle * idx + (Math.random() - 0.5) * 0.06;
       const r = Math.sqrt(1 - y * y);
       const x = Math.cos(theta) * r;
       const z = Math.sin(theta) * r;
@@ -604,11 +604,12 @@
 
     const viewer = document.getElementById('viewer');
     const viewerImg = viewer.querySelector('img');
+    viewerImg.referrerPolicy = 'no-referrer';
     const closeBtn = viewer.querySelector('.close');
-    function openViewer(src, fallback) {
+    function openViewer(primary, alternate) {
       viewerImg.style.opacity = '0';
-      viewerImg.dataset.fallback = fallback;
-      viewerImg.src = src;
+      viewerImg.dataset.fallback = alternate;
+      viewerImg.src = primary;
       viewer.classList.add('active');
     }
 
@@ -637,7 +638,7 @@
       });
 
       setTimeout(() => {
-        openViewer(entry.full, entry.fallback);
+        openViewer(entry.fallback, entry.full);
         overlay.style.opacity = '0';
         setTimeout(() => overlay.remove(), 200);
       }, 520);
@@ -707,7 +708,13 @@
         const dist = camera.position.distanceTo(tile.position);
         toTile.copy(tile.position).sub(camera.position).normalize();
         const facingScore = forward.dot(toTile);
-        if (facingScore > 0.965 && dist < 1850) {
+
+        if (tile.element.classList.contains('loaded')) {
+          const fade = THREE.MathUtils.clamp((facingScore + 0.45) / 1.4, 0.18, 1);
+          tile.element.style.opacity = fade.toFixed(3);
+        }
+
+        if (facingScore > 0.95 && dist < 2300) {
           upgradeTile(i);
         }
       });
