@@ -481,10 +481,12 @@
       "https://drive.google.com/file/d/1rboDD4Fki6XOi0PWmEgP6WYSnkSLMhMy/view?usp=drive_link",
       "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"];
 
-    const driveDownload = (id) => `https://drive.usercontent.google.com/download?id=${id}&export=download`;
+    const driveView = (id) => `https://drive.google.com/uc?export=view&id=${id}`;
+    const driveDownload = (id) => `https://drive.google.com/uc?export=download&id=${id}`;
     const proxyImage = (url, size) => {
-      const proxied = `https://images.weserv.nl/?url=${encodeURIComponent(url)}${size ? `&w=${size}&h=${size}&fit=cover&we&output=jpg` : ''}`;
-      return proxied;
+      const base = `https://images.weserv.nl/?url=${encodeURIComponent(url)}&we`;
+      if (!size) return base;
+      return `${base}&w=${size}&h=${size}&fit=cover&output=jpg`;
     };
 
     const entries = rawLinks
@@ -492,12 +494,13 @@
         const match = url.match(/\/d\/([^/]+)\//);
         if (!match) return null;
         const id = match[1];
+        const view = driveView(id);
         const full = driveDownload(id);
         return {
           id,
-          preview: proxyImage(full, 520),
-          crisp: proxyImage(full, 1600),
-          full,
+          preview: proxyImage(view, 520),
+          crisp: proxyImage(view, 1500),
+          full: proxyImage(full),
           download: full,
         };
       })
