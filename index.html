@@ -61,10 +61,7 @@
       width: 180px;
       height: 180px;
       border-radius: 24px;
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-      background-color: #f3f6ff;
+      background: linear-gradient(135deg, #f8fbff, #e7edff);
       box-shadow:
         0 10px 25px rgba(51, 94, 186, 0.12),
         0 0 0 1px rgba(255, 255, 255, 0.35),
@@ -73,6 +70,17 @@
       pointer-events: auto;
       will-change: transform;
       overflow: hidden;
+    }
+
+    .tile img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 24px;
+      filter: saturate(0.98);
+      transition: filter 0.3s ease;
     }
 
     .tile::after {
@@ -458,7 +466,8 @@
         const id = match[1];
         return {
           id,
-          thumb: `https://drive.google.com/uc?export=view&id=${id}&sz=w512-h512`,
+          thumb: `https://drive.google.com/thumbnail?id=${id}&sz=w512`,
+          fallback: `https://drive.google.com/uc?export=download&id=${id}`,
           full: `https://drive.google.com/uc?export=view&id=${id}`,
         };
       })
@@ -501,20 +510,22 @@
     entries.forEach((entry, idx) => {
       const div = document.createElement('div');
       div.className = 'tile';
-      div.style.backgroundImage = 'linear-gradient(135deg, #f8fbff, #e7edff)';
 
-      const preview = new Image();
-      preview.referrerPolicy = 'no-referrer';
-      preview.src = entry.thumb;
-      preview.onload = () => {
-        div.style.backgroundImage = `url(${entry.thumb})`;
+      const img = document.createElement('img');
+      img.alt = 'Artwork';
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.src = entry.thumb;
+
+      img.onerror = () => {
+        img.src = entry.fallback;
       };
-      preview.onerror = () => {
-        const full = new Image();
-        full.referrerPolicy = 'no-referrer';
-        full.src = entry.full;
-        full.onload = () => (div.style.backgroundImage = `url(${entry.full})`);
+
+      img.onload = () => {
+        img.style.filter = 'saturate(1)';
       };
+
+      div.appendChild(img);
 
       const obj = new THREE.CSS3DObject(div);
       const phi = Math.acos(2 * Math.random() - 1);
