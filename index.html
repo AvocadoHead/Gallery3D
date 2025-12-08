@@ -63,6 +63,7 @@
       border-radius: 24px;
       background-size: cover;
       background-position: center;
+      background-repeat: no-repeat;
       background-color: #f3f6ff;
       box-shadow:
         0 10px 25px rgba(51, 94, 186, 0.12),
@@ -457,7 +458,7 @@
         const id = match[1];
         return {
           id,
-          thumb: `https://drive.google.com/thumbnail?id=${id}`,
+          thumb: `https://drive.google.com/uc?export=view&id=${id}&sz=w512-h512`,
           full: `https://drive.google.com/uc?export=view&id=${id}`,
         };
       })
@@ -465,10 +466,12 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
-    camera.position.set(0, 0, 1100);
+    camera.position.set(0, 0, 1300);
 
     const renderer = new THREE.CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.domElement.style.position = 'fixed';
+    renderer.domElement.style.inset = '0';
     const sceneContainer = document.getElementById('scene-container');
     sceneContainer.appendChild(renderer.domElement);
 
@@ -481,6 +484,8 @@
     controls.enableZoom = true;
     controls.zoomSpeed = 1.1;
     controls.panSpeed = 0.7;
+    controls.target.set(0, 0, 0);
+    controls.update();
 
     const tiles = [];
     const spherical = new THREE.Spherical();
@@ -496,6 +501,7 @@
     entries.forEach((entry, idx) => {
       const div = document.createElement('div');
       div.className = 'tile';
+      div.style.backgroundImage = 'linear-gradient(135deg, #f8fbff, #e7edff)';
 
       const preview = new Image();
       preview.referrerPolicy = 'no-referrer';
@@ -513,7 +519,7 @@
       const obj = new THREE.CSS3DObject(div);
       const phi = Math.acos(2 * Math.random() - 1);
       const theta = Math.random() * Math.PI * 2;
-      const radius = 1600 + Math.random() * 450;
+      const radius = 900 + Math.random() * 380;
       spherical.set(radius, phi, theta);
       obj.position.setFromSpherical(spherical);
 
