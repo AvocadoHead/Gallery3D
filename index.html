@@ -22,7 +22,6 @@
       inset: 0;
     }
 
-    /* Thumbnails as DOM elements in 3D */
     .thumb {
       width: 170px;
       height: 100px;
@@ -80,7 +79,6 @@
       text-decoration: underline;
     }
 
-    /* Fullscreen viewer overlay (smooth) */
     #viewer-overlay {
       position: fixed;
       inset: 0;
@@ -170,12 +168,12 @@
     </a>
   </div>
 
-  <!-- 3D gallery script -->
-  <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-    import { CSS3DRenderer } from "https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS3DRenderer.js";
+  <!-- Three.js (non-module, global THREE) -->
+  <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.152.2/examples/js/renderers/CSS3DRenderer.js"></script>
 
-    // ---- Drive links array (all your URLs, quoted) ----
+  <script>
+    // ---- Drive links array (all your URLs) ----
     const links = [
       "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
       "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
@@ -463,10 +461,9 @@
       "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
     ];
 
-    // Viewer elements
     const viewerOverlay = document.getElementById("viewer-overlay");
-    const viewerFrame   = document.getElementById("viewer-frame");
-    const viewerClose   = document.getElementById("viewer-close");
+    const viewerFrame = document.getElementById("viewer-frame");
+    const viewerClose = document.getElementById("viewer-close");
 
     function extractDriveId(url) {
       const match = url.match(/\/d\/([^/]+)\//);
@@ -491,7 +488,7 @@
       if (e.target === viewerOverlay) closeViewer();
     });
 
-    // Three + CSS3D setup
+    // Three.js + CSS3DRenderer (global THREE)
     const container = document.getElementById("app");
     const scene = new THREE.Scene();
 
@@ -504,7 +501,7 @@
     camera.position.set(0, 0, 80);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new CSS3DRenderer();
+    const renderer = new THREE.CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.domElement.style.position = "fixed";
     renderer.domElement.style.inset = "0";
@@ -513,7 +510,7 @@
     const group = new THREE.Group();
     scene.add(group);
 
-    // Place thumbs on a Fibonacci sphere
+    // Fibonacci sphere layout
     const N = links.length;
     const radius = 35;
     const offset = 2 / N;
@@ -524,14 +521,12 @@
       if (!id) return;
 
       const imgUrl = `https://drive.google.com/uc?export=view&id=${id}`;
-
       const div = document.createElement("div");
       div.className = "thumb";
 
       const img = document.createElement("img");
       img.src = imgUrl;
       img.loading = "lazy";
-
       img.addEventListener("load", () => {
         div.classList.add("loaded");
       });
@@ -539,7 +534,7 @@
       div.onclick = () => openInViewer(url);
       div.appendChild(img);
 
-      const object = new CSS3DObject(div);
+      const object = new THREE.CSS3DObject(div);
 
       const y = (i * offset - 1) + offset / 2;
       const r = Math.sqrt(1 - y * y);
@@ -558,20 +553,16 @@
       group.add(object);
     });
 
-    // Animation loop
     let t = 0;
     function animate() {
       requestAnimationFrame(animate);
       t += 0.002;
-
       group.rotation.y += 0.0018;
       group.rotation.x = Math.sin(t * 0.7) * 0.12;
-
       renderer.render(scene, camera);
     }
     animate();
 
-    // Resize
     function onResize() {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
