@@ -66,10 +66,19 @@
         0 10px 25px rgba(51, 94, 186, 0.12),
         0 0 0 1px rgba(255, 255, 255, 0.35),
         0 0 25px var(--glow);
-      transition: transform 0.35s ease, box-shadow 0.35s ease, filter 0.35s ease;
+      transition: transform 0.35s ease, box-shadow 0.35s ease, filter 0.35s ease, opacity 0.35s ease;
       pointer-events: auto;
       will-change: transform;
       overflow: hidden;
+      opacity: 0;
+      transform: scale(0.94);
+      backface-visibility: hidden;
+      transform-style: preserve-3d;
+    }
+
+    .tile.loaded {
+      opacity: 1;
+      transform: scale(1);
     }
 
     .tile img {
@@ -79,8 +88,9 @@
       height: 100%;
       object-fit: cover;
       border-radius: 24px;
-      filter: saturate(0.98);
-      transition: filter 0.3s ease;
+      filter: saturate(0.92);
+      transition: filter 0.3s ease, opacity 0.35s ease;
+      opacity: 0.85;
     }
 
     .tile::after {
@@ -150,6 +160,11 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+      transition: opacity 0.45s ease;
+    }
+
+    .loading.done {
+      opacity: 0;
     }
   </style>
 </head>
@@ -495,14 +510,18 @@
     sceneContainer.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableRotate = false;
+    controls.enableRotate = true;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.enablePan = true;
     controls.screenSpacePanning = true;
     controls.enableZoom = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.5;
     controls.zoomSpeed = 1.1;
     controls.panSpeed = 0.7;
+    controls.minDistance = 600;
+    controls.maxDistance = 1900;
     controls.target.set(0, 0, 0);
     controls.update();
 
@@ -533,6 +552,8 @@
 
       img.onload = () => {
         img.style.filter = 'saturate(1)';
+        img.style.opacity = '1';
+        div.classList.add('loaded');
       };
 
       div.appendChild(img);
@@ -540,7 +561,7 @@
       const obj = new CSS3DObject(div);
       const phi = Math.acos(2 * Math.random() - 1);
       const theta = Math.random() * Math.PI * 2;
-      const radius = 900 + Math.random() * 380;
+      const radius = 1050 + Math.random() * 320;
       spherical.set(radius, phi, theta);
       obj.position.setFromSpherical(spherical);
 
@@ -549,7 +570,7 @@
 
       basePositions.push(obj.position.clone());
 
-      div.addEventListener('click', () => openViewer(entry.full));
+      div.addEventListener('click', () => openViewer(entry.full, entry.fallback));
 
       scene.add(obj);
       tiles.push(obj);
@@ -558,7 +579,9 @@
     const viewer = document.getElementById('viewer');
     const viewerImg = viewer.querySelector('img');
     const closeBtn = viewer.querySelector('.close');
-    function openViewer(src) {
+    function openViewer(src, fallback) {
+      viewerImg.style.opacity = '0';
+      viewerImg.dataset.fallback = fallback;
       viewerImg.src = src;
       viewer.classList.add('active');
     }
@@ -566,6 +589,14 @@
       viewer.classList.remove('active');
       viewerImg.src = '';
     }
+    viewerImg.onload = () => {
+      viewerImg.style.opacity = '1';
+    };
+    viewerImg.onerror = () => {
+      if (viewerImg.dataset.fallback && viewerImg.src !== viewerImg.dataset.fallback) {
+        viewerImg.src = viewerImg.dataset.fallback;
+      }
+    };
     closeBtn.addEventListener('click', closeViewer);
     viewer.addEventListener('click', (e) => {
       if (e.target === viewer) closeViewer();
@@ -609,7 +640,8 @@
           })
       )
     ).finally(() => {
-      loading.style.display = 'none';
+      loading.classList.add('done');
+      setTimeout(() => loading.remove(), 500);
     });
   </script>
 </body>
