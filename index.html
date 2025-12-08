@@ -484,9 +484,16 @@
     const driveView = (id) => `https://drive.google.com/uc?export=view&id=${id}`;
     const driveDownload = (id) => `https://drive.google.com/uc?export=download&id=${id}`;
     const proxyImage = (url, size) => {
-      const base = `https://images.weserv.nl/?url=${encodeURIComponent(url)}&we`;
-      if (!size) return base;
-      return `${base}&w=${size}&h=${size}&fit=cover&output=jpg`;
+      const stripped = url.replace(/^https?:\/\//, '');
+      const params = new URLSearchParams({ url: stripped, output: 'jpg' });
+      if (size) {
+        params.set('w', size);
+        params.set('h', size);
+        params.set('fit', 'cover');
+        params.set('af', '1');
+        params.set('q', '85');
+      }
+      return `https://images.weserv.nl/?${params.toString()}`;
     };
 
     const entries = rawLinks
