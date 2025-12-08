@@ -481,17 +481,24 @@
       "https://drive.google.com/file/d/1rboDD4Fki6XOi0PWmEgP6WYSnkSLMhMy/view?usp=drive_link",
       "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"];
 
+    const driveDownload = (id) => `https://drive.usercontent.google.com/download?id=${id}&export=download`;
+    const proxyImage = (url, size) => {
+      const proxied = `https://images.weserv.nl/?url=${encodeURIComponent(url)}${size ? `&w=${size}&h=${size}&fit=cover&we&output=jpg` : ''}`;
+      return proxied;
+    };
+
     const entries = rawLinks
       .map((url) => {
         const match = url.match(/\/d\/([^/]+)\//);
         if (!match) return null;
         const id = match[1];
+        const full = driveDownload(id);
         return {
           id,
-          preview: `https://drive.google.com/thumbnail?id=${id}&sz=w512`,
-          crisp: `https://drive.google.com/thumbnail?id=${id}&sz=w1600`,
-          full: `https://drive.google.com/uc?export=view&id=${id}`,
-          download: `https://drive.google.com/uc?export=download&id=${id}`,
+          preview: proxyImage(full, 520),
+          crisp: proxyImage(full, 1600),
+          full,
+          download: full,
         };
       })
       .filter(Boolean);
@@ -503,8 +510,8 @@
     const closeBtn = overlay.querySelector('.close');
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 6000);
-    camera.position.set(0, 0, 500);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 8000);
+    camera.position.set(0, 0, 1400);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -516,14 +523,15 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enablePan = false;
-    controls.minDistance = 120;
-    controls.maxDistance = 3200;
+    controls.minDistance = 40;
+    controls.maxDistance = 4200;
+    controls.zoomSpeed = 1.15;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.35;
     controls.target.set(0, 0, 0);
     controls.update();
 
-    const radius = 2200;
+    const radius = 2600;
     const golden = Math.PI * (3 - Math.sqrt(5));
     const tiles = [];
     let readyCount = 0;
@@ -539,7 +547,7 @@
       const theta = golden * i;
       const x = Math.cos(theta) * r;
       const z = Math.sin(theta) * r;
-      const jitter = 220 + Math.random() * 180;
+      const jitter = 420 + Math.random() * 360;
       const pos = new THREE.Vector3(x, y, z).multiplyScalar(radius + jitter);
 
       const material = new THREE.MeshBasicMaterial({
@@ -547,11 +555,12 @@
         transparent: true,
         opacity: 0,
         side: THREE.DoubleSide,
-        depthTest: true,
+        depthTest: false,
+        depthWrite: false,
       });
 
       const mesh = new THREE.Mesh(planeGeo, material);
-      const size = 180 + Math.random() * 32;
+      const size = 170 + Math.random() * 48;
       mesh.scale.set(size, size, 1);
       mesh.position.copy(pos);
       mesh.lookAt(camera.position);
