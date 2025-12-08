@@ -2,179 +2,187 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>3D Cloud Gallery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Floating Cloud Gallery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    :root {
+      --bg-start: #f8fbff;
+      --bg-end: #eef2ff;
+      --glow: rgba(80, 132, 255, 0.25);
+      --panel: rgba(255, 255, 255, 0.7);
+      --text: #1d2a3a;
     }
+
+    * { box-sizing: border-box; }
 
     body {
-      background: radial-gradient(circle at 20% 20%, #050816 0, #010208 55%, #000000 100%);
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--text);
       overflow: hidden;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #e2e8f0;
+      background: radial-gradient(circle at 20% 20%, #ffffff 0%, #f4f7ff 25%, #eef2ff 55%, #e9edff 100%);
     }
 
-    #app {
+    .hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      padding: 12px 16px;
+      background: var(--panel);
+      border-radius: 14px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 35px rgba(24, 62, 122, 0.12);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 5;
+    }
+
+    .hud .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7dd3fc, #60a5fa);
+      box-shadow: 0 0 0 6px rgba(124, 181, 255, 0.35);
+    }
+
+    .hud strong { font-weight: 600; }
+
+    #scene-container {
       position: fixed;
       inset: 0;
-    }
-
-    .thumb {
-      width: 170px;
-      height: 100px;
-      border-radius: 14px;
       overflow: hidden;
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(148, 163, 184, 0.5);
-      background: radial-gradient(circle at 0 0, #1d4ed8 0, #020617 40%, #000 100%);
-      transform-origin: center center;
-      cursor: pointer;
-      opacity: 0;
-      transition:
-        opacity 0.6s ease-out,
-        transform 0.15s ease-out,
-        box-shadow 0.15s ease-out,
-        border-color 0.15s ease-out;
     }
 
-    .thumb.loaded {
-      opacity: 1;
+    .tile {
+      width: 180px;
+      height: 180px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #f8fbff, #e7edff);
+      box-shadow:
+        0 10px 25px rgba(51, 94, 186, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.35),
+        0 0 25px var(--glow);
+      transition: transform 0.35s ease, box-shadow 0.35s ease, filter 0.35s ease;
+      pointer-events: auto;
+      will-change: transform;
+      overflow: hidden;
     }
 
-    .thumb:hover {
-      transform: scale(1.08);
-      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.95);
-      border-color: #38bdf8;
-    }
-
-    .thumb img {
+    .tile img {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
-      display: block;
+      border-radius: 24px;
+      filter: saturate(0.98);
+      transition: filter 0.3s ease;
     }
 
-    .footer {
-      position: fixed;
-      bottom: 12px;
-      right: 16px;
-      font-size: 12px;
-      z-index: 20;
-      background: rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(8px);
-      border-radius: 999px;
-      padding: 6px 12px;
-      border: 1px solid rgba(148, 163, 184, 0.5);
+    .tile::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0));
+      opacity: 0;
+      transition: opacity 0.35s ease;
     }
 
-    .footer a {
-      color: #38bdf8;
-      text-decoration: none;
+    .tile:hover {
+      transform: scale(1.14) translateZ(40px);
+      box-shadow:
+        0 16px 40px rgba(51, 94, 186, 0.18),
+        0 0 0 1px rgba(255, 255, 255, 0.6),
+        0 0 40px rgba(96, 165, 250, 0.3);
+      filter: saturate(1.08);
     }
 
-    .footer a:hover {
-      text-decoration: underline;
-    }
+    .tile:hover::after { opacity: 1; }
 
-    #viewer-overlay {
+    #viewer {
       position: fixed;
       inset: 0;
-      background: rgba(3, 6, 18, 0.9);
-      backdrop-filter: blur(10px);
-      display: flex;
+      background: rgba(240, 245, 255, 0.7);
+      backdrop-filter: blur(18px);
+      display: none;
       align-items: center;
       justify-content: center;
-      z-index: 30;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease-out;
+      z-index: 10;
     }
 
-    #viewer-overlay.open {
-      opacity: 1;
-      pointer-events: auto;
+    #viewer.active { display: flex; }
+
+    #viewer img {
+      max-width: min(90vw, 1200px);
+      max-height: 90vh;
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(32, 64, 128, 0.35);
+      background: #fff;
     }
 
-    #viewer-inner {
-      position: relative;
-      width: 90vw;
-      height: 90vh;
-      max-width: 1200px;
-      max-height: 800px;
-      border-radius: 18px;
-      overflow: hidden;
-      box-shadow: 0 30px 120px rgba(15, 23, 42, 0.9);
-      background: #020617;
-      border: 1px solid rgba(148, 163, 184, 0.7);
-      transform: scale(0.96);
-      opacity: 0;
-      transition: transform 0.25s ease-out, opacity 0.25s ease-out;
-    }
-
-    #viewer-overlay.open #viewer-inner {
-      transform: scale(1);
-      opacity: 1;
-    }
-
-    #viewer-frame {
-      width: 100%;
-      height: 100%;
+    #viewer .close {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      background: #fff;
       border: none;
-    }
-
-    #viewer-close {
-      position: absolute;
-      top: 10px;
-      right: 12px;
-      width: 32px;
-      height: 32px;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(148, 163, 184, 0.8);
-      color: #e5e7eb;
-      font-size: 18px;
+      padding: 12px 16px;
+      border-radius: 14px;
+      box-shadow: 0 12px 30px rgba(44, 87, 176, 0.25);
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.12s ease, background 0.12s ease;
-      z-index: 2;
+      color: #1b2d4a;
+      font-weight: 600;
+      letter-spacing: 0.01em;
     }
 
-    #viewer-close:hover {
-      transform: scale(1.07);
-      background: rgba(30, 64, 175, 0.9);
+    .loading {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 4;
+      pointer-events: none;
+      color: #4a607c;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
   </style>
 </head>
 <body>
-  <div id="app"></div>
-
-  <!-- Fullscreen viewer (Drive preview) -->
-  <div id="viewer-overlay">
-    <div id="viewer-inner">
-      <button id="viewer-close" aria-label="Close">&times;</button>
-      <iframe id="viewer-frame" allow="autoplay; fullscreen"></iframe>
+  <div class="hud">
+    <div class="dot"></div>
+    <div>
+      <strong>Floating Cloud</strong><br>
+      Drag to pan · Scroll to zoom · Click to open
     </div>
   </div>
-
-  <!-- Minimal footer with your WhatsApp -->
-  <div class="footer">
-    <a href="https://wa.me/97236030603" target="_blank" rel="noopener">
-      WhatsApp: +972 3 6030603
-    </a>
+  <div id="scene-container"></div>
+  <div id="viewer">
+    <button class="close" aria-label="Close">Close</button>
+    <img alt="Artwork" />
   </div>
+  <div class="loading">Loading artworks…</div>
 
-  <!-- Three.js (non-module, global THREE) -->
-  <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.152.2/examples/js/renderers/CSS3DRenderer.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
 
-  <script>
-    // ---- Drive links array (all your URLs) ----
-    const links = [
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+    const rawLinks = [
       "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
       "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
       "https://drive.google.com/file/d/1XLTys10VbfYx3rFIZkvdXPEDdt8VFkOs/view?usp=drive_link",
@@ -461,114 +469,148 @@
       "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
     ];
 
-    const viewerOverlay = document.getElementById("viewer-overlay");
-    const viewerFrame = document.getElementById("viewer-frame");
-    const viewerClose = document.getElementById("viewer-close");
+    const entries = rawLinks
+      .map((url) => {
+        const match = url.match(/\/d\/([^/]+)\//);
+        if (!match) return null;
+        const id = match[1];
+        return {
+          id,
+          thumb: `https://drive.google.com/thumbnail?id=${id}&sz=w512`,
+          fallback: `https://drive.google.com/uc?export=download&id=${id}`,
+          full: `https://drive.google.com/uc?export=view&id=${id}`,
+        };
+      })
+      .filter(Boolean);
 
-    function extractDriveId(url) {
-      const match = url.match(/\/d\/([^/]+)\//);
-      return match ? match[1] : null;
-    }
-
-    function openInViewer(url) {
-      const id = extractDriveId(url);
-      if (!id) return;
-      const previewUrl = `https://drive.google.com/file/d/${id}/preview`;
-      viewerFrame.src = previewUrl;
-      viewerOverlay.classList.add("open");
-    }
-
-    function closeViewer() {
-      viewerOverlay.classList.remove("open");
-      viewerFrame.src = "";
-    }
-
-    viewerClose.addEventListener("click", closeViewer);
-    viewerOverlay.addEventListener("click", (e) => {
-      if (e.target === viewerOverlay) closeViewer();
-    });
-
-    // Three.js + CSS3DRenderer (global THREE)
-    const container = document.getElementById("app");
     const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
+    camera.position.set(0, 0, 1300);
 
-    const camera = new THREE.PerspectiveCamera(
-      55,
-      window.innerWidth / window.innerHeight,
-      1,
-      2000
-    );
-    camera.position.set(0, 0, 80);
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new THREE.CSS3DRenderer();
+    const renderer = new CSS3DRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.domElement.style.position = "fixed";
-    renderer.domElement.style.inset = "0";
-    container.appendChild(renderer.domElement);
+    renderer.domElement.style.position = 'fixed';
+    renderer.domElement.style.inset = '0';
+    const sceneContainer = document.getElementById('scene-container');
+    sceneContainer.appendChild(renderer.domElement);
 
-    const group = new THREE.Group();
-    scene.add(group);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableRotate = false;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.enableZoom = true;
+    controls.zoomSpeed = 1.1;
+    controls.panSpeed = 0.7;
+    controls.target.set(0, 0, 0);
+    controls.update();
 
-    // Fibonacci sphere layout
-    const N = links.length;
-    const radius = 35;
-    const offset = 2 / N;
-    const increment = Math.PI * (3 - Math.sqrt(5));
+    const tiles = [];
+    const spherical = new THREE.Spherical();
 
-    links.forEach((url, i) => {
-      const id = extractDriveId(url);
-      if (!id) return;
+    const floatParams = entries.map(() => ({
+      offset: Math.random() * Math.PI * 2,
+      speed: 0.3 + Math.random() * 0.35,
+      amp: 14 + Math.random() * 16,
+    }));
 
-      const imgUrl = `https://drive.google.com/uc?export=view&id=${id}`;
-      const div = document.createElement("div");
-      div.className = "thumb";
+    const basePositions = [];
 
-      const img = document.createElement("img");
-      img.src = imgUrl;
-      img.loading = "lazy";
-      img.addEventListener("load", () => {
-        div.classList.add("loaded");
-      });
+    entries.forEach((entry, idx) => {
+      const div = document.createElement('div');
+      div.className = 'tile';
 
-      div.onclick = () => openInViewer(url);
+      const img = document.createElement('img');
+      img.alt = 'Artwork';
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.src = entry.thumb;
+
+      img.onerror = () => {
+        img.src = entry.fallback;
+      };
+
+      img.onload = () => {
+        img.style.filter = 'saturate(1)';
+      };
+
       div.appendChild(img);
 
-      const object = new THREE.CSS3DObject(div);
+      const obj = new CSS3DObject(div);
+      const phi = Math.acos(2 * Math.random() - 1);
+      const theta = Math.random() * Math.PI * 2;
+      const radius = 900 + Math.random() * 380;
+      spherical.set(radius, phi, theta);
+      obj.position.setFromSpherical(spherical);
 
-      const y = (i * offset - 1) + offset / 2;
-      const r = Math.sqrt(1 - y * y);
-      const phi = i * increment;
+      obj.lookAt(camera.position);
+      obj.userData = { entry, idx };
 
-      const x = Math.cos(phi) * r;
-      const z = Math.sin(phi) * r;
+      basePositions.push(obj.position.clone());
 
-      object.position.set(x * radius, y * radius, z * radius);
-      object.lookAt(new THREE.Vector3(
-        x * radius * 2,
-        y * radius * 2,
-        z * radius * 2
-      ));
+      div.addEventListener('click', () => openViewer(entry.full));
 
-      group.add(object);
+      scene.add(obj);
+      tiles.push(obj);
     });
 
-    let t = 0;
+    const viewer = document.getElementById('viewer');
+    const viewerImg = viewer.querySelector('img');
+    const closeBtn = viewer.querySelector('.close');
+    function openViewer(src) {
+      viewerImg.src = src;
+      viewer.classList.add('active');
+    }
+    function closeViewer() {
+      viewer.classList.remove('active');
+      viewerImg.src = '';
+    }
+    closeBtn.addEventListener('click', closeViewer);
+    viewer.addEventListener('click', (e) => {
+      if (e.target === viewer) closeViewer();
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeViewer();
+    });
+
+    const clock = new THREE.Clock();
+
     function animate() {
       requestAnimationFrame(animate);
-      t += 0.002;
-      group.rotation.y += 0.0018;
-      group.rotation.x = Math.sin(t * 0.7) * 0.12;
+      const t = clock.getElapsedTime();
+      tiles.forEach((tile, i) => {
+        const data = floatParams[i];
+        const wobble = Math.sin(t * data.speed + data.offset) * data.amp;
+        const base = basePositions[i];
+        tile.position.set(base.x, base.y, base.z + wobble);
+        tile.lookAt(camera.position);
+      });
+      controls.update();
       renderer.render(scene, camera);
     }
+
     animate();
 
-    function onResize() {
+    window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-    window.addEventListener("resize", onResize);
+    });
+
+    const loading = document.querySelector('.loading');
+    Promise.all(
+      entries.slice(0, 12).map(
+        (entry) =>
+          new Promise((resolve) => {
+            const img = new Image();
+            img.src = entry.thumb;
+            img.onload = img.onerror = () => resolve();
+          })
+      )
+    ).finally(() => {
+      loading.style.display = 'none';
+    });
   </script>
 </body>
 </html>
