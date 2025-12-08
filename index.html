@@ -2,17 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Optopia 3D Link Cloud</title>
+  <title>3D Link Cloud</title>
   <style>
-    :root {
-      --bg: #02030a;
-      --accent: #9efcff;
-      --accent-soft: rgba(158, 252, 255, 0.4);
-      --node: #ffffff;
-      --hint: #b6c2d9;
-      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
@@ -21,9 +12,9 @@
 
     body {
       background: radial-gradient(circle at 20% 20%, #050816 0, #010208 55%, #000000 100%);
-      color: #f7fafc;
-      font-family: var(--font);
       overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #e2e8f0;
     }
 
     #app {
@@ -35,112 +26,44 @@
       display: block;
     }
 
-    .overlay {
+    .footer {
       position: fixed;
-      left: 50%;
-      top: 24px;
-      transform: translateX(-50%);
-      text-align: center;
-      pointer-events: none;
-      z-index: 10;
-      user-select: none;
-    }
-
-    .overlay h1 {
-      font-size: 20px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 4px;
-    }
-
-    .overlay p {
+      bottom: 12px;
+      right: 16px;
       font-size: 12px;
-      color: var(--hint);
-      opacity: 0.8;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(4, 10, 22, 0.75);
-      border: 1px solid rgba(158, 252, 255, 0.35);
-      box-shadow: 0 0 14px rgba(2, 220, 252, 0.28);
-      margin-bottom: 8px;
-      font-size: 11px;
-      color: var(--hint);
-    }
-
-    .badge-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 999px;
-      background: var(--accent);
-      box-shadow: 0 0 10px var(--accent-soft);
-    }
-
-    .bottom-hint {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-      font-size: 11px;
-      color: var(--hint);
-      opacity: 0.85;
       z-index: 10;
-      user-select: none;
-      pointer-events: none;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      border-radius: 999px;
+      padding: 6px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
     }
 
-    .bottom-hint span {
-      opacity: 0.75;
+    .footer a {
+      color: #38bdf8;
+      text-decoration: none;
     }
 
-    .bottom-hint strong {
-      color: var(--accent);
-      font-weight: 500;
-    }
-
-    .fade-in {
-      animation: fadeIn 1.3s ease-out forwards;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translate(-50%, -4px); }
-      to   { opacity: 1; transform: translate(-50%, 0); }
-    }
-
-    @media (max-width: 768px) {
-      .overlay h1 { font-size: 16px; }
-      .overlay p  { font-size: 11px; }
+    .footer a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
   <div id="app"></div>
 
-  <div class="overlay fade-in">
-    <div class="badge">
-      <div class="badge-dot"></div>
-      <span>Loading Optopia Cloud • 3D index</span>
-    </div>
-    <h1>Multimodal Link Cloud</h1>
-    <p>Each dot is a piece. Rotate, explore, click to open.</p>
+  <!-- simple footer with WhatsApp link – edit href/text if you like -->
+  <div class="footer">
+    <a href="https://wa.me/97236030603" target="_blank" rel="noopener">
+      WhatsApp
+    </a>
   </div>
 
-  <div class="bottom-hint fade-in">
-    <span>Drag to rotate • Scroll / pinch to zoom • <strong>Click a dot</strong> to open the link</span>
-  </div>
+  <!-- 3D cloud (ES modules) -->
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
-  <!-- Three.js & controls -->
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
-
-  <script>
     // All your links – already quoted & comma-separated
     const rawLinks = [
       "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
@@ -429,8 +352,7 @@
       "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
     ];
 
-    // Shuffle mildly so it's not strictly sequence-based on sphere
-    const links = rawLinks.slice();
+    const links = rawLinks.slice(); // copy
 
     // Basic Three.js setup
     const container = document.getElementById('app');
@@ -451,7 +373,7 @@
     renderer.setClearColor(0x02030a, 1);
     container.appendChild(renderer.domElement);
 
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.rotateSpeed = 0.5;
@@ -494,7 +416,7 @@
 
     const nodes = [];
 
-    // Fibonacci sphere for even distribution
+    // Fibonacci sphere distribution
     const radius = 32;
     const N = links.length;
     const offset = 2 / N;
@@ -515,7 +437,6 @@
         index: i
       };
 
-      // Slight scale jitter so they don't all look the same
       const s = 0.8 + (Math.random() * 0.5);
       mesh.scale.setScalar(s);
 
@@ -523,7 +444,7 @@
       nodes.push(mesh);
     }
 
-    // Subtle background starfield
+    // Background starfield
     const starGeom = new THREE.BufferGeometry();
     const starCount = 2000;
     const starPositions = new Float32Array(starCount * 3);
@@ -580,13 +501,12 @@
     renderer.domElement.addEventListener('pointermove', handleMove);
     renderer.domElement.addEventListener('click', handleClick);
 
-    // Hover feedback (scale + emissive intensity)
+    // Hover feedback
     function updateHover() {
       raycaster.setFromCamera(pointer, camera);
       const intersects = raycaster.intersectObjects(nodes, false);
 
       if (hovered && (!intersects.length || intersects[0].object !== hovered)) {
-        // reset previous
         hovered.material.emissiveIntensity = 0.3;
         hovered.scale.divideScalar(1.3);
         hovered = null;
@@ -606,7 +526,7 @@
       }
     }
 
-    // Animation loop
+    // Animation
     let t = 0;
     function animate() {
       requestAnimationFrame(animate);
@@ -615,11 +535,6 @@
       // Slow autonomous rotation
       cloud.rotation.y += 0.0018;
       cloud.rotation.x = Math.sin(t * 0.7) * 0.12;
-
-      // Subtle camera drift
-      camera.position.x = Math.sin(t * 0.4) * 8;
-      camera.position.y = Math.sin(t * 0.25) * 4;
-      camera.lookAt(0, 0, 0);
 
       controls.update();
       updateHover();
