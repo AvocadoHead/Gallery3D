@@ -55,7 +55,7 @@ const App: React.FC = () => {
         ${selectedId ? 'opacity-0 pointer-events-none' : 'opacity-100'}
       `}>
         <a 
-          href="ttps://api.whatsapp.com/send/?phone=97236030603&text&type=phone_number&app_absent=0" 
+          href="https://api.whatsapp.com/send/?phone=97236030603&text&type=phone_number&app_absent=0" 
           target="_blank" 
           rel="noreferrer"
           className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md hover:bg-white transition-all duration-300 text-slate-600 hover:text-slate-900 text-sm font-medium border border-white"
