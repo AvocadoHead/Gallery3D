@@ -307,10 +307,15 @@ export const getFullUrl = (id: string) => `https://lh3.googleusercontent.com/d/$
 // Algorithm to distribute points on a sphere (Fibonacci Sphere)
 export const getSphereCoordinates = (count: number, radius: number) => {
   const points: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
+  const safeCount = Math.max(1, count);
   const phiSpan = Math.PI * (3 - Math.sqrt(5)); // Golden angle
 
-  for (let i = 0; i < count; i++) {
-    const y = 1 - (i / (count - 1)) * 2; // y goes from 1 to -1
+  if (safeCount === 1) {
+    return [{ position: [0, 0, radius], rotation: [0, 0, 0] }];
+  }
+
+  for (let i = 0; i < safeCount; i++) {
+    const y = 1 - (i / (safeCount - 1)) * 2; // y goes from 1 to -1
     const radiusAtY = Math.sqrt(1 - y * y);
     const theta = phiSpan * i;
 
@@ -328,4 +333,118 @@ export const getSphereCoordinates = (count: number, radius: number) => {
     });
   }
   return points;
+};
+
+export type MediaKind = 'image' | 'video' | 'embed';
+
+export interface MediaItem {
+  id: string;
+  originalUrl: string;
+  previewUrl: string;
+  fullUrl: string;
+  kind: MediaKind;
+  aspectRatio?: number;
+}
+
+const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
+
+const getYouTubeId = (url: string) => {
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  return match ? match[1] : '';
+};
+
+const getVimeoId = (url: string) => {
+  const match = url.match(/vimeo\.com\/(\d+)/);
+  return match ? match[1] : '';
+};
+
+const buildDriveUrls = (id: string) => ({
+  preview: `https://lh3.googleusercontent.com/d/${id}=w500`,
+  full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
+});
+
+const uniqueId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+export const createMediaItem = (url: string): MediaItem => {
+  const trimmed = url.trim();
+  const youTubeId = getYouTubeId(trimmed);
+  const vimeoId = getVimeoId(trimmed);
+  const driveId = getDriveId(trimmed);
+
+  if (youTubeId) {
+    return {
+      id: uniqueId(),
+      originalUrl: trimmed,
+      kind: 'embed',
+      previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
+      fullUrl: `https://www.youtube.com/embed/${youTubeId}?autoplay=1&mute=1&loop=1&playlist=${youTubeId}&controls=0&modestbranding=1&playsinline=1`,
+      aspectRatio: 16 / 9,
+    };
+  }
+
+  if (vimeoId) {
+    return {
+      id: uniqueId(),
+      originalUrl: trimmed,
+      kind: 'embed',
+      previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
+      fullUrl: `https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=1&loop=1&title=0&byline=0&portrait=0`,
+      aspectRatio: 16 / 9,
+    };
+  }
+
+  if (driveId) {
+    const { preview, full } = buildDriveUrls(driveId);
+    return {
+      id: uniqueId(),
+      originalUrl: trimmed,
+      kind: isDirectVideo(trimmed) ? 'video' : 'image',
+      previewUrl: preview,
+      fullUrl: full,
+    };
+  }
+
+  if (isDirectVideo(trimmed)) {
+    return {
+      id: uniqueId(),
+      originalUrl: trimmed,
+      kind: 'video',
+      previewUrl: trimmed,
+      fullUrl: trimmed,
+    };
+  }
+
+  return {
+    id: uniqueId(),
+    originalUrl: trimmed,
+    kind: 'image',
+    previewUrl: trimmed,
+    fullUrl: trimmed,
+  };
+};
+
+export const buildMediaItemsFromUrls = (urls: string[]) =>
+  urls
+    .map((url) => url && url.trim())
+    .filter(Boolean)
+    .map(createMediaItem);
+
+export const buildDefaultMediaItems = () =>
+  ARTWORK_IDS.map((id) => createMediaItem(`https://drive.google.com/file/d/${id}/view?usp=drive_link`));
+
+export const encodeGalleryParam = (items: MediaItem[]) => {
+  const urls = items.map((item) => item.originalUrl);
+  return encodeURIComponent(btoa(JSON.stringify(urls)));
+};
+
+export const decodeGalleryParam = (value: string | null) => {
+  if (!value) return [];
+  try {
+    const raw = atob(decodeURIComponent(value));
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn('Failed to decode gallery payload', err);
+    return [];
+  }
 };
