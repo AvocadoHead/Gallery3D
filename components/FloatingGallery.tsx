@@ -11,6 +11,7 @@ interface ItemProps {
   onClick: (item: MediaItem) => void;
   index: number;
   radius: number;
+  clearing: boolean;
 }
 
 const normalizeSize = (aspectRatio?: number) => {
@@ -33,7 +34,7 @@ const normalizeSize = (aspectRatio?: number) => {
   return { width, height };
 };
 
-const GalleryItem = ({ item, position, onClick, index, radius }: ItemProps) => {
+const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -60,6 +61,29 @@ const GalleryItem = ({ item, position, onClick, index, radius }: ItemProps) => {
       groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
     }
   });
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+
+    const play = () => {
+      const el = videoRef.current!;
+      const promise = el.play();
+      if (promise && typeof promise.then === 'function') {
+        promise.catch(() => {});
+      }
+    };
+
+    play();
+  }, [item.previewUrl]);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    const el = videoRef.current;
+    const promise = el.play();
+    if (promise && typeof promise.then === 'function') {
+      promise.catch(() => {});
+    }
+  }, [hovered]);
 
   useEffect(() => {
     let raf: number;
@@ -136,8 +160,8 @@ const GalleryItem = ({ item, position, onClick, index, radius }: ItemProps) => {
             className={`
               relative group cursor-pointer select-none
               transition-all duration-700 ease-out
-              ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
-              ${hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
+              ${mounted && !clearing ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
+              ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
             `}
             onClick={(e) => {
               e.stopPropagation();
@@ -155,7 +179,7 @@ const GalleryItem = ({ item, position, onClick, index, radius }: ItemProps) => {
               className={`
                 w-full h-full bg-white rounded-2xl p-2 shadow-xl
                 transition-all duration-300
-                ${hovered ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
+                ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
               `}
             >
               {/* Media Container */}
@@ -194,10 +218,11 @@ const GalleryItem = ({ item, position, onClick, index, radius }: ItemProps) => {
 interface GallerySceneProps {
   onSelect: (item: MediaItem) => void;
   items: MediaItem[];
+  clearing: boolean;
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items }) => {
-  const radius = Math.min(80, 48 + items.length * 0.15);
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }) => {
+  const radius = Math.min(74, 42 + items.length * 0.12);
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
@@ -214,6 +239,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items }) => {
             position={coords[i].position}
             onClick={onSelect}
             radius={radius}
+            clearing={clearing}
           />
         ))}
       </group>
@@ -222,14 +248,14 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items }) => {
         enablePan={false}
         enableZoom={true}
         // Broadened zoom range for deep dives and distant overviews
-        minDistance={0.05}
-        maxDistance={260}
+        minDistance={0.008}
+        maxDistance={360}
         autoRotate
         autoRotateSpeed={0.6}
         dampingFactor={0.05}
         rotateSpeed={0.5}
         // Increased zoomSpeed to create larger movement per scroll
-        zoomSpeed={5}
+        zoomSpeed={5.5}
       />
     </>
   );

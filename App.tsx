@@ -25,11 +25,19 @@ const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [shareLink, setShareLink] = useState('');
   const [isCustom, setIsCustom] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const encoded = params.get('gallery');
-    const incoming = decodeGalleryParam(encoded);
+    const extractGallery = () => {
+      const params = new URLSearchParams(window.location.search);
+      const encoded = params.get('gallery');
+      if (encoded) return encoded;
+
+      const match = window.location.href.match(/[?&]gallery=([^&#]+)/);
+      return match ? match[1] : null;
+    };
+
+    const incoming = decodeGalleryParam(extractGallery());
     if (incoming.length) {
       setGalleryItems(buildMediaItemsFromUrls(incoming));
       setIsCustom(true);
@@ -51,10 +59,17 @@ const App: React.FC = () => {
   };
 
   const handleCreateNew = () => {
-    setGalleryItems([]);
+    setIsClearing(true);
     setIsCustom(true);
     setSelectedItem(null);
     setBuilderOpen(true);
+    setShareLink('');
+
+    // Gentle wipe-out animation before emptying items
+    setTimeout(() => {
+      setGalleryItems([]);
+      setIsClearing(false);
+    }, 650);
   };
 
   const sharePayload = useMemo(() => {
@@ -65,6 +80,7 @@ const App: React.FC = () => {
   const handleShare = async () => {
     if (!sharePayload) return;
     setShareLink(sharePayload);
+    window.history.replaceState(null, '', sharePayload);
     try {
       if (navigator.share) {
         await navigator.share({ title: 'Aether Gallery', url: sharePayload });
@@ -94,7 +110,7 @@ const App: React.FC = () => {
             gl={{ antialias: false, alpha: true }}
             className="bg-transparent"
           >
-            <GalleryScene onSelect={setSelectedItem} items={galleryItems} />
+            <GalleryScene onSelect={setSelectedItem} items={galleryItems} clearing={isClearing} />
           </Canvas>
         </Suspense>
       </div>
