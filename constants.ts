@@ -344,6 +344,7 @@ export interface MediaItem {
   fullUrl: string;
   kind: MediaKind;
   aspectRatio?: number;
+  fallbackPreview?: string;
 }
 
 const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
@@ -361,6 +362,7 @@ const getVimeoId = (url: string) => {
 const buildDriveUrls = (id: string) => ({
   preview: `https://lh3.googleusercontent.com/d/${id}=w500`,
   full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
+  stream: `https://drive.google.com/uc?export=download&id=${id}`,
 });
 
 const uniqueId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -394,13 +396,16 @@ export const createMediaItem = (url: string): MediaItem => {
   }
 
   if (driveId) {
-    const { preview, full } = buildDriveUrls(driveId);
+    const { preview, full, stream } = buildDriveUrls(driveId);
+
+    // Treat Drive media as video first; components will gracefully fall back to imagery if playback fails
     return {
       id: uniqueId(),
       originalUrl: trimmed,
-      kind: isDirectVideo(trimmed) ? 'video' : 'image',
-      previewUrl: preview,
-      fullUrl: full,
+      kind: 'video',
+      previewUrl: stream,
+      fullUrl: stream,
+      fallbackPreview: preview,
     };
   }
 
@@ -445,6 +450,13 @@ export const decodeGalleryParam = (value: string | null) => {
     return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.warn('Failed to decode gallery payload', err);
+    const text = decodeURIComponent(value || '');
+    if (text.includes('http')) {
+      return text
+        .split(/[\s,]+/)
+        .map((v) => v.trim())
+        .filter((v) => v.startsWith('http'));
+    }
     return [];
   }
 };

@@ -39,6 +39,8 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [useVideo, setUseVideo] = useState(item.kind === 'video');
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() => normalizeSize(item.aspectRatio));
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -91,16 +93,17 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
       if (!videoRef.current) return;
       const target = hovered ? 0.9 : 0;
       const current = videoRef.current.volume;
-      const step = 0.05;
+      const step = 0.08;
       const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
       videoRef.current.volume = next;
-      videoRef.current.muted = next === 0;
+      const shouldMute = next < 0.05;
+      if (muted !== shouldMute) setMuted(shouldMute);
       if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
     };
 
     raf = requestAnimationFrame(fadeVolume);
     return () => cancelAnimationFrame(raf);
-  }, [hovered]);
+  }, [hovered, muted]);
 
   const handleSize = (width: number, height: number) => {
     const aspect = width && height ? width / height : undefined;
@@ -108,7 +111,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   };
 
   const renderMedia = () => {
-    if (item.kind === 'video') {
+    if (useVideo) {
       return (
         <video
           ref={videoRef}
@@ -121,16 +124,22 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
           autoPlay
           playsInline
           loop
-          muted
+          muted={muted}
           onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
           onLoadedData={() => setLoaded(true)}
+          onError={() => {
+            if (item.fallbackPreview) {
+              setUseVideo(false);
+              setLoaded(false);
+            }
+          }}
         />
       );
     }
 
     return (
       <img
-        src={item.previewUrl}
+        src={item.fallbackPreview || item.previewUrl}
         alt="art"
         className={`
           w-full h-full object-contain rounded-xl
@@ -222,7 +231,7 @@ interface GallerySceneProps {
 }
 
 const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }) => {
-  const radius = Math.min(74, 42 + items.length * 0.12);
+  const radius = Math.min(70, 38 + items.length * 0.1);
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
@@ -248,8 +257,8 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }
         enablePan={false}
         enableZoom={true}
         // Broadened zoom range for deep dives and distant overviews
-        minDistance={0.008}
-        maxDistance={360}
+        minDistance={0.003}
+        maxDistance={640}
         autoRotate
         autoRotateSpeed={0.6}
         dampingFactor={0.05}

@@ -31,7 +31,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const fullUrl = media.fullUrl;
 
   const renderContent = useMemo(() => {
-    if (media.kind === 'video') {
+    if (media.kind === 'video' && !hasError) {
       return (
         <video
           src={fullUrl}
@@ -43,7 +43,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           autoPlay
           loop
           playsInline
-          muted={true}
+          muted={false}
           controls
           onLoadedData={() => setLoaded(true)}
           onError={() => setHasError(true)}
@@ -71,7 +71,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
 
     return (
       <img
-        src={hasError ? previewUrl : fullUrl}
+        src={hasError ? media.fallbackPreview || previewUrl : fullUrl}
         alt="Artwork"
         className={`
           max-w-full max-h-[85vh] object-contain rounded-xl select-none
@@ -84,7 +84,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         }}
       />
     );
-  }, [fullUrl, hasError, loaded, media.kind, previewUrl]);
+  }, [fullUrl, hasError, loaded, media.fallbackPreview, media.kind, previewUrl]);
 
   return (
     <div 
