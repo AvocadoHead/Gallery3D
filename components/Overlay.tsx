@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { getFullUrl, getPreviewUrl } from '../constants';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MediaItem } from '../constants';
 
 interface OverlayProps {
-  artworkId: string | null;
+  artwork: MediaItem | null;
   onClose: () => void;
 }
 
-const Overlay: React.FC<OverlayProps> = ({ artworkId, onClose }) => {
+const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const [loaded, setLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    if (artworkId) {
+    if (artwork) {
       setLoaded(false);
       setHasError(false);
       // Small delay to allow mounting before animating in
@@ -22,12 +22,69 @@ const Overlay: React.FC<OverlayProps> = ({ artworkId, onClose }) => {
       setVisible(false);
       document.body.style.overflow = '';
     }
-  }, [artworkId]);
+  }, [artwork]);
 
-  if (!artworkId) return null;
+  const media = artwork;
+  if (!media) return null;
 
-  const fullUrl = getFullUrl(artworkId);
-  const previewUrl = getPreviewUrl(artworkId);
+  const previewUrl = media.previewUrl;
+  const fullUrl = media.fullUrl;
+
+  const renderContent = useMemo(() => {
+    if (media.kind === 'video') {
+      return (
+        <video
+          src={fullUrl}
+          className={`
+            max-w-full max-h-[85vh] object-contain rounded-xl select-none
+            transition-opacity duration-500
+            ${loaded ? 'opacity-100' : 'opacity-0'}
+          `}
+          autoPlay
+          loop
+          playsInline
+          muted={true}
+          controls
+          onLoadedData={() => setLoaded(true)}
+          onError={() => setHasError(true)}
+        />
+      );
+    }
+
+    if (media.kind === 'embed') {
+      return (
+        <div className="relative w-[80vw] max-w-5xl aspect-video">
+          {!loaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
+              <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
+            </div>
+          )}
+          <iframe
+            src={fullUrl}
+            allow="autoplay; fullscreen; picture-in-picture"
+            className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
+            onLoad={() => setLoaded(true)}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <img
+        src={hasError ? previewUrl : fullUrl}
+        alt="Artwork"
+        className={`
+          max-w-full max-h-[85vh] object-contain rounded-xl select-none
+          transition-opacity duration-500
+          ${loaded ? 'opacity-100' : 'opacity-0'}
+        `}
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          if (!hasError) setHasError(true);
+        }}
+      />
+    );
+  }, [fullUrl, hasError, loaded, media.kind, previewUrl]);
 
   return (
     <div 
@@ -62,25 +119,13 @@ const Overlay: React.FC<OverlayProps> = ({ artworkId, onClose }) => {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {!loaded && !hasError && (
-           <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50/50">
-             <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
-           </div>
+        {!loaded && !hasError && media.kind !== 'embed' && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50/50">
+            <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
+          </div>
         )}
 
-        <img 
-          src={hasError ? previewUrl : fullUrl}
-          alt="Artwork"
-          className={`
-            max-w-full max-h-[85vh] object-contain rounded-xl select-none
-            transition-opacity duration-500
-            ${loaded ? 'opacity-100' : 'opacity-0'}
-          `}
-          onLoad={() => setLoaded(true)}
-          onError={() => {
-            if (!hasError) setHasError(true);
-          }}
-        />
+        {renderContent}
       </div>
     </div>
   );
