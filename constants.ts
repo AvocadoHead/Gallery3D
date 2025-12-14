@@ -341,3 +341,73 @@ export const getSphereCoordinates = (count: number, radius: number) => {
   }
   return points;
 };
+
+// MediaItem type for gallery items
+export interface MediaItem {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+}
+
+// Build default media items from RAW_LINKS
+export const buildDefaultMediaItems = (): MediaItem[] => {
+  return ARTWORK_ITEMS;
+};
+
+// Build media items from an array of URLs
+export const buildMediaItemsFromUrls = (urls: string[]): MediaItem[] => {
+  return urls.map((url, index) => {
+    const isVideo = url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com') || url.match(/\.(mp4|webm|mov)$/i);
+    return {
+      id: `custom-${index}-${Date.now()}`,
+      type: isVideo ? 'video' : 'image',
+      url,
+    };
+  });
+};
+
+// Encode gallery data into URL parameter
+export const encodeGalleryParam = (
+  items: MediaItem[],
+  meta?: { displayName?: string; contactWhatsapp?: string; contactEmail?: string }
+): string => {
+  const urls = items.map(item => item.url);
+  const data = {
+    u: urls,
+    ...(meta?.displayName && { n: meta.displayName }),
+    ...(meta?.contactWhatsapp && { w: meta.contactWhatsapp }),
+    ...(meta?.contactEmail && { e: meta.contactEmail }),
+  };
+  return encodeURIComponent(btoa(JSON.stringify(data)));
+};
+
+// Decode gallery parameter from URL
+export const decodeGalleryParam = (
+  param: string | null
+): { urls: string[]; displayName?: string; contactWhatsapp?: string; contactEmail?: string } => {
+  if (!param) return { urls: [] };
+  try {
+    const decoded = JSON.parse(atob(decodeURIComponent(param)));
+    return {
+      urls: decoded.u || [],
+      displayName: decoded.n,
+      contactWhatsapp: decoded.w,
+      contactEmail: decoded.e,
+    };
+  } catch (e) {
+    console.warn('Failed to decode gallery param:', e);
+    return { urls: [] };
+  }
+};
+
+// Sanitize WhatsApp phone number
+export const sanitizeWhatsapp = (phone: string): string => {
+  if (!phone) return '';
+  // Remove all non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  // If starts with 0, replace with 972 (Israel country code)
+  if (digits.startsWith('0')) {
+    return '972' + digits.slice(1);
+  }
+  return digits;
+};
