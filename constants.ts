@@ -337,12 +337,25 @@ export const getSphereCoordinates = (count: number, radius: number) => {
 
 export type MediaKind = 'image' | 'video' | 'embed';
 
+export type MediaProvider = 'html5' | 'gdrive' | 'youtube' | 'vimeo' | 'unknown';
+
+export interface GalleryMetadata {
+  displayName?: string;
+  contactWhatsapp?: string;
+  contactEmail?: string;
+}
+
+export interface DecodedGalleryPayload extends GalleryMetadata {
+  urls: string[];
+}
+
 export interface MediaItem {
   id: string;
   originalUrl: string;
   previewUrl: string;
   fullUrl: string;
   kind: MediaKind;
+  provider?: MediaProvider;
   aspectRatio?: number;
   fallbackPreview?: string;
 }
@@ -365,6 +378,8 @@ const buildDriveUrls = (id: string) => ({
   stream: `https://drive.google.com/uc?export=download&id=${id}`,
 });
 
+export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
+
 const uniqueId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 export const createMediaItem = (url: string): MediaItem => {
@@ -378,6 +393,7 @@ export const createMediaItem = (url: string): MediaItem => {
       id: uniqueId(),
       originalUrl: trimmed,
       kind: 'embed',
+      provider: 'youtube',
       previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
       fullUrl: `https://www.youtube.com/embed/${youTubeId}?autoplay=1&mute=1&loop=1&playlist=${youTubeId}&controls=0&modestbranding=1&playsinline=1`,
       aspectRatio: 16 / 9,
@@ -389,6 +405,7 @@ export const createMediaItem = (url: string): MediaItem => {
       id: uniqueId(),
       originalUrl: trimmed,
       kind: 'embed',
+      provider: 'vimeo',
       previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
       fullUrl: `https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=1&loop=1&title=0&byline=0&portrait=0`,
       aspectRatio: 16 / 9,
@@ -403,6 +420,7 @@ export const createMediaItem = (url: string): MediaItem => {
       id: uniqueId(),
       originalUrl: trimmed,
       kind: 'video',
+      provider: 'gdrive',
       previewUrl: stream,
       fullUrl: stream,
       fallbackPreview: preview,
@@ -414,6 +432,7 @@ export const createMediaItem = (url: string): MediaItem => {
       id: uniqueId(),
       originalUrl: trimmed,
       kind: 'video',
+      provider: 'html5',
       previewUrl: trimmed,
       fullUrl: trimmed,
     };
@@ -423,6 +442,7 @@ export const createMediaItem = (url: string): MediaItem => {
     id: uniqueId(),
     originalUrl: trimmed,
     kind: 'image',
+    provider: 'unknown',
     previewUrl: trimmed,
     fullUrl: trimmed,
   };
@@ -437,26 +457,41 @@ export const buildMediaItemsFromUrls = (urls: string[]) =>
 export const buildDefaultMediaItems = () =>
   ARTWORK_IDS.map((id) => createMediaItem(`https://drive.google.com/file/d/${id}/view?usp=drive_link`));
 
-export const encodeGalleryParam = (items: MediaItem[]) => {
-  const urls = items.map((item) => item.originalUrl);
-  return encodeURIComponent(btoa(JSON.stringify(urls)));
+export const encodeGalleryParam = (
+  items: MediaItem[],
+  metadata: GalleryMetadata = {},
+) => {
+  const payload = {
+    urls: items.map((item) => item.originalUrl),
+    ...metadata,
+  };
+  return encodeURIComponent(btoa(JSON.stringify(payload)));
 };
 
-export const decodeGalleryParam = (value: string | null) => {
-  if (!value) return [];
+export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload => {
+  if (!value) return { urls: [] };
   try {
     const raw = atob(decodeURIComponent(value));
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (Array.isArray(parsed)) {
+      return { urls: parsed };
+    }
+    if (parsed && typeof parsed === 'object') {
+      const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } = parsed as DecodedGalleryPayload;
+      return { urls, displayName, contactWhatsapp, contactEmail };
+    }
+    return { urls: [] };
   } catch (err) {
     console.warn('Failed to decode gallery payload', err);
     const text = decodeURIComponent(value || '');
     if (text.includes('http')) {
-      return text
-        .split(/[\s,]+/)
-        .map((v) => v.trim())
-        .filter((v) => v.startsWith('http'));
+      return {
+        urls: text
+          .split(/[\s,]+/)
+          .map((v) => v.trim())
+          .filter((v) => v.startsWith('http')),
+      };
     }
-    return [];
+    return { urls: [] };
   }
 };

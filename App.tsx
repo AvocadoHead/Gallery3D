@@ -7,6 +7,7 @@ import {
   buildMediaItemsFromUrls,
   decodeGalleryParam,
   encodeGalleryParam,
+  sanitizeWhatsapp,
   MediaItem,
 } from './constants';
 
@@ -26,6 +27,11 @@ const App: React.FC = () => {
   const [shareLink, setShareLink] = useState('');
   const [isCustom, setIsCustom] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [contactWhatsapp, setContactWhatsapp] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
+  const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   useEffect(() => {
     const extractGallery = () => {
@@ -38,9 +44,12 @@ const App: React.FC = () => {
     };
 
     const incoming = decodeGalleryParam(extractGallery());
-    if (incoming.length) {
-      setGalleryItems(buildMediaItemsFromUrls(incoming));
+    if (incoming.urls.length) {
+      setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
       setIsCustom(true);
+      setDisplayName(incoming.displayName || '');
+      setContactWhatsapp(incoming.contactWhatsapp || '');
+      setContactEmail(incoming.contactEmail || '');
       return;
     }
     setGalleryItems(buildDefaultMediaItems());
@@ -74,8 +83,12 @@ const App: React.FC = () => {
 
   const sharePayload = useMemo(() => {
     if (!galleryItems.length) return '';
-    return `${window.location.origin}${window.location.pathname}?gallery=${encodeGalleryParam(galleryItems)}`;
-  }, [galleryItems]);
+    return `${window.location.origin}${window.location.pathname}?gallery=${encodeGalleryParam(galleryItems, {
+      displayName,
+      contactWhatsapp,
+      contactEmail,
+    })}`;
+  }, [contactEmail, contactWhatsapp, displayName, galleryItems]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
@@ -86,10 +99,46 @@ const App: React.FC = () => {
         await navigator.share({ title: 'Aether Gallery', url: sharePayload });
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(sharePayload);
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 1600);
       }
     } catch (error) {
       console.warn('Share cancelled', error);
+    } finally {
+      if (navigator.clipboard && !navigator.share) {
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 1600);
+      }
     }
+  };
+
+  const handleCopyLink = async () => {
+    if (!sharePayload && !shareLink) return;
+    if (!shareLink && sharePayload) setShareLink(sharePayload);
+    try {
+      await navigator.clipboard.writeText(sharePayload || shareLink);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 1600);
+    } catch (err) {
+      console.warn('Clipboard unavailable', err);
+    }
+  };
+
+  const handleContactClick = () => {
+    const phone = sanitizeWhatsapp(contactWhatsapp);
+    if (contactEmail && phone) {
+      setContactMenuOpen((prev) => !prev);
+      return;
+    }
+    if (phone) {
+      window.open(`https://wa.me/${phone}`, '_blank');
+      return;
+    }
+    if (contactEmail) {
+      window.open(`mailto:${contactEmail}`);
+      return;
+    }
+    window.open('https://api.whatsapp.com/send/?phone=97236030603&text&type=phone_number&app_absent=0', '_blank');
   };
 
   return (
@@ -129,10 +178,13 @@ const App: React.FC = () => {
         >
           <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900">Aether</h1>
           <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1">Gallery</p>
+          {displayName && (
+            <p className="text-[11px] text-slate-500 font-semibold mt-1 ml-[2px]">{displayName}</p>
+          )}
         </button>
 
         {builderOpen && (
-          <div className="w-[540px] max-w-[calc(100vw-2.5rem)] bg-gradient-to-br from-white/90 via-white/85 to-slate-50/85 backdrop-blur-xl border border-white/80 rounded-[28px] shadow-2xl p-6 space-y-5 ring-1 ring-slate-100/70">
+          <div className="w-[720px] max-w-[calc(100vw-2.5rem)] bg-gradient-to-br from-white/95 via-white/90 to-slate-50/90 backdrop-blur-2xl border border-white/80 rounded-[32px] shadow-[0_35px_120px_rgba(15,23,42,0.18)] p-7 space-y-6 ring-1 ring-slate-100/80">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-800">Build your own gallery</p>
@@ -141,8 +193,8 @@ const App: React.FC = () => {
               <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">New</span>
             </div>
 
-            <div className="bg-slate-900 text-white rounded-2xl p-4 flex items-center gap-3 shadow-inner ring-1 ring-white/10">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-pink-500 flex items-center justify-center text-slate-900 font-bold shadow-lg">1$</div>
+            <div className="bg-slate-900 text-white rounded-3xl p-5 flex items-center gap-4 shadow-inner ring-1 ring-white/10">
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-pink-500 flex items-center justify-center text-slate-900 font-bold shadow-lg text-lg">1$</div>
               <div className="text-sm leading-tight space-y-1">
                 <p className="font-semibold text-base">Enjoying the gallery?</p>
                 <p className="text-slate-200 text-xs">A friendly tip (1$ / 5₪) keeps the lights on.</p>
@@ -176,6 +228,36 @@ const App: React.FC = () => {
                 </div>
                 <p className="text-[10px] text-slate-500 mt-auto">054-773-1650 works for both.</p>
               </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-xs text-slate-600">
+              <label className="flex flex-col gap-1 p-3 rounded-xl bg-white/70 border border-slate-100">
+                <span className="font-semibold text-slate-800">Display name</span>
+                <input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="e.g. Maya Cohen"
+                  className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </label>
+              <label className="flex flex-col gap-1 p-3 rounded-xl bg-white/70 border border-slate-100">
+                <span className="font-semibold text-slate-800">WhatsApp</span>
+                <input
+                  value={contactWhatsapp}
+                  onChange={(e) => setContactWhatsapp(e.target.value)}
+                  placeholder="972... or local"
+                  className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </label>
+              <label className="flex flex-col gap-1 p-3 rounded-xl bg-white/70 border border-slate-100">
+                <span className="font-semibold text-slate-800">Email</span>
+                <input
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="artist@aether.com"
+                  className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </label>
             </div>
 
             {isCustom && (
@@ -223,10 +305,15 @@ const App: React.FC = () => {
                         Email
                       </a>
                       <button
-                        className="px-3 py-1.5 rounded-full bg-slate-200 text-slate-800 font-semibold shadow"
-                        onClick={() => navigator.clipboard?.writeText(shareLink)}
+                        className="relative px-3 py-1.5 rounded-full bg-slate-200 text-slate-800 font-semibold shadow"
+                        onClick={handleCopyLink}
                       >
                         Copy link
+                        {toastVisible && (
+                          <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-1 rounded-full bg-slate-900 text-white text-[10px] shadow-lg">
+                            Link copied
+                          </span>
+                        )}
                       </button>
                     </div>
                     <p className="text-[11px] text-slate-500">Recipients open the link and instantly see your uploaded packet.</p>
@@ -243,15 +330,41 @@ const App: React.FC = () => {
         fixed bottom-8 right-8 z-20 transition-opacity duration-500
         ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}
       `}>
-        <a
-          href="https://api.whatsapp.com/send/?phone=97236030603&text&type=phone_number&app_absent=0"
-          target="_blank" 
-          rel="noreferrer"
-          className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md hover:bg-white transition-all duration-300 text-slate-600 hover:text-slate-900 text-sm font-medium border border-white"
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
-          Contact
-        </a>
+        <div className="relative">
+          <button
+            onClick={handleContactClick}
+            className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md hover:bg-white transition-all duration-300 text-slate-600 hover:text-slate-900 text-sm font-medium border border-white"
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
+            Contact
+          </button>
+          {contactMenuOpen && (
+            <div className="absolute bottom-12 right-0 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+              {sanitizeWhatsapp(contactWhatsapp) && (
+                <button
+                  className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 w-full text-left"
+                  onClick={() => {
+                    window.open(`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`, '_blank');
+                    setContactMenuOpen(false);
+                  }}
+                >
+                  WhatsApp {sanitizeWhatsapp(contactWhatsapp)}
+                </button>
+              )}
+              {contactEmail && (
+                <button
+                  className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 w-full text-left"
+                  onClick={() => {
+                    window.open(`mailto:${contactEmail}`);
+                    setContactMenuOpen(false);
+                  }}
+                >
+                  Email {contactEmail}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -111,6 +111,33 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   };
 
   const renderMedia = () => {
+    if (item.kind === 'embed') {
+      const hint = item.provider === 'youtube' || item.provider === 'vimeo';
+      return (
+        <div className="relative w-full h-full">
+          <iframe
+            src={`${item.fullUrl}${item.fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=1&playsinline=1&loop=1`}
+            className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            loading="lazy"
+            style={{ pointerEvents: 'none' }}
+            onLoad={() => {
+              if (item.aspectRatio) {
+                setComputedSize(normalizeSize(item.aspectRatio));
+              }
+              setLoaded(true);
+            }}
+          />
+          {hint && (
+            <div className="absolute inset-0 pointer-events-none flex items-end justify-center pb-2">
+              <span className="text-[10px] bg-black/50 text-white px-2 py-1 rounded-full">Click for sound</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (useVideo) {
       return (
         <video
@@ -125,6 +152,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
           playsInline
           loop
           muted={muted}
+          preload="metadata"
           onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
           onLoadedData={() => setLoaded(true)}
           onError={() => {
@@ -193,22 +221,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
             >
               {/* Media Container */}
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
-                {item.kind === 'embed' ? (
-                  <div className={`w-full h-full flex items-center justify-center ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}>
-                    <img
-                      src={item.previewUrl}
-                      alt="preview"
-                      className="w-full h-full object-contain"
-                      onLoad={(e) => {
-                        const el = e.target as HTMLImageElement;
-                        handleSize(el.naturalWidth, el.naturalHeight);
-                        setLoaded(true);
-                      }}
-                    />
-                  </div>
-                ) : (
-                  renderMedia()
-                )}
+                {renderMedia()}
                 {!loaded && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/40">
                     <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
@@ -231,7 +244,7 @@ interface GallerySceneProps {
 }
 
 const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }) => {
-  const radius = Math.min(70, 38 + items.length * 0.1);
+  const radius = Math.min(62, (38 + items.length * 0.1) * 0.92);
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
@@ -255,16 +268,14 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }
 
       <OrbitControls
         enablePan={false}
-        enableZoom={true}
-        // Broadened zoom range for deep dives and distant overviews
-        minDistance={0.003}
-        maxDistance={640}
+        enableZoom
+        minDistance={Math.max(6, radius * 0.18)}
+        maxDistance={Math.max(90, radius * 1.35)}
         autoRotate
         autoRotateSpeed={0.6}
-        dampingFactor={0.05}
-        rotateSpeed={0.5}
-        // Increased zoomSpeed to create larger movement per scroll
-        zoomSpeed={5.5}
+        dampingFactor={0.08}
+        rotateSpeed={0.55}
+        zoomSpeed={3}
       />
     </>
   );

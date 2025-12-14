@@ -10,11 +10,13 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const [loaded, setLoaded] = useState(false);
   const [visible, setVisible] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [modalMuted, setModalMuted] = useState(true);
 
   useEffect(() => {
     if (artwork) {
       setLoaded(false);
       setHasError(false);
+      setModalMuted(true);
       // Small delay to allow mounting before animating in
       requestAnimationFrame(() => setVisible(true));
       document.body.style.overflow = 'hidden';
@@ -23,6 +25,16 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       document.body.style.overflow = '';
     }
   }, [artwork]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   const media = artwork;
   if (!media) return null;
@@ -33,25 +45,34 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const renderContent = useMemo(() => {
     if (media.kind === 'video' && !hasError) {
       return (
-        <video
-          src={fullUrl}
-          className={`
-            max-w-full max-h-[85vh] object-contain rounded-xl select-none
-            transition-opacity duration-500
-            ${loaded ? 'opacity-100' : 'opacity-0'}
-          `}
-          autoPlay
-          loop
-          playsInline
-          muted={false}
-          controls
-          onLoadedData={() => setLoaded(true)}
-          onError={() => setHasError(true)}
-        />
+        <div className="relative">
+          <video
+            src={fullUrl}
+            className={`
+              max-w-full max-h-[85vh] object-contain rounded-xl select-none
+              transition-opacity duration-500
+              ${loaded ? 'opacity-100' : 'opacity-0'}
+            `}
+            autoPlay
+            loop
+            playsInline
+            muted={modalMuted}
+            controls
+            onLoadedData={() => setLoaded(true)}
+            onError={() => setHasError(true)}
+          />
+          <button
+            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
+            onClick={() => setModalMuted((prev) => !prev)}
+          >
+            {modalMuted ? 'Enable sound' : 'Mute'}
+          </button>
+        </div>
       );
     }
 
     if (media.kind === 'embed') {
+      const embedUrl = `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
       return (
         <div className="relative w-[80vw] max-w-5xl aspect-video">
           {!loaded && (
@@ -60,11 +81,17 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             </div>
           )}
           <iframe
-            src={fullUrl}
+            src={embedUrl}
             allow="autoplay; fullscreen; picture-in-picture"
             className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
             onLoad={() => setLoaded(true)}
           />
+          <button
+            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
+            onClick={() => setModalMuted((prev) => !prev)}
+          >
+            {modalMuted ? 'Enable sound' : 'Mute'}
+          </button>
         </div>
       );
     }
@@ -84,14 +111,14 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         }}
       />
     );
-  }, [fullUrl, hasError, loaded, media.fallbackPreview, media.kind, previewUrl]);
+  }, [fullUrl, hasError, loaded, media.fallbackPreview, media.kind, modalMuted, previewUrl]);
 
   return (
     <div 
       className={`
-        fixed inset-0 z-50 flex items-center justify-center 
+        fixed inset-0 z-50 flex items-center justify-center
         transition-all duration-500 ease-out
-        ${visible ? 'bg-white/60 backdrop-blur-xl' : 'bg-transparent backdrop-blur-none pointer-events-none'}
+        ${visible ? 'bg-black/70 backdrop-blur-sm' : 'bg-transparent backdrop-blur-none pointer-events-none'}
       `}
       onClick={onClose}
     >
