@@ -311,9 +311,8 @@ export const ARTWORK_ITEMS: ArtworkItem[] = ARTWORK_IDS.map((id, index) => ({
   url: RAW_LINKS[index],
 }));
 
-// We use the lh3.googleusercontent.com CDN which is faster and avoids CORS issues for thumbnails
-// w500 is good for grid, w1600 is good for overlay
-export const getPreviewUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w500`;
+// Use Google Drive direct view URL which works reliably with "Anyone with the link" permissions// w500 is good for grid, w1600 is good for overlay
+export const getPreviewUrl = (id: string) => `https://drive.google.com/uc?export=view&id=${id}`;
 export const getFullUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w2000`;
 
 // Algorithm to distribute points on a sphere (Fibonacci Sphere)
