@@ -174,7 +174,7 @@ const App: React.FC = () => {
       `}>
         <button
           onClick={() => setBuilderOpen((prev) => !prev)}
-          className="text-left group"
+          className="text-left group cursor-pointer"
         >
           <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900">Aether</h1>
           <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1">Gallery</p>
