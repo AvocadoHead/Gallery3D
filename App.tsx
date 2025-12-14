@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, Suspense } from 'react';
+// Force rebuild for image loading fix
 import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
