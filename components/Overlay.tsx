@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { getFullUrl, getPreviewUrl } from '../constants';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MediaItem } from '../constants';
 
 interface OverlayProps {
-  artworkId: string | null;
+  artwork: MediaItem | null;
   onClose: () => void;
 }
 
-const Overlay: React.FC<OverlayProps> = ({ artworkId, onClose }) => {
+const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const [loaded, setLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [modalMuted, setModalMuted] = useState(true);
 
   useEffect(() => {
-    if (artworkId) {
+    if (artwork) {
       setLoaded(false);
       setHasError(false);
+      setModalMuted(true);
       // Small delay to allow mounting before animating in
       requestAnimationFrame(() => setVisible(true));
       document.body.style.overflow = 'hidden';
@@ -22,19 +24,101 @@ const Overlay: React.FC<OverlayProps> = ({ artworkId, onClose }) => {
       setVisible(false);
       document.body.style.overflow = '';
     }
-  }, [artworkId]);
+  }, [artwork]);
 
-  if (!artworkId) return null;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
 
-  const fullUrl = getFullUrl(artworkId);
-  const previewUrl = getPreviewUrl(artworkId);
+  const media = artwork;
+  if (!media) return null;
+
+  const previewUrl = media.previewUrl;
+  const fullUrl = media.fullUrl;
+
+  const renderContent = useMemo(() => {
+    if (media.kind === 'video' && !hasError) {
+      return (
+        <div className="relative">
+          <video
+            src={fullUrl}
+            className={`
+              max-w-full max-h-[85vh] object-contain rounded-xl select-none
+              transition-opacity duration-500
+              ${loaded ? 'opacity-100' : 'opacity-0'}
+            `}
+            autoPlay
+            loop
+            playsInline
+            muted={modalMuted}
+            controls
+            onLoadedData={() => setLoaded(true)}
+            onError={() => setHasError(true)}
+          />
+          <button
+            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
+            onClick={() => setModalMuted((prev) => !prev)}
+          >
+            {modalMuted ? 'Enable sound' : 'Mute'}
+          </button>
+        </div>
+      );
+    }
+
+    if (media.kind === 'embed') {
+      const embedUrl = `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
+      return (
+        <div className="relative w-[80vw] max-w-5xl aspect-video">
+          {!loaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
+              <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
+            </div>
+          )}
+          <iframe
+            src={embedUrl}
+            allow="autoplay; fullscreen; picture-in-picture"
+            className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
+            onLoad={() => setLoaded(true)}
+          />
+          <button
+            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
+            onClick={() => setModalMuted((prev) => !prev)}
+          >
+            {modalMuted ? 'Enable sound' : 'Mute'}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <img
+        src={hasError ? media.fallbackPreview || previewUrl : fullUrl}
+        alt="Artwork"
+        className={`
+          max-w-full max-h-[85vh] object-contain rounded-xl select-none
+          transition-opacity duration-500
+          ${loaded ? 'opacity-100' : 'opacity-0'}
+        `}
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          if (!hasError) setHasError(true);
+        }}
+      />
+    );
+  }, [fullUrl, hasError, loaded, media.fallbackPreview, media.kind, modalMuted, previewUrl]);
 
   return (
     <div 
       className={`
-        fixed inset-0 z-50 flex items-center justify-center 
+        fixed inset-0 z-50 flex items-center justify-center
         transition-all duration-500 ease-out
-        ${visible ? 'bg-white/60 backdrop-blur-xl' : 'bg-transparent backdrop-blur-none pointer-events-none'}
+        ${visible ? 'bg-black/70 backdrop-blur-sm' : 'bg-transparent backdrop-blur-none pointer-events-none'}
       `}
       onClick={onClose}
     >
@@ -62,25 +146,13 @@ const Overlay: React.FC<OverlayProps> = ({ artworkId, onClose }) => {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {!loaded && !hasError && (
-           <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50/50">
-             <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
-           </div>
+        {!loaded && !hasError && media.kind !== 'embed' && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50/50">
+            <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
+          </div>
         )}
 
-        <img 
-          src={hasError ? previewUrl : fullUrl}
-          alt="Artwork"
-          className={`
-            max-w-full max-h-[85vh] object-contain rounded-xl select-none
-            transition-opacity duration-500
-            ${loaded ? 'opacity-100' : 'opacity-0'}
-          `}
-          onLoad={() => setLoaded(true)}
-          onError={() => {
-            if (!hasError) setHasError(true);
-          }}
-        />
+        {renderContent}
       </div>
     </div>
   );
