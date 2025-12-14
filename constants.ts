@@ -284,6 +284,13 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1rboDD4Fki6XOi0PWmEgP6WYSnkSLMhMy/view?usp=drive_link",
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
+export type MediaType = 'image' | 'video';
+
+export interface ArtworkItem {
+  id: string;
+  type: MediaType;
+  url: string;
+}
 
 // Helper to extract Google Drive ID
 const getDriveId = (url: string): string => {
@@ -298,6 +305,11 @@ export const ARTWORK_IDS = RAW_LINKS.map(l => l && l.trim())
   .filter(Boolean)
   .map(getDriveId)
   .filter(Boolean);
+export const ARTWORK_ITEMS: ArtworkItem[] = ARTWORK_IDS.map((id, index) => ({
+  id,
+  type: 'image', // later change to 'video' for video items
+  url: RAW_LINKS[index],
+}));
 
 // We use the lh3.googleusercontent.com CDN which is faster and avoids CORS issues for thumbnails
 // w500 is good for grid, w1600 is good for overlay
