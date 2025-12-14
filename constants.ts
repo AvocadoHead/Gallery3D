@@ -284,6 +284,13 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1rboDD4Fki6XOi0PWmEgP6WYSnkSLMhMy/view?usp=drive_link",
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
+export type MediaType = 'image' | 'video';
+
+export interface ArtworkItem {
+  id: string;
+  type: MediaType;
+  url: string;
+}
 
 // Helper to extract Google Drive ID
 const getDriveId = (url: string): string => {
@@ -298,6 +305,11 @@ export const ARTWORK_IDS = RAW_LINKS.map(l => l && l.trim())
   .filter(Boolean)
   .map(getDriveId)
   .filter(Boolean);
+export const ARTWORK_ITEMS: ArtworkItem[] = ARTWORK_IDS.map((id, index) => ({
+  id,
+  type: 'image', // later change to 'video' for video items
+  url: RAW_LINKS[index],
+}));
 
 // We use the lh3.googleusercontent.com CDN which is faster and avoids CORS issues for thumbnails
 // w500 is good for grid, w1600 is good for overlay
@@ -307,15 +319,10 @@ export const getFullUrl = (id: string) => `https://lh3.googleusercontent.com/d/$
 // Algorithm to distribute points on a sphere (Fibonacci Sphere)
 export const getSphereCoordinates = (count: number, radius: number) => {
   const points: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
-  const safeCount = Math.max(1, count);
   const phiSpan = Math.PI * (3 - Math.sqrt(5)); // Golden angle
 
-  if (safeCount === 1) {
-    return [{ position: [0, 0, radius], rotation: [0, 0, 0] }];
-  }
-
-  for (let i = 0; i < safeCount; i++) {
-    const y = 1 - (i / (safeCount - 1)) * 2; // y goes from 1 to -1
+  for (let i = 0; i < count; i++) {
+    const y = 1 - (i / (count - 1)) * 2; // y goes from 1 to -1
     const radiusAtY = Math.sqrt(1 - y * y);
     const theta = phiSpan * i;
 
@@ -333,165 +340,4 @@ export const getSphereCoordinates = (count: number, radius: number) => {
     });
   }
   return points;
-};
-
-export type MediaKind = 'image' | 'video' | 'embed';
-
-export type MediaProvider = 'html5' | 'gdrive' | 'youtube' | 'vimeo' | 'unknown';
-
-export interface GalleryMetadata {
-  displayName?: string;
-  contactWhatsapp?: string;
-  contactEmail?: string;
-}
-
-export interface DecodedGalleryPayload extends GalleryMetadata {
-  urls: string[];
-}
-
-export interface MediaItem {
-  id: string;
-  originalUrl: string;
-  previewUrl: string;
-  fullUrl: string;
-  kind: MediaKind;
-  provider?: MediaProvider;
-  aspectRatio?: number;
-  fallbackPreview?: string;
-}
-
-const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
-
-const getYouTubeId = (url: string) => {
-  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  return match ? match[1] : '';
-};
-
-const getVimeoId = (url: string) => {
-  const match = url.match(/vimeo\.com\/(\d+)/);
-  return match ? match[1] : '';
-};
-
-const buildDriveUrls = (id: string) => ({
-  preview: `https://lh3.googleusercontent.com/d/${id}=w500`,
-  full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
-  stream: `https://drive.google.com/uc?export=download&id=${id}`,
-});
-
-export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
-
-const uniqueId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-export const createMediaItem = (url: string): MediaItem => {
-  const trimmed = url.trim();
-  const youTubeId = getYouTubeId(trimmed);
-  const vimeoId = getVimeoId(trimmed);
-  const driveId = getDriveId(trimmed);
-
-  if (youTubeId) {
-    return {
-      id: uniqueId(),
-      originalUrl: trimmed,
-      kind: 'embed',
-      provider: 'youtube',
-      previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
-      fullUrl: `https://www.youtube.com/embed/${youTubeId}?autoplay=1&mute=1&loop=1&playlist=${youTubeId}&controls=0&modestbranding=1&playsinline=1`,
-      aspectRatio: 16 / 9,
-    };
-  }
-
-  if (vimeoId) {
-    return {
-      id: uniqueId(),
-      originalUrl: trimmed,
-      kind: 'embed',
-      provider: 'vimeo',
-      previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
-      fullUrl: `https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=1&loop=1&title=0&byline=0&portrait=0`,
-      aspectRatio: 16 / 9,
-    };
-  }
-
-  if (driveId) {
-    const { preview, full, stream } = buildDriveUrls(driveId);
-
-    // Treat Drive media as video first; components will gracefully fall back to imagery if playback fails
-    return {
-      id: uniqueId(),
-      originalUrl: trimmed,
-      kind: 'video',
-      provider: 'gdrive',
-      previewUrl: stream,
-      fullUrl: stream,
-      fallbackPreview: preview,
-    };
-  }
-
-  if (isDirectVideo(trimmed)) {
-    return {
-      id: uniqueId(),
-      originalUrl: trimmed,
-      kind: 'video',
-      provider: 'html5',
-      previewUrl: trimmed,
-      fullUrl: trimmed,
-    };
-  }
-
-  return {
-    id: uniqueId(),
-    originalUrl: trimmed,
-    kind: 'image',
-    provider: 'unknown',
-    previewUrl: trimmed,
-    fullUrl: trimmed,
-  };
-};
-
-export const buildMediaItemsFromUrls = (urls: string[]) =>
-  urls
-    .map((url) => url && url.trim())
-    .filter(Boolean)
-    .map(createMediaItem);
-
-export const buildDefaultMediaItems = () =>
-  ARTWORK_IDS.map((id) => createMediaItem(`https://drive.google.com/file/d/${id}/view?usp=drive_link`));
-
-export const encodeGalleryParam = (
-  items: MediaItem[],
-  metadata: GalleryMetadata = {},
-) => {
-  const payload = {
-    urls: items.map((item) => item.originalUrl),
-    ...metadata,
-  };
-  return encodeURIComponent(btoa(JSON.stringify(payload)));
-};
-
-export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload => {
-  if (!value) return { urls: [] };
-  try {
-    const raw = atob(decodeURIComponent(value));
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return { urls: parsed };
-    }
-    if (parsed && typeof parsed === 'object') {
-      const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } = parsed as DecodedGalleryPayload;
-      return { urls, displayName, contactWhatsapp, contactEmail };
-    }
-    return { urls: [] };
-  } catch (err) {
-    console.warn('Failed to decode gallery payload', err);
-    const text = decodeURIComponent(value || '');
-    if (text.includes('http')) {
-      return {
-        urls: text
-          .split(/[\s,]+/)
-          .map((v) => v.trim())
-          .filter((v) => v.startsWith('http')),
-      };
-    }
-    return { urls: [] };
-  }
 };

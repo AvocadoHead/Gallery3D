@@ -2,194 +2,61 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { getSphereCoordinates, MediaItem } from '../constants';
+import { PlayCircle } from 'lucide-react';
+import { ARTWORK_ITEMS, getSphereCoordinates, ArtworkItem } from '../constants';
 
-// --- Single Gallery Item ---
-interface ItemProps {
-  item: MediaItem;
-  position: [number, number, number];
-  onClick: (item: MediaItem) => void;
-  index: number;
-  radius: number;
-  clearing: boolean;
-}
-
-const normalizeSize = (aspectRatio?: number) => {
-  const base = 220;
-  const min = 150;
-  const max = 260;
-
-  if (!aspectRatio || Number.isNaN(aspectRatio)) {
-    return { width: base, height: base };
-  }
-
-  if (aspectRatio >= 1) {
-    const width = base;
-    const height = Math.min(max, Math.max(min, base / aspectRatio));
-    return { width, height };
-  }
-
-  const height = base;
-  const width = Math.min(max, Math.max(min, base * aspectRatio));
-  return { width, height };
+const getDriveId = (url: string) => {
+  const match = url.match(/[-\w]{25,}/);
+  return match ? match[0] : null;
 };
 
-const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemProps) => {
+const getThumbUrl = (item: ArtworkItem) => {
+  const driveId = getDriveId(item.url);
+  if (!driveId) return item.url;
+
+  if (item.type === 'image') {
+    return `https://drive.google.com/uc?export=view&id=${driveId}`;
+  }
+
+  return `https://drive.google.com/file/d/${driveId}/preview?autoplay=1&mute=1&controls=0`;
+};
+
+interface ItemProps {
+  item: ArtworkItem;
+  position: [number, number, number];
+  onClick: (id: string) => void;
+  index: number;
+}
+
+const GalleryItem = ({ item, position, onClick, index }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [muted, setMuted] = useState(true);
-  const [useVideo, setUseVideo] = useState(item.kind === 'video');
-  const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() => normalizeSize(item.aspectRatio));
-  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const isVideo = item.type === 'video';
+  const driveId = getDriveId(item.url);
+  const thumbUrl = useMemo(() => getThumbUrl(item), [item]);
 
   useEffect(() => {
-    // Staggered entry animation
     const timeout = setTimeout(() => {
       setMounted(true);
-    }, index * 20); 
+    }, index * 20);
     return () => clearTimeout(timeout);
   }, [index]);
 
   useFrame((state) => {
-    if (!groupRef.current) return;
-    // Billboard behavior: always face the camera
-    // This works perfectly both outside and INSIDE the sphere
-    groupRef.current.lookAt(state.camera.position);
-
-    const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
-    if (edgeTilt > 0) {
-      groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
+    if (groupRef.current) {
+      groupRef.current.lookAt(state.camera.position);
     }
   });
-
-  useEffect(() => {
-    if (!videoRef.current) return;
-
-    const play = () => {
-      const el = videoRef.current!;
-      const promise = el.play();
-      if (promise && typeof promise.then === 'function') {
-        promise.catch(() => {});
-      }
-    };
-
-    play();
-  }, [item.previewUrl]);
-
-  useEffect(() => {
-    if (!videoRef.current) return;
-    const el = videoRef.current;
-    const promise = el.play();
-    if (promise && typeof promise.then === 'function') {
-      promise.catch(() => {});
-    }
-  }, [hovered]);
-
-  useEffect(() => {
-    let raf: number;
-    const fadeVolume = () => {
-      if (!videoRef.current) return;
-      const target = hovered ? 0.9 : 0;
-      const current = videoRef.current.volume;
-      const step = 0.08;
-      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
-      videoRef.current.volume = next;
-      const shouldMute = next < 0.05;
-      if (muted !== shouldMute) setMuted(shouldMute);
-      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
-    };
-
-    raf = requestAnimationFrame(fadeVolume);
-    return () => cancelAnimationFrame(raf);
-  }, [hovered, muted]);
-
-  const handleSize = (width: number, height: number) => {
-    const aspect = width && height ? width / height : undefined;
-    setComputedSize(normalizeSize(aspect));
-  };
-
-  const renderMedia = () => {
-    if (item.kind === 'embed') {
-      const hint = item.provider === 'youtube' || item.provider === 'vimeo';
-      return (
-        <div className="relative w-full h-full">
-          <iframe
-            src={`${item.fullUrl}${item.fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=1&playsinline=1&loop=1`}
-            className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-            style={{ pointerEvents: 'none' }}
-            onLoad={() => {
-              if (item.aspectRatio) {
-                setComputedSize(normalizeSize(item.aspectRatio));
-              }
-              setLoaded(true);
-            }}
-          />
-          {hint && (
-            <div className="absolute inset-0 pointer-events-none flex items-end justify-center pb-2">
-              <span className="text-[10px] bg-black/50 text-white px-2 py-1 rounded-full">Click for sound</span>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (useVideo) {
-      return (
-        <video
-          ref={videoRef}
-          src={item.previewUrl}
-          className={`
-            w-full h-full object-contain rounded-xl
-            transition-opacity duration-500
-            ${loaded ? 'opacity-100' : 'opacity-0'}
-          `}
-          autoPlay
-          playsInline
-          loop
-          muted={muted}
-          preload="metadata"
-          onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
-          onLoadedData={() => setLoaded(true)}
-          onError={() => {
-            if (item.fallbackPreview) {
-              setUseVideo(false);
-              setLoaded(false);
-            }
-          }}
-        />
-      );
-    }
-
-    return (
-      <img
-        src={item.fallbackPreview || item.previewUrl}
-        alt="art"
-        className={`
-          w-full h-full object-contain rounded-xl
-          transition-opacity duration-500
-          ${loaded ? 'opacity-100' : 'opacity-0'}
-        `}
-        onLoad={(e) => {
-          const el = e.target as HTMLImageElement;
-          handleSize(el.naturalWidth, el.naturalHeight);
-          setLoaded(true);
-        }}
-        draggable={false}
-      />
-    );
-  };
 
   return (
     <group position={position} ref={groupRef}>
       <Float
-        speed={1.5} 
-        rotationIntensity={0.05} 
-        floatIntensity={0.5} 
+        speed={1.5}
+        rotationIntensity={0.05}
+        floatIntensity={0.5}
         floatingRange={[-0.1, 0.1]}
       >
         <Html transform occlude="blending" distanceFactor={12} zIndexRange={[100, 0]}>
@@ -197,35 +64,61 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
             className={`
               relative group cursor-pointer select-none
               transition-all duration-700 ease-out
-              ${mounted && !clearing ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
-              ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
+              ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
+              ${hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
             `}
             onClick={(e) => {
               e.stopPropagation();
-              onClick(item);
+              onClick(item.id);
             }}
             onPointerEnter={() => setHover(true)}
             onPointerLeave={() => setHover(false)}
             style={{
-              width: `${computedSize.width}px`,
-              height: `${computedSize.height}px`,
+              width: '240px',
+              height: '240px',
             }}
           >
-            {/* Card Container */}
             <div
               className={`
                 w-full h-full bg-white rounded-2xl p-2 shadow-xl
                 transition-all duration-300
-                ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
+                ${hovered ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
               `}
             >
-              {/* Media Container */}
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
-                {renderMedia()}
-                {!loaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/40">
-                    <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
-                  </div>
+                {isVideo && driveId ? (
+                  <>
+                    <iframe
+                      src={thumbUrl}
+                      title={`preview-${item.id}`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        pointerEvents: 'none',
+                      }}
+                      allow="autoplay"
+                    />
+                    <div
+                      className="absolute inset-0"
+                      style={{ pointerEvents: 'auto' }}
+                    />
+                    <div className="absolute bottom-3 right-3 z-10 bg-black/60 rounded-full p-2 text-white">
+                      <PlayCircle size={20} />
+                    </div>
+                  </>
+                ) : (
+                  <img
+                    src={thumbUrl}
+                    alt="art"
+                    className={`
+                      w-full h-full object-cover
+                      transition-opacity duration-500
+                      ${loaded ? 'opacity-100' : 'opacity-0'}
+                    `}
+                    onLoad={() => setLoaded(true)}
+                    draggable={false}
+                  />
                 )}
               </div>
             </div>
@@ -236,16 +129,16 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   );
 };
 
-// --- Main Scene ---
 interface GallerySceneProps {
-  onSelect: (item: MediaItem) => void;
-  items: MediaItem[];
-  clearing: boolean;
+  onSelect: (id: string) => void;
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }) => {
-  const radius = Math.min(62, (38 + items.length * 0.1) * 0.92);
-  const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect }) => {
+  const radius = 58;
+  const coords = useMemo(
+    () => getSphereCoordinates(ARTWORK_ITEMS.length, radius),
+    []
+  );
 
   return (
     <>
@@ -253,29 +146,27 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }
       <Environment preset="city" />
 
       <group>
-        {items.map((item, i) => (
+        {ARTWORK_ITEMS.map((item, i) => (
           <GalleryItem
             key={item.id}
             item={item}
             index={i}
             position={coords[i].position}
             onClick={onSelect}
-            radius={radius}
-            clearing={clearing}
           />
         ))}
       </group>
 
       <OrbitControls
         enablePan={false}
-        enableZoom
-        minDistance={Math.max(6, radius * 0.18)}
-        maxDistance={Math.max(90, radius * 1.35)}
+        enableZoom={true}
+        minDistance={0}
+        maxDistance={110}
         autoRotate
         autoRotateSpeed={0.6}
-        dampingFactor={0.08}
-        rotateSpeed={0.55}
-        zoomSpeed={3}
+        dampingFactor={0.05}
+        rotateSpeed={0.5}
+        zoomSpeed={4}
       />
     </>
   );
