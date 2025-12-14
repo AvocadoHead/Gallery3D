@@ -351,8 +351,11 @@ export interface MediaItem {
 
 // Build default media items from RAW_LINKS
 export const buildDefaultMediaItems = (): MediaItem[] => {
-  return ARTWORK_ITEMS;
-};
+  return ARTWORK_ITEMS.map(item => ({
+    id: item.id,
+    type: item.type as 'image' | 'video',
+    url: getPreviewUrl(item.id),
+  }));};
 
 // Build media items from an array of URLs
 export const buildMediaItemsFromUrls = (urls: string[]): MediaItem[] => {
