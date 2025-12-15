@@ -1,68 +1,214 @@
-import React, { useState, Suspense } from 'react';
+import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
+import {
+  ARTWORK_ITEMS,
+  buildMediaItemsFromUrls,
+  decodeGalleryParam,
+  encodeGalleryParam,
+  sanitizeWhatsapp,
+  MediaItem,
+} from './constants';
 
 const Loader = () => (
   <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-    <div className="flex flex-col items-center gap-4">
-      <div className="w-10 h-10 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
-    </div>
+    <div className="w-10 h-10 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
   </div>
 );
 
 const App: React.FC = () => {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
+
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+
+  const [displayName, setDisplayName] = useState('');
+  const [contactWhatsapp, setContactWhatsapp] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+
+  const [toastVisible, setToastVisible] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
+  // ✅ Load shared gallery or default gallery
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get('gallery');
+
+    if (encoded) {
+      const decoded = decodeGalleryParam(encoded);
+      if (decoded?.urls?.length) {
+        setGalleryItems(buildMediaItemsFromUrls(decoded.urls));
+        setDisplayName(decoded.displayName || '');
+        setContactWhatsapp(decoded.contactWhatsapp || '');
+        setContactEmail(decoded.contactEmail || '');
+        return;
+      }
+    }
+
+    setGalleryItems(ARTWORK_ITEMS);
+  }, []);
+
+  const handleAddMedia = () => {
+    const entries = inputValue
+      .split(/[,\n]/)
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    if (!entries.length) return;
+
+    setGalleryItems((prev) => [...prev, ...buildMediaItemsFromUrls(entries)]);
+    setInputValue('');
+  };
+
+  const handleCreateNew = () => {
+    setIsClearing(true);
+    setSelectedItem(null);
+    setBuilderOpen(true);
+
+    setTimeout(() => {
+      setGalleryItems([]);
+      setIsClearing(false);
+    }, 450);
+  };
+
+  const shareLink = useMemo(() => {
+    if (!galleryItems.length) return '';
+    const encoded = encodeGalleryParam(galleryItems, {
+      displayName,
+      contactWhatsapp,
+      contactEmail,
+    });
+    return `${window.location.origin}${window.location.pathname}?gallery=${encoded}`;
+  }, [galleryItems, displayName, contactWhatsapp, contactEmail]);
+
+  const handleCopyShare = async () => {
+    if (!shareLink) return;
+
+    window.history.replaceState(null, '', shareLink);
+
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 1500);
+    } catch {
+      // ignore
+    }
+  };
+
+  const openWhatsApp = () => {
+    const phone = sanitizeWhatsapp(contactWhatsapp);
+    if (!phone) return;
+    window.open(`https://wa.me/${phone}`, '_blank');
+  };
+
+  const openEmail = () => {
+    if (!contactEmail) return;
+    window.open(`mailto:${contactEmail}`, '_blank');
+  };
 
   return (
-    <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
-      
-      {/* 3D Scene Wrapper */}
-      <div 
-        className={`
-          absolute inset-0 transition-all duration-700 ease-out
-          ${selectedId ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}
-        `}
-      >
-        <Suspense fallback={<Loader />}>
-          <Canvas 
-            // Position z: 75 ensures the whole sphere (radius 58) is visible on load
-            camera={{ position: [0, 0, 75], fov: 50 }}
-            dpr={[1, 1.5]} 
-            gl={{ antialias: false, alpha: true }} 
-            className="bg-transparent"
-          >
-            <GalleryScene onSelect={setSelectedId} />
-          </Canvas>
-        </Suspense>
-      </div>
+    <div className="w-full h-screen relative bg-gradient-to-br from-slate-50 to-slate-200 overflow-hidden">
+      <Suspense fallback={<Loader />}>
+        <Canvas camera={{ position: [0, 0, 75], fov: 50 }}>
+          <GalleryScene items={galleryItems} onSelect={setSelectedItem} clearing={isClearing} />
+        </Canvas>
+      </Suspense>
 
-      {/* UI Overlay for Zoomed Image */}
-      <Overlay artworkId={selectedId} onClose={() => setSelectedId(null)} />
+      <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
-      {/* Header */}
-      <div className={`
-        fixed top-8 left-8 z-10 pointer-events-none select-none transition-opacity duration-500
-        ${selectedId ? 'opacity-0' : 'opacity-100'}
-      `}>
-        <h1 className="text-3xl font-light text-slate-800 tracking-tighter">Aether</h1>
-        <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1">Gallery</p>
-      </div>
-
-      {/* Footer */}
-      <div className={`
-        fixed bottom-8 right-8 z-20 transition-opacity duration-500
-        ${selectedId ? 'opacity-0 pointer-events-none' : 'opacity-100'}
-      `}>
-        <a 
-          href="https://api.whatsapp.com/send/?phone=97236030603&text&type=phone_number&app_absent=0" 
-          target="_blank" 
-          rel="noreferrer"
-          className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md hover:bg-white transition-all duration-300 text-slate-600 hover:text-slate-900 text-sm font-medium border border-white"
+      {/* HEADER (clickable) */}
+      <div className="fixed top-8 left-8 z-20">
+        <button
+          onClick={() => setBuilderOpen((v) => !v)}
+          className="text-left select-none"
+          style={{ cursor: 'pointer' }}
         >
-          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
-          Contact
-        </a>
+          <h1 className="text-3xl font-light leading-none">Aether</h1>
+          <p className="text-xs uppercase tracking-widest opacity-80">Gallery</p>
+          {displayName && <p className="text-xs opacity-70 mt-1">{displayName}</p>}
+        </button>
+
+        {builderOpen && (
+          <div className="mt-4 w-[520px] bg-white/90 backdrop-blur-xl rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={handleCreateNew}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg"
+              >
+                Create new gallery
+              </button>
+              <button onClick={handleCopyShare} className="px-4 py-2 border rounded-lg">
+                Copy share link
+              </button>
+              {toastVisible && <span className="text-sm opacity-70 self-center">Link copied</span>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+                className="border rounded-xl p-3"
+              />
+              <input
+                value={contactWhatsapp}
+                onChange={(e) => setContactWhatsapp(e.target.value)}
+                placeholder="WhatsApp (digits)"
+                className="border rounded-xl p-3"
+              />
+              <input
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="Email"
+                className="border rounded-xl p-3 col-span-2"
+              />
+            </div>
+
+            <textarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Paste image / video URLs (one per line or separated by commas)"
+              className="w-full h-24 border rounded-xl p-3"
+            />
+
+            <div className="flex gap-2">
+              <button onClick={handleAddMedia} className="px-4 py-2 bg-slate-900 text-white rounded-lg">
+                Add media
+              </button>
+              <div className="text-xs opacity-70 self-center">
+                Items: <b>{galleryItems.length}</b>
+              </div>
+            </div>
+
+            {/* OPTIONAL: donate images if you have them in /public/assets/ */}
+            <details className="text-sm">
+              <summary className="cursor-pointer opacity-80">Donate (QR)</summary>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <img src="/assets/donate-qr-1.png" alt="Donate QR 1" className="w-full rounded-xl border" />
+                <img src="/assets/donate-qr-2.png" alt="Donate QR 2" className="w-full rounded-xl border" />
+              </div>
+              <div className="text-xs opacity-60 mt-2">
+                If your QR filenames differ, update these image paths.
+              </div>
+            </details>
+          </div>
+        )}
+      </div>
+
+      {/* FOOTER CONTACT (shown on homepage too) */}
+      <div className="fixed bottom-8 right-8 z-20 flex gap-2">
+        {contactWhatsapp && (
+          <button onClick={openWhatsApp} className="px-5 py-2 bg-white/80 rounded-full shadow">
+            WhatsApp
+          </button>
+        )}
+        {contactEmail && (
+          <button onClick={openEmail} className="px-5 py-2 bg-white/80 rounded-full shadow">
+            Email
+          </button>
+        )}
       </div>
     </div>
   );
