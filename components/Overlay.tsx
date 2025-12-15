@@ -17,6 +17,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       setLoaded(false);
       setHasError(false);
       setModalMuted(true);
+      // Small delay to allow CSS transition to render
       requestAnimationFrame(() => setVisible(true));
       document.body.style.overflow = 'hidden';
     } else {
@@ -36,14 +37,24 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   if (!artwork) return null;
 
   const previewUrl = artwork.previewUrl;
-  const fullUrl = artwork.fullUrl;
+  const url = artwork.url; // FIXED: Was artwork.fullUrl
+
+  // Helper to detect if it's a social embed (YouTube/Vimeo) vs direct file
+  const isEmbed = useMemo(() => {
+    return (
+      url.includes('youtube') ||
+      url.includes('youtu.be') ||
+      url.includes('vimeo')
+    );
+  }, [url]);
 
   const renderContent = useMemo(() => {
-    if (artwork.kind === 'video' && !hasError) {
+    // 1. VIDEO (Direct File like .mp4)
+    if (artwork.type === 'video' && !isEmbed && !hasError) {
       return (
         <div className="relative">
           <video
-            src={fullUrl}
+            src={url}
             className={`
               max-w-full max-h-[85vh] object-contain rounded-xl select-none
               transition-opacity duration-500
@@ -58,8 +69,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             onError={() => setHasError(true)}
           />
           <button
-            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
-            onClick={() => setModalMuted((prev) => !prev)}
+            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow hover:bg-black/80 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setModalMuted((prev) => !prev);
+            }}
           >
             {modalMuted ? 'Enable sound' : 'Mute'}
           </button>
@@ -67,10 +81,20 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       );
     }
 
-    if (artwork.kind === 'embed') {
-      const embedUrl = `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
+    // 2. VIDEO (Embed - YouTube/Vimeo)
+    if (artwork.type === 'video' && isEmbed) {
+      let embedUrl = url;
+      
+      // Convert YouTube standard link to Embed link
+      if (url.includes('youtube') || url.includes('youtu.be')) {
+         const videoId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
+         embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
+      }
+      // Simple logic for Vimeo (requires player.vimeo.com normally, but assuming raw link for now)
+      // If you are pasting raw vimeo links, you might need a regex to convert to player.vimeo.com/video/ID
+
       return (
-        <div className="relative w-[80vw] max-w-5xl aspect-video">
+        <div className="relative w-[80vw] max-w-5xl aspect-video bg-black rounded-xl overflow-hidden">
           {!loaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
               <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin" />
@@ -82,19 +106,14 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
             onLoad={() => setLoaded(true)}
           />
-          <button
-            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
-            onClick={() => setModalMuted((prev) => !prev)}
-          >
-            {modalMuted ? 'Enable sound' : 'Mute'}
-          </button>
         </div>
       );
     }
 
+    // 3. IMAGE (Fallback or Standard)
     return (
       <img
-        src={hasError ? (artwork.fallbackPreview || previewUrl) : fullUrl}
+        src={hasError ? previewUrl : url} // Fallback to preview if full load fails
         alt="Artwork"
         className={`
           max-w-full max-h-[85vh] object-contain rounded-xl select-none
@@ -107,7 +126,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         }}
       />
     );
-  }, [artwork.kind, artwork.fallbackPreview, fullUrl, hasError, loaded, modalMuted, previewUrl]);
+  }, [artwork.type, isEmbed, hasError, url, loaded, modalMuted, previewUrl]);
 
   return (
     <div
@@ -118,6 +137,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       `}
       onClick={onClose}
     >
+      {/* Close Button */}
       <button
         onClick={onClose}
         className={`
@@ -130,6 +150,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         </svg>
       </button>
 
+      {/* Content Container */}
       <div
         className={`
           relative p-2 bg-white rounded-2xl shadow-2xl overflow-hidden
@@ -139,7 +160,8 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         style={{ maxWidth: '92vw', maxHeight: '92vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {!loaded && !hasError && artwork.kind !== 'embed' && (
+        {/* Loading Spinner for non-embeds */}
+        {!loaded && !hasError && !isEmbed && (
           <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50/50">
             <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin" />
           </div>
