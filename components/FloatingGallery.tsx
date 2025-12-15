@@ -2,90 +2,77 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { ARTWORK_IDS, getPreviewUrl, getSphereCoordinates } from '../constants';
+import { MediaItem, getSphereCoordinates } from '../constants';
 
-// --- Single Gallery Item ---
-interface ItemProps {
-  id: string;
-  position: [number, number, number];
-  onClick: (id: string) => void;
-  index: number;
+interface GallerySceneProps {
+  items: MediaItem[];
+  onSelect: (item: MediaItem) => void;
+  clearing?: boolean;
 }
 
-const GalleryItem = ({ id, position, onClick, index }: ItemProps) => {
-  const groupRef = useRef<THREE.Group>(null);
-  const [hovered, setHover] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+const GalleryItem = ({
+  item,
+  position,
+  index,
+  onClick,
+}: {
+  item: MediaItem;
+  position: [number, number, number];
+  index: number;
+  onClick: (item: MediaItem) => void;
+}) => {
+  const ref = useRef<THREE.Group>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  
-  const url = useMemo(() => getPreviewUrl(id), [id]);
 
   useEffect(() => {
-    // Staggered entry animation
-    const timeout = setTimeout(() => {
-      setMounted(true);
-    }, index * 20); 
-    return () => clearTimeout(timeout);
+    const t = setTimeout(() => setMounted(true), index * 20);
+    return () => clearTimeout(t);
   }, [index]);
 
-  useFrame((state) => {
-    if (groupRef.current) {
-      // Billboard behavior: always face the camera
-      // This works perfectly both outside and INSIDE the sphere
-      groupRef.current.lookAt(state.camera.position);
-    }
+  useFrame(({ camera }) => {
+    if (ref.current) ref.current.lookAt(camera.position);
   });
 
   return (
-    <group position={position} ref={groupRef}>
-      <Float
-        speed={1.5} 
-        rotationIntensity={0.05} 
-        floatIntensity={0.5} 
-        floatingRange={[-0.1, 0.1]}
-      >
-        <Html transform occlude="blending" distanceFactor={12} zIndexRange={[100, 0]}>
+    <group ref={ref} position={position}>
+      <Float speed={1.5} floatIntensity={0.6}>
+        <Html transform distanceFactor={12}>
           <div
-            className={`
-              relative group cursor-pointer select-none
-              transition-all duration-700 ease-out
-              ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
-              ${hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
-            `}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick(id);
+            onClick={() => onClick(item)}
+            onMouseEnter={() => {
+              if (item.type === 'video' && videoRef.current) {
+                videoRef.current.muted = false;
+              }
             }}
-            onPointerEnter={() => setHover(true)}
-            onPointerLeave={() => setHover(false)}
-            style={{
-              width: '240px',
-              height: '240px',
+            onMouseLeave={() => {
+              if (item.type === 'video' && videoRef.current) {
+                videoRef.current.muted = true;
+              }
             }}
+            className={`cursor-pointer transition-all duration-700 ${
+              mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+            }`}
           >
-            {/* Card Container */}
-            <div 
-              className={`
-                w-full h-full bg-white rounded-2xl p-2 shadow-xl
-                transition-all duration-300
-                ${hovered ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
-              `}
-            >
-              {/* Image Container */}
-              <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
-                <img 
-                  src={url} 
-                  alt="art" 
-                  className={`
-                    w-full h-full object-cover
-                    transition-opacity duration-500
-                    ${loaded ? 'opacity-100' : 'opacity-0'}
-                  `}
-                  onLoad={() => setLoaded(true)}
-                  draggable={false}
-                />
-              </div>
-            </div>
+            {item.type === 'video' ? (
+              <video
+                ref={videoRef}
+                src={item.url}
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                className="w-[220px] h-[220px] object-cover rounded-xl shadow-xl"
+              />
+            ) : (
+              <img
+                src={item.previewUrl}
+                alt=""
+                draggable={false}
+                className="w-[220px] h-[220px] object-cover rounded-xl shadow-xl"
+              />
+            )}
           </div>
         </Html>
       </Float>
@@ -93,46 +80,42 @@ const GalleryItem = ({ id, position, onClick, index }: ItemProps) => {
   );
 };
 
-// --- Main Scene ---
-interface GallerySceneProps {
-  onSelect: (id: string) => void;
-}
+const GalleryScene: React.FC<GallerySceneProps> = ({
+  items,
+  onSelect,
+  clearing = false,
+}) => {
+  const radius = Math.min(80, 48 + items.length * 0.15);
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect }) => {
-  // Increased radius significantly to 58 to absolutely prevent overlapping
-  const radius = 58;
-  const coords = useMemo(() => getSphereCoordinates(ARTWORK_IDS.length, radius), []);
+  const coords = useMemo(
+    () => getSphereCoordinates(items.length || 1, radius),
+    [items.length, radius]
+  );
+
+  if (!items.length) return null;
 
   return (
     <>
       <ambientLight intensity={1} />
       <Environment preset="city" />
-      
-      <group>
-        {ARTWORK_IDS.map((id, i) => (
-          <GalleryItem 
-            key={id} 
-            id={id} 
-            index={i}
-            position={coords[i].position} 
-            onClick={onSelect} 
-          />
-        ))}
-      </group>
 
-      <OrbitControls 
-        enablePan={false} 
-        enableZoom={true} 
-        // minDistance 0 allows fully entering the sphere to the center
-        // maxDistance 110 allows viewing the whole sphere from afar
-        minDistance={0} 
-        maxDistance={110} 
-        autoRotate 
+      {items.map((item, i) => (
+        <GalleryItem
+          key={item.id}
+          item={item}
+          index={i}
+          position={coords[i].position}
+          onClick={onSelect}
+        />
+      ))}
+
+      <OrbitControls
+        enablePan={false}
+        enableZoom
+        minDistance={18}
+        maxDistance={95}
+        autoRotate={!clearing}
         autoRotateSpeed={0.6}
-        dampingFactor={0.05}
-        rotateSpeed={0.5}
-        // Increased zoomSpeed to create larger movement per scroll
-        zoomSpeed={4}
       />
     </>
   );
