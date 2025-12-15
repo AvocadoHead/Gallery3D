@@ -1,5 +1,0 @@
-{
-  "name": "Aether Gallery",
-  "description": "A high-performance, minimalistic 3D floating image gallery using WebGL to eliminate DOM reflow issues.",
-  "requestFramePermissions": []
-}
