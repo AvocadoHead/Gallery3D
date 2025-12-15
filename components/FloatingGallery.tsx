@@ -55,19 +55,22 @@ const GalleryItem = ({
             }`}
           >
             {item.type === 'video' ? (
-              <video
-                ref={videoRef}
-                src={item.url}
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-                className="w-[220px] h-[220px] object-cover rounded-xl shadow-xl"
-              />
+              <div className="relative">
+                <img
+                  src={item.previewUrl || item.url}
+                  alt=""
+                  draggable={false}
+                  className="w-[220px] h-[220px] object-cover rounded-xl shadow-xl"
+                />
+                <div className="absolute inset-0 grid place-items-center">
+                  <div className="w-12 h-12 rounded-full bg-black/60 text-white flex items-center justify-center text-lg shadow">
+                    ▶
+                  </div>
+                </div>
+              </div>
             ) : (
               <img
-                src={item.previewUrl}
+                src={item.previewUrl || item.url}
                 alt=""
                 draggable={false}
                 className="w-[220px] h-[220px] object-cover rounded-xl shadow-xl"
