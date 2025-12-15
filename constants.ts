@@ -1,5 +1,10 @@
-export const RAW_LINKS = [
-  "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
+/* ===============================
+   Default data and helpers
+================================ */
+
+// ✅ Keep your 284 links here exactly as you already have them.
+// If your repo already contains RAW_LINKS, keep it unchanged.
+export const RAW_LINKS: string[] = [  "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
   "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
   "https://drive.google.com/file/d/1XLTys10VbfYx3rFIZkvdXPEDdt8VFkOs/view?usp=drive_link",
   "https://drive.google.com/file/d/1ag-sRtn2snQkCQKIQd47VMP0YVvrBNFF/view?usp=drive_link",
@@ -285,47 +290,129 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
 
-// Helper to extract Google Drive ID
-const getDriveId = (url: string): string => {
-  const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (m && m[1]) return m[1].split('?', 1)[0];
-  const alt = url.match(/id=([a-zA-Z0-9_-]+)/);
-  return alt ? alt[1].split('?', 1)[0] : '';
+// ---------- Dynamic gallery types ----------
+export type MediaType = 'image' | 'video';
+export interface MediaItem {
+  id: string;
+  url: string;
+  previewUrl: string;
+  type: MediaType;
+}
+
+// ---------- Helpers ----------
+const isProbablyVideo = (url: string) => {
+  const u = url.toLowerCase();
+  return (
+    u.includes('youtube.com') ||
+    u.includes('youtu.be') ||
+    u.includes('vimeo.com') ||
+    u.endsWith('.mp4') ||
+    u.endsWith('.webm') ||
+    u.endsWith('.mov')
+  );
 };
 
-// Clean ID list
-export const ARTWORK_IDS = RAW_LINKS.map(l => l && l.trim())
-  .filter(Boolean)
-  .map(getDriveId)
-  .filter(Boolean);
+const buildPreviewUrl = (url: string) => {
+  // Google Drive "file/d/<id>/" or "id=<id>"
+  const driveId =
+    url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ??
+    url.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
 
-// We use the lh3.googleusercontent.com CDN which is faster and avoids CORS issues for thumbnails
-// w500 is good for grid, w1600 is good for overlay
-export const getPreviewUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w500`;
-export const getFullUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w2000`;
+  if (driveId) {
+    // fast image preview endpoint; works well for most images
+    return `https://drive.google.com/uc?export=view&id=${driveId}`;
+  }
 
-// Algorithm to distribute points on a sphere (Fibonacci Sphere)
+  // YouTube thumbnail
+  if (url.includes('youtu')) {
+    const id =
+      url.split('v=')[1]?.split('&')[0] ??
+      url.replace('https://youtu.be/', '').split('?')[0];
+    if (id) return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  }
+
+  // fallback
+  return url;
+};
+
+export const buildMediaItemsFromUrls = (
+  urls: string[],
+  options?: { seed?: string | number; prefix?: string }
+): MediaItem[] => {
+  const seed = options?.seed ?? Date.now();
+  const prefix = options?.prefix ?? 'custom';
+
+  return urls
+    .map((u) => u?.trim())
+    .filter(Boolean)
+    .map((url, i) => ({
+      id: `${prefix}-${i}-${seed}`,
+      url,
+      previewUrl: buildPreviewUrl(url),
+      type: isProbablyVideo(url) ? 'video' : 'image',
+    }));
+};
+
+export const ARTWORK_ITEMS: MediaItem[] = buildMediaItemsFromUrls(RAW_LINKS, {
+  seed: 'default-gallery',
+  prefix: 'artwork',
+});
+
+// ---------- Share encoding/decoding ----------
+export const encodeGalleryParam = (
+  items: MediaItem[],
+  meta?: {
+    displayName?: string;
+    contactWhatsapp?: string;
+    contactEmail?: string;
+  }
+) => {
+  const payload = {
+    urls: items.map((i) => i.url),
+    displayName: meta?.displayName || '',
+    contactWhatsapp: meta?.contactWhatsapp || '',
+    contactEmail: meta?.contactEmail || '',
+  };
+  return encodeURIComponent(btoa(JSON.stringify(payload)));
+};
+
+export const decodeGalleryParam = (encoded: string | null) => {
+  if (!encoded) return null;
+  try {
+    const normalized = decodeURIComponent(encoded).replace(/ /g, '+');
+    const decoded = atob(normalized);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+};
+
+export const sanitizeWhatsapp = (value: string) => {
+  if (!value) return '';
+  // keep digits only; allow leading +
+  const digits = value.replace(/[^\d]/g, '');
+  return digits;
+};
+
+// ---------- Sphere distribution ----------
 export const getSphereCoordinates = (count: number, radius: number) => {
-  const points: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
-  const phiSpan = Math.PI * (3 - Math.sqrt(5)); // Golden angle
+  const points: { position: [number, number, number] }[] = [];
+  if (count <= 0) return points;
+
+  const phi = Math.PI * (3 - Math.sqrt(5)); // golden angle
 
   for (let i = 0; i < count; i++) {
-    const y = 1 - (i / (count - 1)) * 2; // y goes from 1 to -1
-    const radiusAtY = Math.sqrt(1 - y * y);
-    const theta = phiSpan * i;
+    const y = 1 - (i / Math.max(1, count - 1)) * 2; // 1 to -1
+    const r = Math.sqrt(1 - y * y);
+    const theta = phi * i;
 
-    const x = Math.cos(theta) * radiusAtY;
-    const z = Math.sin(theta) * radiusAtY;
-
-    // Apply radius magnitude
-    const posX = x * radius;
-    const posY = y * radius;
-    const posZ = z * radius;
+    const x = Math.cos(theta) * r;
+    const z = Math.sin(theta) * r;
 
     points.push({
-      position: [posX, posY, posZ],
-      rotation: [0, 0, 0] // Placeholder, will be handled by LookAt logic
+      position: [x * radius, y * radius, z * radius],
     });
   }
+
   return points;
 };
