@@ -10,12 +10,13 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const [loaded, setLoaded] = useState(false);
   const [visible, setVisible] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [modalMuted, setModalMuted] = useState(true);
 
   useEffect(() => {
     if (artwork) {
       setLoaded(false);
       setHasError(false);
-      // Small delay to allow mounting before animating in
+      setModalMuted(true);
       requestAnimationFrame(() => setVisible(true));
       document.body.style.overflow = 'hidden';
     } else {
@@ -24,54 +25,76 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
     }
   }, [artwork]);
 
-  const media = artwork;
-  if (!media) return null;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
 
-  const previewUrl = media.previewUrl;
-  const fullUrl = media.fullUrl;
+  if (!artwork) return null;
+
+  const previewUrl = artwork.previewUrl;
+  const fullUrl = artwork.fullUrl;
 
   const renderContent = useMemo(() => {
-    if (media.kind === 'video') {
+    if (artwork.kind === 'video' && !hasError) {
       return (
-        <video
-          src={fullUrl}
-          className={`
-            max-w-full max-h-[85vh] object-contain rounded-xl select-none
-            transition-opacity duration-500
-            ${loaded ? 'opacity-100' : 'opacity-0'}
-          `}
-          autoPlay
-          loop
-          playsInline
-          muted={true}
-          controls
-          onLoadedData={() => setLoaded(true)}
-          onError={() => setHasError(true)}
-        />
+        <div className="relative">
+          <video
+            src={fullUrl}
+            className={`
+              max-w-full max-h-[85vh] object-contain rounded-xl select-none
+              transition-opacity duration-500
+              ${loaded ? 'opacity-100' : 'opacity-0'}
+            `}
+            autoPlay
+            loop
+            playsInline
+            muted={modalMuted}
+            controls
+            onLoadedData={() => setLoaded(true)}
+            onError={() => setHasError(true)}
+          />
+          <button
+            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
+            onClick={() => setModalMuted((prev) => !prev)}
+          >
+            {modalMuted ? 'Enable sound' : 'Mute'}
+          </button>
+        </div>
       );
     }
 
-    if (media.kind === 'embed') {
+    if (artwork.kind === 'embed') {
+      const embedUrl = `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
       return (
         <div className="relative w-[80vw] max-w-5xl aspect-video">
           {!loaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
-              <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
+              <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin" />
             </div>
           )}
           <iframe
-            src={fullUrl}
+            src={embedUrl}
             allow="autoplay; fullscreen; picture-in-picture"
             className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
             onLoad={() => setLoaded(true)}
           />
+          <button
+            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
+            onClick={() => setModalMuted((prev) => !prev)}
+          >
+            {modalMuted ? 'Enable sound' : 'Mute'}
+          </button>
         </div>
       );
     }
 
     return (
       <img
-        src={hasError ? previewUrl : fullUrl}
+        src={hasError ? (artwork.fallbackPreview || previewUrl) : fullUrl}
         alt="Artwork"
         className={`
           max-w-full max-h-[85vh] object-contain rounded-xl select-none
@@ -84,18 +107,18 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         }}
       />
     );
-  }, [fullUrl, hasError, loaded, media.kind, previewUrl]);
+  }, [artwork.kind, artwork.fallbackPreview, fullUrl, hasError, loaded, modalMuted, previewUrl]);
 
   return (
-    <div 
+    <div
       className={`
-        fixed inset-0 z-50 flex items-center justify-center 
+        fixed inset-0 z-50 flex items-center justify-center
         transition-all duration-500 ease-out
-        ${visible ? 'bg-white/60 backdrop-blur-xl' : 'bg-transparent backdrop-blur-none pointer-events-none'}
+        ${visible ? 'bg-black/70 backdrop-blur-sm' : 'bg-transparent backdrop-blur-none pointer-events-none'}
       `}
       onClick={onClose}
     >
-      <button 
+      <button
         onClick={onClose}
         className={`
           absolute top-8 right-8 w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-lg text-gray-800 hover:scale-105 transition-all duration-300 z-50 border border-gray-100
@@ -107,24 +130,20 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         </svg>
       </button>
 
-      <div 
+      <div
         className={`
           relative p-2 bg-white rounded-2xl shadow-2xl overflow-hidden
           transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1)
           ${visible ? 'scale-100 opacity-100 translate-y-0' : 'scale-90 opacity-0 translate-y-12'}
         `}
-        style={{
-          maxWidth: '92vw',
-          maxHeight: '92vh',
-        }}
+        style={{ maxWidth: '92vw', maxHeight: '92vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {!loaded && !hasError && media.kind !== 'embed' && (
+        {!loaded && !hasError && artwork.kind !== 'embed' && (
           <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50/50">
-            <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
+            <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin" />
           </div>
         )}
-
         {renderContent}
       </div>
     </div>
