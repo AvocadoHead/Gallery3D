@@ -2,63 +2,159 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { PlayCircle } from 'lucide-react';
-import { ARTWORK_ITEMS, getSphereCoordinates, ArtworkItem } from '../constants';
-
-const getDriveId = (url: string) => {
-  const match = url.match(/[-\w]{25,}/);
-  return match ? match[0] : null;
-};
-
-const getThumbUrl = (item: ArtworkItem) => {
-  const driveId = getDriveId(item.url);
-  if (!driveId) return item.url;
-
-  if (item.type === 'image') {
-    return `https://drive.google.com/uc?export=view&id=${driveId}`;
-  }
-
-  return `https://drive.google.com/file/d/${driveId}/preview?autoplay=1&mute=1&controls=0`;
-};
+import { getSphereCoordinates, MediaItem } from '../constants';
 
 interface ItemProps {
-  item: ArtworkItem;
+  item: MediaItem;
   position: [number, number, number];
-  onClick: (id: string) => void;
+  onClick: (item: MediaItem) => void;
   index: number;
+  radius: number;
+  clearing?: boolean;
 }
 
-const GalleryItem = ({ item, position, onClick, index }: ItemProps) => {
+const normalizeSize = (aspectRatio?: number) => {
+  const base = 220;
+  const min = 150;
+  const max = 260;
+
+  if (!aspectRatio || Number.isNaN(aspectRatio)) return { width: base, height: base };
+
+  if (aspectRatio >= 1) {
+    return { width: base, height: Math.min(max, Math.max(min, base / aspectRatio)) };
+  }
+
+  return { height: base, width: Math.min(max, Math.max(min, base * aspectRatio)) };
+};
+
+const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
-
-  const isVideo = item.type === 'video';
-  const driveId = getDriveId(item.url);
-  const thumbUrl = useMemo(() => getThumbUrl(item), [item]);
+  const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() => normalizeSize(item.aspectRatio));
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setMounted(true);
-    }, index * 20);
+    const timeout = setTimeout(() => setMounted(true), index * 20);
     return () => clearTimeout(timeout);
   }, [index]);
 
   useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.lookAt(state.camera.position);
-    }
+    if (!groupRef.current) return;
+
+    // Always face camera (works outside + inside sphere)
+    groupRef.current.lookAt(state.camera.position);
+
+    // Slight extra tilt near edges to give depth
+    const edgeTilt = Math.min(
+      0.35,
+      (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15
+    );
+    if (edgeTilt > 0) groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
   });
+
+  // Smooth audio fade on hover (videos only)
+  useEffect(() => {
+    if (item.kind !== 'video') return;
+
+    let raf = 0;
+    const tick = () => {
+      const el = videoRef.current;
+      if (!el) return;
+
+      const target = hovered ? 0.9 : 0;
+      const current = el.volume ?? 0;
+      const step = 0.06;
+      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
+
+      el.volume = next;
+      el.muted = next === 0;
+
+      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [hovered, item.kind]);
+
+  const handleSize = (width: number, height: number) => {
+    const aspect = width && height ? width / height : undefined;
+    setComputedSize(normalizeSize(aspect));
+  };
+
+  const renderMedia = () => {
+    if (item.kind === 'video') {
+      return (
+        <video
+          ref={videoRef}
+          src={item.previewUrl}
+          className={`
+            w-full h-full object-contain rounded-xl
+            transition-opacity duration-500
+            ${loaded ? 'opacity-100' : 'opacity-0'}
+          `}
+          autoPlay
+          playsInline
+          loop
+          muted
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            const el = e.target as HTMLVideoElement;
+            handleSize(el.videoWidth, el.videoHeight);
+          }}
+          onLoadedData={() => setLoaded(true)}
+          onError={() => setLoaded(true)}
+        />
+      );
+    }
+
+    // embed: show thumbnail image in the sphere; play only in overlay
+    if (item.kind === 'embed') {
+      return (
+        <img
+          src={item.previewUrl}
+          alt="preview"
+          className={`
+            w-full h-full object-contain rounded-xl
+            transition-opacity duration-500
+            ${loaded ? 'opacity-100' : 'opacity-0'}
+          `}
+          onLoad={(e) => {
+            const el = e.target as HTMLImageElement;
+            handleSize(el.naturalWidth, el.naturalHeight);
+            setLoaded(true);
+          }}
+          onError={() => setLoaded(true)}
+          draggable={false}
+        />
+      );
+    }
+
+    return (
+      <img
+        src={item.previewUrl}
+        alt="art"
+        className={`
+          w-full h-full object-contain rounded-xl
+          transition-opacity duration-500
+          ${loaded ? 'opacity-100' : 'opacity-0'}
+        `}
+        onLoad={(e) => {
+          const el = e.target as HTMLImageElement;
+          handleSize(el.naturalWidth, el.naturalHeight);
+          setLoaded(true);
+        }}
+        onError={() => setLoaded(true)}
+        draggable={false}
+      />
+    );
+  };
 
   return (
     <group position={position} ref={groupRef}>
-      <Float
-        speed={1.5}
-        rotationIntensity={0.05}
-        floatIntensity={0.5}
-        floatingRange={[-0.1, 0.1]}
-      >
+      <Float speed={1.5} rotationIntensity={0.05} floatIntensity={0.5} floatingRange={[-0.1, 0.1]}>
         <Html transform occlude="blending" distanceFactor={12} zIndexRange={[100, 0]}>
           <div
             className={`
@@ -66,17 +162,15 @@ const GalleryItem = ({ item, position, onClick, index }: ItemProps) => {
               transition-all duration-700 ease-out
               ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
               ${hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
+              ${clearing ? 'opacity-0 scale-90 translate-y-6' : ''}
             `}
             onClick={(e) => {
               e.stopPropagation();
-              onClick(item.id);
+              onClick(item);
             }}
             onPointerEnter={() => setHover(true)}
             onPointerLeave={() => setHover(false)}
-            style={{
-              width: '240px',
-              height: '240px',
-            }}
+            style={{ width: `${computedSize.width}px`, height: `${computedSize.height}px` }}
           >
             <div
               className={`
@@ -86,39 +180,16 @@ const GalleryItem = ({ item, position, onClick, index }: ItemProps) => {
               `}
             >
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
-                {isVideo && driveId ? (
-                  <>
-                    <iframe
-                      src={thumbUrl}
-                      title={`preview-${item.id}`}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        border: 'none',
-                        pointerEvents: 'none',
-                      }}
-                      allow="autoplay"
-                    />
-                    <div
-                      className="absolute inset-0"
-                      style={{ pointerEvents: 'auto' }}
-                    />
-                    <div className="absolute bottom-3 right-3 z-10 bg-black/60 rounded-full p-2 text-white">
-                      <PlayCircle size={20} />
-                    </div>
-                  </>
-                ) : (
-                  <img
-                    src={thumbUrl}
-                    alt="art"
-                    className={`
-                      w-full h-full object-cover
-                      transition-opacity duration-500
-                      ${loaded ? 'opacity-100' : 'opacity-0'}
-                    `}
-                    onLoad={() => setLoaded(true)}
-                    draggable={false}
-                  />
+                {renderMedia()}
+                {!loaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/40">
+                    <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
+                  </div>
+                )}
+                {item.kind !== 'image' && (
+                  <div className="absolute bottom-3 right-3 z-10 bg-black/55 rounded-full px-2 py-1 text-white text-[10px]">
+                    {item.kind === 'video' ? 'VIDEO' : 'PLAY'}
+                  </div>
                 )}
               </div>
             </div>
@@ -130,15 +201,14 @@ const GalleryItem = ({ item, position, onClick, index }: ItemProps) => {
 };
 
 interface GallerySceneProps {
-  onSelect: (id: string) => void;
+  onSelect: (item: MediaItem) => void;
+  items: MediaItem[];
+  clearing?: boolean;
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect }) => {
-  const radius = 58;
-  const coords = useMemo(
-    () => getSphereCoordinates(ARTWORK_ITEMS.length, radius),
-    []
-  );
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }) => {
+  const radius = Math.min(80, 48 + items.length * 0.15);
+  const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
     <>
@@ -146,13 +216,15 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect }) => {
       <Environment preset="city" />
 
       <group>
-        {ARTWORK_ITEMS.map((item, i) => (
+        {items.map((item, i) => (
           <GalleryItem
             key={item.id}
             item={item}
             index={i}
-            position={coords[i].position}
+            position={coords[i]?.position || [0, 0, radius]}
             onClick={onSelect}
+            radius={radius}
+            clearing={clearing}
           />
         ))}
       </group>
@@ -160,13 +232,13 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect }) => {
       <OrbitControls
         enablePan={false}
         enableZoom={true}
-        minDistance={0}
-        maxDistance={110}
+        minDistance={18}
+        maxDistance={105}
         autoRotate
         autoRotateSpeed={0.6}
-        dampingFactor={0.05}
-        rotateSpeed={0.5}
-        zoomSpeed={4}
+        dampingFactor={0.08}
+        rotateSpeed={0.55}
+        zoomSpeed={3.6}
       />
     </>
   );
