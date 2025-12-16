@@ -38,36 +38,39 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
-  // --- 1. ROBUST PARSING LOGIC ---
+  // --- 1. ROBUST DECODING LOGIC ---
   useEffect(() => {
     const extractGalleryToken = (): string | null => {
-      // Step 1: Get the token from URL
-      let token: string | null = null;
-      
-      const searchParams = new URLSearchParams(window.location.search);
-      if (searchParams.has('gallery')) {
-        token = searchParams.get('gallery');
-      } else if (window.location.href.includes('gallery=')) {
-        // Fallback for pasted links where browser didn't parse params
-        const match = window.location.href.match(/gallery=([^&#]*)/);
-        if (match) token = match[1];
+      // We manually extract the string to avoid browser auto-decoding + to space
+      const href = window.location.href;
+      let rawToken = '';
+
+      // Check ?gallery= first
+      if (href.includes('gallery=')) {
+        const match = href.match(/[?&]gallery=([^&#]*)/);
+        if (match) rawToken = match[1];
+      } 
+      // Fallback to #gallery=
+      else if (href.includes('#gallery=')) {
+        rawToken = href.split('#gallery=')[1];
       }
 
-      if (!token) return null;
+      if (!rawToken) return null;
 
-      // Step 2: Fix URL-Safe Base64 to Standard Base64
-      // The generator creates URL-safe strings (using - and _), but the decoder
-      // often expects Standard Base64 (using + and /). We must swap them back.
       try {
-        // 1. Decode URI components (fixes %3D, %2F etc)
-        let cleanToken = decodeURIComponent(token);
-        
-        // 2. Swap URL-safe chars back to Standard Base64 chars
-        cleanToken = cleanToken.replace(/-/g, '+').replace(/_/g, '/');
-        
-        return cleanToken;
+        // 1. Decode the URI (turns %2B back to +, %2F back to /)
+        let decoded = decodeURIComponent(rawToken);
+
+        // 2. Fix spaces: If browser/messenger turned + into space, turn it back
+        decoded = decoded.replace(/ /g, '+');
+
+        // 3. Normalize Base64: If the token is URL-Safe (-_), turn it to Standard (+/)
+        // This ensures the decoder works regardless of which format was shared
+        decoded = decoded.replace(/-/g, '+').replace(/_/g, '/');
+
+        return decoded;
       } catch (e) {
-        return token;
+        return rawToken;
       }
     };
 
@@ -91,7 +94,7 @@ const App: React.FC = () => {
         const incoming = decodeGalleryParam(token);
 
         if (incoming) {
-          // New Object Format
+          // Object Format
           if (incoming.urls && Array.isArray(incoming.urls)) {
             setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
             setIsCustom(true);
@@ -100,7 +103,7 @@ const App: React.FC = () => {
             setContactEmail(incoming.contactEmail || '');
             return;
           }
-          // Old Array Format (Legacy)
+          // Array Format
           if (Array.isArray(incoming)) {
             setGalleryItems(buildMediaItemsFromUrls(incoming));
             setIsCustom(true);
@@ -111,10 +114,9 @@ const App: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error("Decoding error:", err);
+        console.error("Parse error:", err);
       }
 
-      // Fallback if decoding failed
       loadDefaults();
     };
 
@@ -169,24 +171,33 @@ const App: React.FC = () => {
     return [...galleryItems, ...draftItems];
   }, [draftItems, galleryItems]);
 
-  // --- 2. LINK GENERATION ---
+  // --- 2. LINK GENERATION (THE FIX) ---
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
 
-    const token = encodeGalleryParam(effectiveItems, {
+    // 1. Get the base64 string from your helper
+    let token = encodeGalleryParam(effectiveItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
     });
 
-    try {
-      const url = new URL(shareBase);
-      // This automatically makes the token URL-safe (e.g. turns + into %2B)
-      url.searchParams.set('gallery', token);
-      return url.toString();
-    } catch (e) {
-      return `${shareBase}/?gallery=${encodeURIComponent(token)}`;
-    }
+    /** 
+     * CRITICAL FIX FOR WHATSAPP HIGHLIGHTING:
+     * Your helper creates "URL-Safe" Base64 (using - and _).
+     * WhatsApp breaks highlighting on - and _.
+     * 
+     * We must manually swap them back to Standard Base64 (+ and /)
+     * and THEN encodeURIComponent them. This produces the %2B and %2F
+     * which WhatsApp LOVES and highlights perfectly.
+     */
+    token = token.replace(/-/g, '+').replace(/_/g, '/');
+
+    // 2. URI Encode the standard base64 characters
+    const safeToken = encodeURIComponent(token);
+
+    // 3. Return the standard query param URL
+    return `${shareBase}/?gallery=${safeToken}`;
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
   useEffect(() => {
@@ -195,14 +206,12 @@ const App: React.FC = () => {
 
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    // Using a newline (\n) is the most robust way to ensure WhatsApp 
-    // highlights the full link on all devices.
-    return `Look at my Aether gallery:\n${sharePayload}`;
+    // Ensure there is a distinct space or newline so the link stands out
+    return `Look at my Aether gallery ${sharePayload}`;
   }, [sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
-    
     window.history.replaceState(null, '', sharePayload);
 
     try {
