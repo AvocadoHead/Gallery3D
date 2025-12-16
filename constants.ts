@@ -285,6 +285,11 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
 
+const extractUrls = (text: string): string[] => {
+  if (!text) return [];
+  return (text.match(/https?:\/\/[^\s,]+/g) || []).map((v) => v.trim());
+};
+
 // Helper to extract Google Drive ID
 const getDriveId = (url: string): string => {
   const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
@@ -359,7 +364,7 @@ export interface MediaItem {
   aspectRatio?: number;
   fallbackPreview?: string;
   videoUrl?: string;
-   embedUrl?: string;
+  embedUrl?: string;
 }
 
 const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
@@ -454,8 +459,9 @@ export const createMediaItem = (url: string): MediaItem => {
 
 export const buildMediaItemsFromUrls = (urls: string[]) =>
   urls
+    .flatMap((url) => extractUrls(url))
     .map((url) => url && url.trim())
-    .filter(Boolean)
+    .filter((url) => url && !/\bgallery=/.test(url))
     .map(createMediaItem);
 
 export const buildDefaultMediaItems = () =>
@@ -480,11 +486,16 @@ export const encodeGalleryParam = (
 
 const parsePayloadObject = (input: unknown): DecodedGalleryPayload | null => {
   if (Array.isArray(input)) {
-    return { urls: input } as DecodedGalleryPayload;
+    return { urls: input.flatMap((v) => extractUrls(String(v))) } as DecodedGalleryPayload;
   }
   if (input && typeof input === 'object') {
     const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } = input as DecodedGalleryPayload;
-    return { urls, displayName, contactWhatsapp, contactEmail };
+    return {
+      urls: urls.flatMap((v) => extractUrls(String(v))),
+      displayName,
+      contactWhatsapp,
+      contactEmail,
+    };
   }
   return null;
 };
@@ -541,10 +552,7 @@ export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload 
   const text = safeDecode(value || '');
   if (text.includes('http')) {
     return {
-      urls: text
-        .split(/[\s,]+/)
-        .map((v) => v.trim())
-        .filter((v) => v.startsWith('http')),
+      urls: extractUrls(text),
     };
   }
 

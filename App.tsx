@@ -20,6 +20,7 @@ const Loader = () => (
 );
 
 const App: React.FC = () => {
+  const shareBase = 'https://gallery3-d.vercel.app';
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -93,7 +94,7 @@ const App: React.FC = () => {
 
   const sharePayload = useMemo(() => {
     if (!galleryItems.length) return '';
-    return `${window.location.origin}${window.location.pathname}?gallery=${encodeGalleryParam(galleryItems, {
+    return `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
