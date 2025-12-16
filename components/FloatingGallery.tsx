@@ -44,9 +44,8 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
     [item.fallbackPreview, item.previewUrl, item.videoUrl],
   );
-  const [useVideo, setUseVideo] = useState(
-    item.kind === 'video' && item.provider !== 'gdrive' && !hasDedicatedPreview,
-  );
+  const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
+  const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() => normalizeSize(item.aspectRatio));
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -119,29 +118,24 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
 
   const renderMedia = () => {
     if (item.kind === 'embed') {
-      const hint = item.provider === 'youtube' || item.provider === 'vimeo';
+      const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
       return (
-        <div className="relative w-full h-full">
-          <iframe
-            src={`${item.fullUrl}${item.fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=1&playsinline=1&loop=1`}
-            className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-            style={{ pointerEvents: 'none' }}
-            onLoad={() => {
-              if (item.aspectRatio) {
-                setComputedSize(normalizeSize(item.aspectRatio));
-              }
-              setLoaded(true);
-            }}
-          />
-          {hint && (
-            <div className="absolute inset-0 pointer-events-none flex items-end justify-center pb-2">
-              <span className="text-[10px] bg-black/50 text-white px-2 py-1 rounded-full">Click for sound</span>
-            </div>
-          )}
-        </div>
+        <img
+          src={thumb}
+          alt="embed preview"
+          className={`
+            w-full h-full object-contain rounded-xl
+            transition-opacity duration-500
+            ${loaded ? 'opacity-100' : 'opacity-0'}
+          `}
+          onLoad={(e) => {
+            const el = e.target as HTMLImageElement;
+            handleSize(el.naturalWidth, el.naturalHeight);
+            setLoaded(true);
+          }}
+          onError={() => setLoaded(true)}
+          draggable={false}
+        />
       );
     }
 

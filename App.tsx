@@ -126,13 +126,8 @@ const App: React.FC = () => {
 
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    const mediaUrls = effectiveItems
-      .map((item) => item.originalUrl)
-      .filter((url) => /^https?:\/\//i.test(url));
-
-    const urlsBlock = mediaUrls.length ? `\n${mediaUrls.join('\n')}` : '';
-    return `Look at my Aether gallery:\n${sharePayload}${urlsBlock}`;
-  }, [effectiveItems, sharePayload]);
+    return `Look at my Aether gallery ${sharePayload}`;
+  }, [sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
