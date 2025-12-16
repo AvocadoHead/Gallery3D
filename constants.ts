@@ -358,6 +358,7 @@ export interface MediaItem {
   provider?: MediaProvider;
   aspectRatio?: number;
   fallbackPreview?: string;
+  videoUrl?: string;
 }
 
 const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
@@ -415,15 +416,15 @@ export const createMediaItem = (url: string): MediaItem => {
   if (driveId) {
     const { preview, full, stream } = buildDriveUrls(driveId);
 
-    // Treat Drive media as video first; components will gracefully fall back to imagery if playback fails
     return {
       id: uniqueId(),
       originalUrl: trimmed,
       kind: 'video',
       provider: 'gdrive',
-      previewUrl: stream,
-      fullUrl: stream,
-      fallbackPreview: preview,
+      previewUrl: preview,
+      fullUrl: full,
+      videoUrl: stream,
+      fallbackPreview: full,
     };
   }
 

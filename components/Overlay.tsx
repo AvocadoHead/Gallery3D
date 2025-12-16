@@ -44,10 +44,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
 
   const renderContent = useMemo(() => {
     if (media.kind === 'video' && !hasError) {
+      const videoSource = media.videoUrl || fullUrl;
       return (
         <div className="relative">
           <video
-            src={fullUrl}
+            src={videoSource}
             className={`
               max-w-full max-h-[85vh] object-contain rounded-xl select-none
               transition-opacity duration-500
