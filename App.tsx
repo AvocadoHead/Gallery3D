@@ -117,6 +117,11 @@ const App: React.FC = () => {
     })}`;
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems]);
 
+  useEffect(() => {
+    // Keep the latest encoded link available for quick-share buttons even before hitting "Finalize"
+    setShareLink(sharePayload);
+  }, [sharePayload]);
+
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
     const mediaUrls = effectiveItems
