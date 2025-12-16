@@ -158,7 +158,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           </div>
         )}
 
-        {renderContent}
+        {renderContent()}
       </div>
     </div>
   );

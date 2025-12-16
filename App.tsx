@@ -208,8 +208,7 @@ const App: React.FC = () => {
                 <p className="text-slate-200 text-xs">A friendly tip (1$ / 5₪) keeps the lights on.</p>
                 <div className="flex items-center flex-wrap gap-2 mt-2">
                   <a href="https://www.bitpay.co.il/app/me/705695EF-357F-6632-4165-6032ED7F44AE0278" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Bit</a>
-                  <a href="https://links.payboxapp.com/hyc1wV1p0Yb" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Pay</a>
-                  <a href="https://pay.google.com" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Google&nbsp;Pay</a>
+                  <a href="https://links.payboxapp.com/hyc1wV1p0Yb" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Paybox</a>
                   <a href="https://buymeacoffee.com/Optopia" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Buy&nbsp;Me&nbsp;a&nbsp;Coffee</a>
                 </div>
               </div>
