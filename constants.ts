@@ -1,7 +1,8 @@
 /* constants.ts */
 
-
-/* constants.ts */
+/* ============================================================
+   🔹 DEFAULT LINKS (PASTE YOUR OWN HERE)
+   ============================================================ */
 
 export const RAW_LINKS = [
   "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
@@ -289,21 +290,28 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1rboDD4Fki6XOi0PWmEgP6WYSnkSLMhMy/view?usp=drive_link",
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
-/* ------------------------- helpers ------------------------- */
+
+/* ============================================================
+   🔹 HELPERS
+   ============================================================ */
 
 const extractUrls = (text: string): string[] => {
   if (!text) return [];
   return (text.match(/https?:\/\/[^\s,]+/g) || []).map((v) => v.trim());
 };
 
-export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
+export const sanitizeWhatsapp = (value?: string) =>
+  (value || '').replace(/\D+/g, '');
 
 const uniqueId = () =>
-  (globalThis.crypto as any)?.randomUUID
-    ? (globalThis.crypto as any).randomUUID()
+  crypto.randomUUID
+    ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-/** Google Drive ID extractor */
+/* ============================================================
+   🔹 URL PARSERS
+   ============================================================ */
+
 export const getDriveId = (url: string): string => {
   const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (m?.[1]) return m[1].split('?', 1)[0];
@@ -311,50 +319,46 @@ export const getDriveId = (url: string): string => {
   return alt?.[1] ? alt[1].split('?', 1)[0] : '';
 };
 
-/** YouTube / Vimeo */
 const getYouTubeId = (url: string) => {
-  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  return match ? match[1] : '';
+  const m = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/
+  );
+  return m?.[1] || '';
 };
 
 const getVimeoId = (url: string) => {
-  const match = url.match(/vimeo\.com\/(\d+)/);
-  return match ? match[1] : '';
+  const m = url.match(/vimeo\.com\/(\d+)/);
+  return m?.[1] || '';
 };
 
-/** Direct video file (non-Drive) */
-const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
+const isDirectVideo = (url: string) =>
+  /\.(mp4|mov|webm|m4v|ogg)(\?|$)/i.test(url);
 
-/** Direct image file (non-Drive) */
-const isDirectImage = (url: string) => /\.(png|jpg|jpeg|gif|webp|avif|svg)(\?|$)/i.test(url);
+const isImage = (url: string) =>
+  /\.(png|jpg|jpeg|webp|gif|avif|svg)(\?|$)/i.test(url);
 
-/** Safe “always loads” thumbnail for videos (same-origin, works as WebGL texture) */
-const VIDEO_PLACEHOLDER_SVG = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
-  <defs>
-    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#0f172a"/>
-      <stop offset="1" stop-color="#334155"/>
-    </linearGradient>
-  </defs>
-  <rect width="800" height="450" rx="28" fill="url(#g)"/>
-  <circle cx="400" cy="225" r="86" fill="rgba(255,255,255,0.12)"/>
-  <path d="M380 185 L380 265 L455 225 Z" fill="rgba(255,255,255,0.85)"/>
-  <text x="24" y="420" fill="rgba(255,255,255,0.55)" font-family="Arial" font-size="18">video</text>
-</svg>
-`)}`;
-
-/** Drive urls: thumbnails via lh3, playback via /preview iframe */
-const buildDriveUrls = (id: string) => ({
-  thumb: `https://lh3.googleusercontent.com/d/${id}=w500`,
-  full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
-  previewIframe: `https://drive.google.com/file/d/${id}/preview`,
-});
-
-/* ------------------------- types ------------------------- */
+/* ============================================================
+   🔹 TYPES
+   ============================================================ */
 
 export type MediaKind = 'image' | 'video' | 'embed';
-export type MediaProvider = 'html5' | 'gdrive' | 'youtube' | 'vimeo' | 'unknown';
+export type MediaProvider = 'gdrive' | 'youtube' | 'vimeo' | 'html5' | 'unknown';
+
+export interface MediaItem {
+  id: string;
+  originalUrl: string;
+
+  kind: MediaKind;
+  provider?: MediaProvider;
+
+  previewUrl: string; // MUST be an image
+  fullUrl: string;
+
+  videoUrl?: string;
+  embedUrl?: string;
+
+  aspectRatio?: number;
+}
 
 export interface GalleryMetadata {
   displayName?: string;
@@ -366,267 +370,162 @@ export interface DecodedGalleryPayload extends GalleryMetadata {
   urls: string[];
 }
 
-export interface MediaItem {
-  id: string;
-  originalUrl: string;
+/* ============================================================
+   🔹 MEDIA FACTORY
+   ============================================================ */
 
-  kind: MediaKind;
-  provider?: MediaProvider;
+export const createMediaItem = (raw: string): MediaItem | null => {
+  const input = raw.trim();
 
-  previewUrl: string; // grid thumb (must be an IMAGE for WebGL textures)
-  fullUrl: string; // full-res image OR embed base
-  videoUrl?: string; // direct mp4/webm
-  embedUrl?: string; // iframe src (youtube/vimeo/drive preview)
-
-  fallbackPreview?: string; // optional static preview for videos / failures
-  aspectRatio?: number;
-}
-
-/* ------------------------- core builder ------------------------- */
-
-const extractPreviewFromParam = (url: string) => {
-  const match = url.match(/(?:[?#]|&)preview=([^&#]+)/i);
-  if (!match?.[1]) return '';
-  try {
-    return decodeURIComponent(match[1]);
-  } catch {
-    return match[1];
-  }
-};
-
-const parseMediaInput = (raw: string) => {
-  const [maybeUrl, maybePreview] = raw.split('|').map((part) => part.trim());
-  if (
-    maybeUrl &&
-    maybePreview &&
-    /^https?:\/\//i.test(maybeUrl) &&
-    /^https?:\/\//i.test(maybePreview)
-  ) {
-    return { source: maybeUrl, preview: maybePreview };
-  }
-
-  return {
-    source: raw,
-    preview: extractPreviewFromParam(raw),
-  };
-};
-
-export const createMediaItem = (url: string): MediaItem => {
-  const rawInput = (url || '').trim();
-  const { source, preview } = parseMediaInput(rawInput);
-  const trimmed = source.trim();
-
-  const youTubeId = getYouTubeId(trimmed);
-  if (youTubeId) {
+  // 🔹 YouTube
+  const yt = getYouTubeId(input);
+  if (yt) {
     return {
       id: uniqueId(),
-      originalUrl: rawInput,
+      originalUrl: input,
       kind: 'embed',
       provider: 'youtube',
-      previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
-      fullUrl: `https://www.youtube.com/embed/${youTubeId}`,
-      embedUrl: `https://www.youtube.com/embed/${youTubeId}`,
+      previewUrl: `https://img.youtube.com/vi/${yt}/hqdefault.jpg`,
+      fullUrl: `https://www.youtube.com/embed/${yt}`,
+      embedUrl: `https://www.youtube.com/embed/${yt}`,
       aspectRatio: 16 / 9,
     };
   }
 
-  const vimeoId = getVimeoId(trimmed);
-  if (vimeoId) {
+  // 🔹 Vimeo
+  const vimeo = getVimeoId(input);
+  if (vimeo) {
     return {
       id: uniqueId(),
-      originalUrl: rawInput,
+      originalUrl: input,
       kind: 'embed',
       provider: 'vimeo',
-      previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
-      fullUrl: `https://player.vimeo.com/video/${vimeoId}`,
-      embedUrl: `https://player.vimeo.com/video/${vimeoId}`,
+      previewUrl: `https://vumbnail.com/${vimeo}.jpg`,
+      fullUrl: `https://player.vimeo.com/video/${vimeo}`,
+      embedUrl: `https://player.vimeo.com/video/${vimeo}`,
       aspectRatio: 16 / 9,
     };
   }
 
-  const driveId = getDriveId(trimmed);
+  // 🔹 Google Drive
+  const driveId = getDriveId(input);
   if (driveId) {
-    const { thumb, full, previewIframe } = buildDriveUrls(driveId);
-
-    // Treat Drive as embed for overlay reliability.
-    // IMPORTANT: previewUrl must be an IMAGE (for WebGL).
     return {
       id: uniqueId(),
-      originalUrl: rawInput,
+      originalUrl: input,
       kind: 'embed',
       provider: 'gdrive',
-      previewUrl: thumb,
-      fallbackPreview: VIDEO_PLACEHOLDER_SVG,
-      fullUrl: full,
-      embedUrl: previewIframe,
+      previewUrl: `https://lh3.googleusercontent.com/d/${driveId}=w600`,
+      fullUrl: `https://lh3.googleusercontent.com/d/${driveId}=w2000`,
+      embedUrl: `https://drive.google.com/file/d/${driveId}/preview`,
       aspectRatio: 16 / 9,
     };
   }
 
-  if (isDirectVideo(trimmed)) {
-    // IMPORTANT: previewUrl must be an IMAGE. Never point previewUrl to an .mp4.
+  // 🔹 Direct image
+  if (isImage(input)) {
     return {
       id: uniqueId(),
-      originalUrl: rawInput,
-      kind: 'video',
-      provider: 'html5',
-      previewUrl: preview || VIDEO_PLACEHOLDER_SVG,
-      fallbackPreview: preview || VIDEO_PLACEHOLDER_SVG,
-      fullUrl: trimmed,
-      videoUrl: trimmed,
+      originalUrl: input,
+      kind: 'image',
+      provider: 'unknown',
+      previewUrl: input,
+      fullUrl: input,
     };
   }
 
-  // Image (or unknown but treated as image)
-  return {
-    id: uniqueId(),
-    originalUrl: rawInput,
-    kind: 'image',
-    provider: 'unknown',
-    previewUrl: trimmed,
-    fullUrl: trimmed,
-    aspectRatio: isDirectImage(trimmed) ? undefined : undefined,
-  };
-};
-
-export const buildMediaItemsFromUrls = (urls: string[]) =>
-  urls
-    .flatMap((u) => extractUrls(u))
-    .map((u) => u.trim())
-    .filter((u) => u && !/\bgallery=/.test(u))
-    .map(createMediaItem);
-
-export const buildDefaultMediaItems = () => buildMediaItemsFromUrls(RAW_LINKS);
-
-/* ------------------------- gallery param encode/decode ------------------------- */
-
-const b64urlEncodeUtf8 = (obj: unknown) => {
-  const json = JSON.stringify(obj);
-  const utf8 = encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) =>
-    String.fromCharCode(parseInt(p1, 16)),
-  );
-  const base64 = btoa(utf8)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-  return base64; // URL-safe already
-};
-
-const b64urlDecodeUtf8 = (value: string) => {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-  const raw = atob(padded);
-  const json = decodeURIComponent(
-    Array.from(raw)
-      .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
-      .join(''),
-  );
-  return JSON.parse(json);
-};
-
-export const encodeGalleryParam = (items: MediaItem[], metadata: GalleryMetadata = {}) => {
-  const payload = {
-    urls: items.map((item) => item.originalUrl),
-    ...metadata,
-  };
-  return b64urlEncodeUtf8(payload);
-};
-
-const parsePayloadObject = (input: unknown): DecodedGalleryPayload | null => {
-  if (Array.isArray(input)) {
-    return { urls: input.flatMap((v) => extractUrls(String(v))) } as DecodedGalleryPayload;
-  }
-
-  if (input && typeof input === 'object') {
-    const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } =
-      input as DecodedGalleryPayload;
-
-    return {
-      urls: (urls || []).flatMap((v) => extractUrls(String(v))),
-      displayName,
-      contactWhatsapp,
-      contactEmail,
-    };
+  // 🔹 Direct video WITHOUT preview → ❌ excluded from gallery
+  if (isDirectVideo(input)) {
+    return null;
   }
 
   return null;
 };
 
-const tryParseJsonString = (value: string): DecodedGalleryPayload | null => {
-  try {
-    return parsePayloadObject(JSON.parse(value));
-  } catch {
-    return null;
-  }
+/* ============================================================
+   🔹 BUILDERS
+   ============================================================ */
+
+export const buildMediaItemsFromUrls = (urls: string[]) =>
+  urls
+    .flatMap((u) => extractUrls(u))
+    .map(createMediaItem)
+    .filter((v): v is MediaItem => Boolean(v));
+
+export const buildDefaultMediaItems = () =>
+  buildMediaItemsFromUrls(RAW_LINKS);
+
+/* ============================================================
+   🔹 GALLERY PARAM ENCODE / DECODE
+   ============================================================ */
+
+const encodeBase64Url = (obj: unknown) => {
+  const json = JSON.stringify(obj);
+  const utf8 = encodeURIComponent(json).replace(
+    /%([0-9A-F]{2})/g,
+    (_, p1) => String.fromCharCode(parseInt(p1, 16))
+  );
+  return btoa(utf8).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
-const tryParseBase64UrlJson = (value: string): DecodedGalleryPayload | null => {
-  try {
-    return parsePayloadObject(b64urlDecodeUtf8(value));
-  } catch {
-    return null;
-  }
+const decodeBase64Url = (value: string) => {
+  const norm = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = norm + '='.repeat((4 - (norm.length % 4)) % 4);
+  const raw = atob(padded);
+  const json = decodeURIComponent(
+    [...raw]
+      .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
+      .join('')
+  );
+  return JSON.parse(json);
 };
 
-const safeDecode = (input: string) => {
-  try {
-    return decodeURIComponent(input);
-  } catch {
-    return input;
-  }
-};
+export const encodeGalleryParam = (
+  items: MediaItem[],
+  metadata: GalleryMetadata = {}
+) =>
+  encodeBase64Url({
+    urls: items.map((i) => i.originalUrl),
+    ...metadata,
+  });
 
-export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload => {
+export const decodeGalleryParam = (
+  value: string | null
+): DecodedGalleryPayload => {
   if (!value) return { urls: [] };
 
-  const candidates = Array.from(
-    new Set(
-      [
-        value,
-        safeDecode(value),
-        value.replace(/\s+/g, '+'),
-        safeDecode(value.replace(/\s+/g, '+')),
-      ].filter(Boolean),
-    ),
-  );
+  try {
+    const parsed = decodeBase64Url(value);
+    if (Array.isArray(parsed)) return { urls: parsed };
+    if (parsed?.urls) return parsed;
+  } catch {}
 
-  for (const candidate of candidates) {
-    const jsonParsed = tryParseJsonString(candidate);
-    if (jsonParsed) return jsonParsed;
-
-    const base64Parsed = tryParseBase64UrlJson(candidate);
-    if (base64Parsed) return base64Parsed;
-  }
-
-  const text = safeDecode(value);
-  if (text.includes('http')) return { urls: extractUrls(text) };
+  if (value.includes('http')) return { urls: extractUrls(value) };
 
   return { urls: [] };
 };
 
-/* ------------------------- sphere coords ------------------------- */
+/* ============================================================
+   🔹 SPHERE LAYOUT
+   ============================================================ */
 
 export const getSphereCoordinates = (count: number, radius: number) => {
-  const points: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
-  const safeCount = Math.max(1, count);
-  const phiSpan = Math.PI * (3 - Math.sqrt(5)); // Golden angle
+  const points: { position: [number, number, number] }[] = [];
+  const golden = Math.PI * (3 - Math.sqrt(5));
 
-  if (safeCount === 1) return [{ position: [0, 0, radius], rotation: [0, 0, 0] }];
-
-  for (let i = 0; i < safeCount; i++) {
-    const y = 1 - (i / (safeCount - 1)) * 2;
+  for (let i = 0; i < count; i++) {
+    const y = 1 - (i / (count - 1)) * 2;
     const r = Math.sqrt(1 - y * y);
-    const theta = phiSpan * i;
-
-    const x = Math.cos(theta) * r;
-    const z = Math.sin(theta) * r;
+    const theta = golden * i;
 
     points.push({
-      position: [x * radius, y * radius, z * radius],
-      rotation: [0, 0, 0],
+      position: [
+        Math.cos(theta) * r * radius,
+        y * radius,
+        Math.sin(theta) * r * radius,
+      ],
     });
   }
 
   return points;
 };
-
