@@ -20,6 +20,7 @@ const Loader = () => (
 );
 
 const App: React.FC = () => {
+  const shareBase = 'https://gallery3-d.vercel.app';
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -39,20 +40,30 @@ const App: React.FC = () => {
       const encoded = params.get('gallery');
       if (encoded) return encoded;
 
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashEncoded = hashParams.get('gallery');
+      if (hashEncoded) return hashEncoded;
+
       const match = window.location.href.match(/[?&]gallery=([^&#]+)/);
       return match ? match[1] : null;
     };
 
-    const incoming = decodeGalleryParam(extractGallery());
-    if (incoming.urls.length) {
-      setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
-      setIsCustom(true);
-      setDisplayName(incoming.displayName || '');
-      setContactWhatsapp(incoming.contactWhatsapp || '');
-      setContactEmail(incoming.contactEmail || '');
-      return;
-    }
-    setGalleryItems(buildDefaultMediaItems());
+    const syncFromQuery = () => {
+      const incoming = decodeGalleryParam(extractGallery());
+      if (incoming.urls.length) {
+        setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
+        setIsCustom(true);
+        setDisplayName(incoming.displayName || '');
+        setContactWhatsapp(incoming.contactWhatsapp || '');
+        setContactEmail(incoming.contactEmail || '');
+        return;
+      }
+      setGalleryItems(buildDefaultMediaItems());
+    };
+
+    syncFromQuery();
+    window.addEventListener('popstate', syncFromQuery);
+    return () => window.removeEventListener('popstate', syncFromQuery);
   }, []);
 
   const handleAddMedia = () => {
@@ -83,7 +94,7 @@ const App: React.FC = () => {
 
   const sharePayload = useMemo(() => {
     if (!galleryItems.length) return '';
-    return `${window.location.origin}${window.location.pathname}?gallery=${encodeGalleryParam(galleryItems, {
+    return `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
