@@ -469,32 +469,76 @@ export const encodeGalleryParam = (
     urls: items.map((item) => item.originalUrl),
     ...metadata,
   };
-  return encodeURIComponent(btoa(JSON.stringify(payload)));
+
+  const base64 = btoa(JSON.stringify(payload))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  return encodeURIComponent(base64);
+};
+
+const parsePayloadObject = (input: unknown): DecodedGalleryPayload | null => {
+  if (Array.isArray(input)) {
+    return { urls: input } as DecodedGalleryPayload;
+  }
+  if (input && typeof input === 'object') {
+    const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } = input as DecodedGalleryPayload;
+    return { urls, displayName, contactWhatsapp, contactEmail };
+  }
+  return null;
+};
+
+const tryParseJsonString = (value: string): DecodedGalleryPayload | null => {
+  try {
+    const parsed = JSON.parse(value);
+    return parsePayloadObject(parsed);
+  } catch {
+    return null;
+  }
+};
+
+const tryParseBase64Json = (value: string): DecodedGalleryPayload | null => {
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    const raw = atob(padded);
+    const parsed = JSON.parse(raw);
+    return parsePayloadObject(parsed);
+  } catch {
+    return null;
+  }
+};
+
+const safeDecode = (input: string) => {
+  try {
+    return decodeURIComponent(input);
+  } catch {
+    return input;
+  }
 };
 
 export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload => {
   if (!value) return { urls: [] };
 
-  const attempts = [value, decodeURIComponent(value || ''), (value || '').replace(/\s+/g, '+')];
+  const candidates = Array.from(
+    new Set([
+      value,
+      safeDecode(value || ''),
+      (value || '').replace(/\s+/g, '+'),
+      safeDecode((value || '').replace(/\s+/g, '+')),
+    ].filter(Boolean)),
+  );
 
-  for (const candidate of attempts) {
-    try {
-      const normalized = decodeURIComponent(candidate);
-      const raw = atob(normalized.replace(/-/g, '+').replace(/_/g, '/'));
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return { urls: parsed };
-      }
-      if (parsed && typeof parsed === 'object') {
-        const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } = parsed as DecodedGalleryPayload;
-        return { urls, displayName, contactWhatsapp, contactEmail };
-      }
-    } catch (err) {
-      continue;
-    }
+  for (const candidate of candidates) {
+    const jsonParsed = tryParseJsonString(candidate);
+    if (jsonParsed) return jsonParsed;
+
+    const base64Parsed = tryParseBase64Json(candidate);
+    if (base64Parsed) return base64Parsed;
   }
 
-  const text = decodeURIComponent(value || '');
+  const text = safeDecode(value || '');
   if (text.includes('http')) {
     return {
       urls: text
