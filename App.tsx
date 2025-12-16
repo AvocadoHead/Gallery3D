@@ -38,28 +38,37 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
-  // --- 1. ROBUST PARSING (Using Standards) ---
+  // --- 1. ROBUST PARSING LOGIC ---
   useEffect(() => {
     const extractGalleryToken = (): string | null => {
-      // 1. Standard Query Param (?gallery=)
-      // URLSearchParams automatically handles decoding % characters
+      // Step 1: Get the token from URL
+      let token: string | null = null;
+      
       const searchParams = new URLSearchParams(window.location.search);
-      const queryToken = searchParams.get('gallery');
-      if (queryToken) return queryToken;
-
-      // 2. Fallback for legacy Hash (#gallery=) logic
-      // We manually check this just in case an old link is clicked
-      const href = window.location.href;
-      if (href.includes('#gallery=')) {
-        const raw = href.split('#gallery=')[1];
-        try {
-          return decodeURIComponent(raw);
-        } catch (e) {
-          return raw;
-        }
+      if (searchParams.has('gallery')) {
+        token = searchParams.get('gallery');
+      } else if (window.location.href.includes('gallery=')) {
+        // Fallback for pasted links where browser didn't parse params
+        const match = window.location.href.match(/gallery=([^&#]*)/);
+        if (match) token = match[1];
       }
 
-      return null;
+      if (!token) return null;
+
+      // Step 2: Fix URL-Safe Base64 to Standard Base64
+      // The generator creates URL-safe strings (using - and _), but the decoder
+      // often expects Standard Base64 (using + and /). We must swap them back.
+      try {
+        // 1. Decode URI components (fixes %3D, %2F etc)
+        let cleanToken = decodeURIComponent(token);
+        
+        // 2. Swap URL-safe chars back to Standard Base64 chars
+        cleanToken = cleanToken.replace(/-/g, '+').replace(/_/g, '/');
+        
+        return cleanToken;
+      } catch (e) {
+        return token;
+      }
     };
 
     const loadDefaults = () => {
@@ -91,7 +100,7 @@ const App: React.FC = () => {
             setContactEmail(incoming.contactEmail || '');
             return;
           }
-          // Old Array Format
+          // Old Array Format (Legacy)
           if (Array.isArray(incoming)) {
             setGalleryItems(buildMediaItemsFromUrls(incoming));
             setIsCustom(true);
@@ -102,16 +111,15 @@ const App: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error("Error decoding gallery:", err);
+        console.error("Decoding error:", err);
       }
 
-      // If token was invalid
+      // Fallback if decoding failed
       loadDefaults();
     };
 
     syncFromUrl();
     window.addEventListener('popstate', syncFromUrl);
-    // Listen to hashchange too, just to be safe
     window.addEventListener('hashchange', syncFromUrl);
 
     return () => {
@@ -161,7 +169,7 @@ const App: React.FC = () => {
     return [...galleryItems, ...draftItems];
   }, [draftItems, galleryItems]);
 
-  // --- 2. GENERATING THE LINK (Using URL API) ---
+  // --- 2. LINK GENERATION ---
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
 
@@ -172,14 +180,11 @@ const App: React.FC = () => {
     });
 
     try {
-      // Create a clean URL object. This handles slashes and ? automatically.
       const url = new URL(shareBase);
-      // set() automatically encodes characters like '=' to '%3D'
-      // This is what fixes the WhatsApp highlighting issue.
+      // This automatically makes the token URL-safe (e.g. turns + into %2B)
       url.searchParams.set('gallery', token);
       return url.toString();
     } catch (e) {
-      // Fallback if URL constructor fails (rare)
       return `${shareBase}/?gallery=${encodeURIComponent(token)}`;
     }
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
@@ -190,13 +195,14 @@ const App: React.FC = () => {
 
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    return `Look at my Aether gallery ${sharePayload}`;
+    // Using a newline (\n) is the most robust way to ensure WhatsApp 
+    // highlights the full link on all devices.
+    return `Look at my Aether gallery:\n${sharePayload}`;
   }, [sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
     
-    // Update the browser URL bar nicely
     window.history.replaceState(null, '', sharePayload);
 
     try {
@@ -470,7 +476,7 @@ const App: React.FC = () => {
                       </div>
 
                       {/* Text area for visual confirmation */}
-                      <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all">
+                      <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all whitespace-pre-wrap">
                         {shareMessage}
                       </p>
 
