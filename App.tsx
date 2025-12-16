@@ -1,5 +1,3 @@
-/* App.tsx */
-
 import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
@@ -22,7 +20,11 @@ const Loader = () => (
 );
 
 const App: React.FC = () => {
-  const shareBase = 'https://gallery3-d.vercel.app';
+  // Use the current origin so previews work in forks/preview deploys too.
+  const shareBase =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://gallery3-d.vercel.app';
 
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
@@ -31,49 +33,61 @@ const App: React.FC = () => {
   const [shareLink, setShareLink] = useState('');
   const [isCustom, setIsCustom] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-
   const [displayName, setDisplayName] = useState('');
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   useEffect(() => {
     const extractGallery = () => {
+      // Prefer hash payload (WhatsApp-safe): #gallery=...
+      const hash = window.location.hash || '';
+      if (hash.includes('gallery=')) {
+        const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
+        const hashEncoded = hashParams.get('gallery');
+        if (hashEncoded) return hashEncoded;
+      }
+
+      // Fallback: querystring ?gallery=...
       const params = new URLSearchParams(window.location.search);
       const encoded = params.get('gallery');
       if (encoded) return encoded;
 
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-      const hashEncoded = hashParams.get('gallery');
-      if (hashEncoded) return hashEncoded;
-
+      // Last resort: regex
       const match = window.location.href.match(/[?&]gallery=([^&#]+)/);
       return match ? match[1] : null;
     };
 
-    const syncFromQuery = () => {
+    const syncFromUrl = () => {
       const incoming = decodeGalleryParam(extractGallery());
-      if (incoming.urls.length) {
+
+      if (incoming.urls?.length) {
         setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
         setIsCustom(true);
+
+        // ✅ metadata travels with payload (when using object payload)
         setDisplayName(incoming.displayName || '');
         setContactWhatsapp(incoming.contactWhatsapp || '');
         setContactEmail(incoming.contactEmail || '');
         return;
       }
-      setGalleryItems(buildDefaultMediaItems());
+
       setIsCustom(false);
-      // Keep your default display/contact as-is (or blank)
-      // setDisplayName('');
-      // setContactWhatsapp('');
-      // setContactEmail('');
+      setDisplayName('');
+      setContactWhatsapp('');
+      setContactEmail('');
+      setGalleryItems(buildDefaultMediaItems());
     };
 
-    syncFromQuery();
-    window.addEventListener('popstate', syncFromQuery);
-    return () => window.removeEventListener('popstate', syncFromQuery);
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    window.addEventListener('hashchange', syncFromUrl);
+
+    return () => {
+      window.removeEventListener('popstate', syncFromUrl);
+      window.removeEventListener('hashchange', syncFromUrl);
+    };
   }, []);
 
   const handleAddMedia = () => {
@@ -97,7 +111,6 @@ const App: React.FC = () => {
     setBuilderOpen(true);
     setShareLink('');
 
-    // Gentle wipe-out animation before emptying items
     setTimeout(() => {
       setGalleryItems([]);
       setIsClearing(false);
@@ -113,52 +126,61 @@ const App: React.FC = () => {
     return entries.length ? buildMediaItemsFromUrls(entries) : [];
   }, [inputValue]);
 
-  // Include un-added draft items in the share payload so the outgoing link always represents everything typed.
   const effectiveItems = useMemo(() => {
     if (!draftItems.length) return galleryItems;
     return [...galleryItems, ...draftItems];
   }, [draftItems, galleryItems]);
 
+  /**
+   * ✅ WhatsApp-safe share link:
+   * - put the payload in #gallery=... (hash)
+   * - do not rely on WhatsApp parsing '?gallery=' reliably
+   */
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
-    return `${shareBase}/?gallery=${encodeGalleryParam(effectiveItems, {
+    const token = encodeGalleryParam(effectiveItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
-    })}`;
+    });
+
+    // Use hash: it’s usually treated as part of the clickable URL.
+    return `${shareBase}/#gallery=${token}`;
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
   useEffect(() => {
-    // Keep latest encoded link available for the quick-share buttons
     setShareLink(sharePayload);
   }, [sharePayload]);
 
-  // IMPORTANT: Share ONLY ONE canonical URL (no extra URLs in the text),
-  // otherwise WhatsApp / mail clients “helpfully” expand and you end up with messy URL blocks.
+  /**
+   * ✅ Put the link alone on its own line.
+   * This prevents WhatsApp from highlighting only part of it.
+   */
   const shareMessage = useMemo(() => {
-    return sharePayload || '';
+    if (!sharePayload) return '';
+    return `Look at my Aether gallery:\n${sharePayload}`;
   }, [sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
 
-    setShareLink(sharePayload);
+    // Keep URL bar updated so copying from address bar also works.
     window.history.replaceState(null, '', sharePayload);
 
     try {
       if (navigator.share) {
+        // Some share targets ignore `url` or split text/url weirdly.
+        // So we put the FULL link into text as well.
         await navigator.share({
           title: 'Aether Gallery',
-          // do NOT embed the sharePayload here; keep text clean
-          text: 'Aether Gallery',
+          text: shareMessage,
           url: sharePayload,
         });
         return;
       }
 
-      // Clipboard fallback: copy ONLY the gallery URL
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(sharePayload);
+        await navigator.clipboard.writeText(shareMessage);
         setToastVisible(true);
         setTimeout(() => setToastVisible(false), 1600);
       }
@@ -168,11 +190,11 @@ const App: React.FC = () => {
   };
 
   const handleCopyLink = async () => {
-    const urlToCopy = sharePayload || shareLink;
-    if (!urlToCopy) return;
+    if (!sharePayload && !shareLink) return;
+    const textToCopy = shareMessage || sharePayload || shareLink;
 
     try {
-      await navigator.clipboard.writeText(urlToCopy);
+      await navigator.clipboard.writeText(textToCopy);
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 1600);
     } catch (err) {
@@ -222,7 +244,7 @@ const App: React.FC = () => {
         </Suspense>
       </div>
 
-      {/* UI Overlay for Zoomed Item */}
+      {/* UI Overlay */}
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
       {/* Header */}
@@ -240,7 +262,9 @@ const App: React.FC = () => {
             Gallery
           </p>
           {displayName && (
-            <p className="text-[11px] text-slate-500 font-semibold mt-1 ml-[2px]">{displayName}</p>
+            <p className="text-[11px] text-slate-500 font-semibold mt-1 ml-[2px]">
+              {displayName}
+            </p>
           )}
         </button>
 
@@ -415,7 +439,7 @@ const App: React.FC = () => {
                         <a
                           className="px-3 py-1.5 rounded-full bg-green-500 text-white font-semibold shadow"
                           href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                            sharePayload || shareLink,
+                            shareMessage || sharePayload || shareLink,
                           )}`}
                           target="_blank"
                           rel="noreferrer"
@@ -424,9 +448,9 @@ const App: React.FC = () => {
                         </a>
                         <a
                           className="px-3 py-1.5 rounded-full bg-blue-600 text-white font-semibold shadow"
-                          href={`mailto:?subject=${encodeURIComponent('Aether gallery')}&body=${encodeURIComponent(
-                            sharePayload || shareLink,
-                          )}`}
+                          href={`mailto:?subject=${encodeURIComponent(
+                            'Aether gallery',
+                          )}&body=${encodeURIComponent(shareMessage || sharePayload || shareLink)}`}
                         >
                           Email
                         </a>
@@ -442,7 +466,9 @@ const App: React.FC = () => {
                           )}
                         </button>
                       </div>
-                      <p className="text-[11px] text-slate-500">Recipients open the link and instantly see your sphere.</p>
+                      <p className="text-[11px] text-slate-500">
+                        Recipients open the link and instantly see your uploaded packet.
+                      </p>
                     </div>
                   )}
                 </div>
