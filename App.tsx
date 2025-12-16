@@ -1,3 +1,5 @@
+/* App.tsx */
+
 import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
@@ -21,6 +23,7 @@ const Loader = () => (
 
 const App: React.FC = () => {
   const shareBase = 'https://gallery3-d.vercel.app';
+
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -28,9 +31,11 @@ const App: React.FC = () => {
   const [shareLink, setShareLink] = useState('');
   const [isCustom, setIsCustom] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+
   const [displayName, setDisplayName] = useState('');
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
@@ -59,6 +64,11 @@ const App: React.FC = () => {
         return;
       }
       setGalleryItems(buildDefaultMediaItems());
+      setIsCustom(false);
+      // Keep your default display/contact as-is (or blank)
+      // setDisplayName('');
+      // setContactWhatsapp('');
+      // setContactEmail('');
     };
 
     syncFromQuery();
@@ -87,6 +97,7 @@ const App: React.FC = () => {
     setBuilderOpen(true);
     setShareLink('');
 
+    // Gentle wipe-out animation before emptying items
     setTimeout(() => {
       setGalleryItems([]);
       setIsClearing(false);
@@ -102,6 +113,7 @@ const App: React.FC = () => {
     return entries.length ? buildMediaItemsFromUrls(entries) : [];
   }, [inputValue]);
 
+  // Include un-added draft items in the share payload so the outgoing link always represents everything typed.
   const effectiveItems = useMemo(() => {
     if (!draftItems.length) return galleryItems;
     return [...galleryItems, ...draftItems];
@@ -117,23 +129,19 @@ const App: React.FC = () => {
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
   useEffect(() => {
+    // Keep latest encoded link available for the quick-share buttons
     setShareLink(sharePayload);
   }, [sharePayload]);
 
-  // ✅ IMPORTANT FIX:
-  // Make the outgoing message include the link AND the raw URLs, like it used to.
+  // IMPORTANT: Share ONLY ONE canonical URL (no extra URLs in the text),
+  // otherwise WhatsApp / mail clients “helpfully” expand and you end up with messy URL blocks.
   const shareMessage = useMemo(() => {
-    if (!sharePayload) return '';
-    const urlLines = effectiveItems
-      .map((i) => (i.originalUrl || '').trim())
-      .filter(Boolean)
-      .join('\n');
-
-    return `Look at my Aether gallery ${sharePayload}\n\n${urlLines}`;
-  }, [sharePayload, effectiveItems]);
+    return sharePayload || '';
+  }, [sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
+
     setShareLink(sharePayload);
     window.history.replaceState(null, '', sharePayload);
 
@@ -141,30 +149,30 @@ const App: React.FC = () => {
       if (navigator.share) {
         await navigator.share({
           title: 'Aether Gallery',
-          text: shareMessage || sharePayload,
+          // do NOT embed the sharePayload here; keep text clean
+          text: 'Aether Gallery',
           url: sharePayload,
         });
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareMessage || sharePayload);
+        return;
+      }
+
+      // Clipboard fallback: copy ONLY the gallery URL
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(sharePayload);
         setToastVisible(true);
         setTimeout(() => setToastVisible(false), 1600);
       }
     } catch (error) {
       console.warn('Share cancelled', error);
-    } finally {
-      if (navigator.clipboard && !navigator.share) {
-        setToastVisible(true);
-        setTimeout(() => setToastVisible(false), 1600);
-      }
     }
   };
 
   const handleCopyLink = async () => {
-    if (!sharePayload && !shareLink) return;
-    if (!shareLink && sharePayload) setShareLink(sharePayload);
+    const urlToCopy = sharePayload || shareLink;
+    if (!urlToCopy) return;
 
     try {
-      await navigator.clipboard.writeText(shareMessage || sharePayload || shareLink);
+      await navigator.clipboard.writeText(urlToCopy);
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 1600);
     } catch (err) {
@@ -195,6 +203,7 @@ const App: React.FC = () => {
 
   return (
     <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
+      {/* 3D Scene Wrapper */}
       <div
         className={`
           absolute inset-0 transition-all duration-700 ease-out
@@ -213,14 +222,15 @@ const App: React.FC = () => {
         </Suspense>
       </div>
 
+      {/* UI Overlay for Zoomed Item */}
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
       {/* Header */}
       <div
         className={`
-        fixed top-8 left-8 z-20 pointer-events-auto select-none transition-opacity duration-500 space-y-3
-        ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}
-      `}
+          fixed top-8 left-8 z-20 pointer-events-auto select-none transition-opacity duration-500 space-y-3
+          ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}
+        `}
       >
         <button onClick={() => setBuilderOpen((prev) => !prev)} className="text-left group">
           <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900">
@@ -230,9 +240,7 @@ const App: React.FC = () => {
             Gallery
           </p>
           {displayName && (
-            <p className="text-[11px] text-slate-500 font-semibold mt-1 ml-[2px]">
-              {displayName}
-            </p>
+            <p className="text-[11px] text-slate-500 font-semibold mt-1 ml-[2px]">{displayName}</p>
           )}
         </button>
 
@@ -250,9 +258,7 @@ const App: React.FC = () => {
               <div className="flex items-start justify-between gap-3 pr-10">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Build your own gallery</p>
-                  <p className="text-xs text-slate-500">
-                    Share a custom Aether sphere with your media.
-                  </p>
+                  <p className="text-xs text-slate-500">Share a custom Aether sphere with your media.</p>
                 </div>
                 <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
                   New
@@ -409,7 +415,7 @@ const App: React.FC = () => {
                         <a
                           className="px-3 py-1.5 rounded-full bg-green-500 text-white font-semibold shadow"
                           href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                            shareMessage || sharePayload || shareLink,
+                            sharePayload || shareLink,
                           )}`}
                           target="_blank"
                           rel="noreferrer"
@@ -418,8 +424,8 @@ const App: React.FC = () => {
                         </a>
                         <a
                           className="px-3 py-1.5 rounded-full bg-blue-600 text-white font-semibold shadow"
-                          href={`mailto:?subject=Aether%20gallery&body=${encodeURIComponent(
-                            shareMessage || sharePayload || shareLink,
+                          href={`mailto:?subject=${encodeURIComponent('Aether gallery')}&body=${encodeURIComponent(
+                            sharePayload || shareLink,
                           )}`}
                         >
                           Email
@@ -436,9 +442,7 @@ const App: React.FC = () => {
                           )}
                         </button>
                       </div>
-                      <p className="text-[11px] text-slate-500">
-                        Recipients open the link and instantly see your uploaded packet.
-                      </p>
+                      <p className="text-[11px] text-slate-500">Recipients open the link and instantly see your sphere.</p>
                     </div>
                   )}
                 </div>
@@ -451,9 +455,9 @@ const App: React.FC = () => {
       {/* Footer */}
       <div
         className={`
-        fixed bottom-8 right-8 z-20 transition-opacity duration-500
-        ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}
-      `}
+          fixed bottom-8 right-8 z-20 transition-opacity duration-500
+          ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}
+        `}
       >
         <div className="relative">
           <button
