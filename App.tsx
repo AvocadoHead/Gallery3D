@@ -40,45 +40,72 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   useEffect(() => {
+    // FIX 1: Robust extraction that doesn't break Base64 '+' characters
     const extractGallery = () => {
-      // Prefer hash payload (WhatsApp-safe): #gallery=...
-      const hash = window.location.hash || '';
-      if (hash.includes('gallery=')) {
-        const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
-        const hashEncoded = hashParams.get('gallery');
-        if (hashEncoded) return hashEncoded;
+      const href = window.location.href;
+      
+      // Check Hash first (#gallery=...)
+      // We manually substring to avoid URLSearchParams turning '+' into spaces
+      const hashIndex = href.indexOf('#gallery=');
+      if (hashIndex !== -1) {
+        return href.substring(hashIndex + 9); // 9 is length of "#gallery="
       }
 
-      // Fallback: querystring ?gallery=...
-      const params = new URLSearchParams(window.location.search);
-      const encoded = params.get('gallery');
-      if (encoded) return encoded;
+      // Fallback: Check Query Param (?gallery=...)
+      const searchIndex = href.indexOf('?gallery=');
+      if (searchIndex !== -1) {
+        const match = href.match(/[?&]gallery=([^&#]+)/);
+        return match ? match[1] : null;
+      }
 
-      // Last resort: regex
-      const match = window.location.href.match(/[?&]gallery=([^&#]+)/);
-      return match ? match[1] : null;
+      return null;
     };
 
     const syncFromUrl = () => {
-      const incoming = decodeGalleryParam(extractGallery());
-
-      if (incoming.urls?.length) {
-        setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
-        setIsCustom(true);
-
-        // ✅ metadata travels with payload (when using object payload)
-        setDisplayName(incoming.displayName || '');
-        setContactWhatsapp(incoming.contactWhatsapp || '');
-        setContactEmail(incoming.contactEmail || '');
+      const token = extractGallery();
+      
+      // If no token, load defaults
+      if (!token) {
+        loadDefaults();
         return;
       }
 
+      const incoming = decodeGalleryParam(token);
+
+      // FIX 2: Handle valid data or fallback if decoding failed
+      if (incoming) {
+        // Scenario A: New Object Format { urls: [...], displayName: ... }
+        if (incoming.urls && Array.isArray(incoming.urls)) {
+          setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
+          setIsCustom(true);
+          setDisplayName(incoming.displayName || '');
+          setContactWhatsapp(incoming.contactWhatsapp || '');
+          setContactEmail(incoming.contactEmail || '');
+          return;
+        }
+
+        // Scenario B: Old Array Format (Legacy support)
+        if (Array.isArray(incoming)) {
+           setGalleryItems(buildMediaItemsFromUrls(incoming));
+           setIsCustom(true);
+           setDisplayName('');
+           setContactWhatsapp('');
+           setContactEmail('');
+           return;
+        }
+      }
+
+      // If decoding returned null or invalid structure
+      loadDefaults();
+    };
+
+    const loadDefaults = () => {
       setIsCustom(false);
       setDisplayName('');
       setContactWhatsapp('');
       setContactEmail('');
       setGalleryItems(buildDefaultMediaItems());
-    };
+    }
 
     syncFromUrl();
     window.addEventListener('popstate', syncFromUrl);
@@ -131,11 +158,6 @@ const App: React.FC = () => {
     return [...galleryItems, ...draftItems];
   }, [draftItems, galleryItems]);
 
-  /**
-   * ✅ WhatsApp-safe share link:
-   * - put the payload in #gallery=... (hash)
-   * - do not rely on WhatsApp parsing '?gallery=' reliably
-   */
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
     const token = encodeGalleryParam(effectiveItems, {
@@ -153,12 +175,13 @@ const App: React.FC = () => {
   }, [sharePayload]);
 
   /**
-   * ✅ Put the link alone on its own line.
-   * This prevents WhatsApp from highlighting only part of it.
+   * FIX 3: Removed the newline formatting to match the old style.
+   * This ensures WhatsApp treats the text and URL as one block,
+   * or highlights the link correctly inline.
    */
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    return `Look at my Aether gallery:\n${sharePayload}`;
+    return `Look at my Aether gallery ${sharePayload}`;
   }, [sharePayload]);
 
   const handleShare = async () => {
@@ -169,12 +192,10 @@ const App: React.FC = () => {
 
     try {
       if (navigator.share) {
-        // Some share targets ignore `url` or split text/url weirdly.
-        // So we put the FULL link into text as well.
         await navigator.share({
           title: 'Aether Gallery',
           text: shareMessage,
-          url: sharePayload,
+          // url: sharePayload // Often better to leave URL out of this field if included in 'text' to prevent duplication on some Android devices
         });
         return;
       }
@@ -289,6 +310,7 @@ const App: React.FC = () => {
                 </span>
               </div>
 
+              {/* ... (Donation Section kept as is) ... */}
               <div className="bg-slate-900 text-white rounded-3xl p-5 flex items-center gap-4 shadow-inner ring-1 ring-white/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-pink-500 flex items-center justify-center text-slate-900 font-bold shadow-lg text-lg">
                   1$
@@ -297,30 +319,9 @@ const App: React.FC = () => {
                   <p className="font-semibold text-base">Enjoying the gallery?</p>
                   <p className="text-slate-200 text-xs">A friendly tip (1$ / 5₪) keeps the lights on.</p>
                   <div className="flex items-center flex-wrap gap-2 mt-2">
-                    <a
-                      href="https://www.bitpay.co.il/app/me/705695EF-357F-6632-4165-6032ED7F44AE0278"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs underline hover:text-amber-200"
-                    >
-                      Bit
-                    </a>
-                    <a
-                      href="https://links.payboxapp.com/hyc1wV1p0Yb"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs underline hover:text-amber-200"
-                    >
-                      Paybox
-                    </a>
-                    <a
-                      href="https://buymeacoffee.com/Optopia"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs underline hover:text-amber-200"
-                    >
-                      Buy&nbsp;Me&nbsp;a&nbsp;Coffee
-                    </a>
+                    <a href="https://www.bitpay.co.il/app/me/705695EF-357F-6632-4165-6032ED7F44AE0278" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Bit</a>
+                    <a href="https://links.payboxapp.com/hyc1wV1p0Yb" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Paybox</a>
+                    <a href="https://buymeacoffee.com/Optopia" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Buy&nbsp;Me&nbsp;a&nbsp;Coffee</a>
                   </div>
                 </div>
               </div>
@@ -342,27 +343,15 @@ const App: React.FC = () => {
                   <p>Quick scan for Israeli friends.</p>
                   <div className="grid grid-cols-3 gap-2 text-[11px] font-semibold text-slate-700">
                     <div className="flex flex-col items-center gap-1">
-                      <img
-                        src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png"
-                        alt="Bit QR"
-                        className="w-full rounded-lg shadow"
-                      />
+                      <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" alt="Bit QR" className="w-full rounded-lg shadow" />
                       <span>Bit</span>
                     </div>
                     <div className="flex flex-col items-center gap-1">
-                      <img
-                        src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png"
-                        alt="Pay QR"
-                        className="w-full rounded-lg shadow"
-                      />
+                      <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" alt="Pay QR" className="w-full rounded-lg shadow" />
                       <span>Paybox</span>
                     </div>
                     <div className="flex flex-col items-center gap-1">
-                      <img
-                        src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png"
-                        alt="Buy Me a Coffee QR"
-                        className="w-full rounded-lg shadow"
-                      />
+                      <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" alt="Buy Me a Coffee QR" className="w-full rounded-lg shadow" />
                       <span>Buy me cofee</span>
                     </div>
                   </div>
@@ -436,38 +425,13 @@ const App: React.FC = () => {
                     <div className="flex flex-col gap-2 text-xs text-slate-600">
                       <p className="font-semibold text-slate-800">Share as easy as 1-2-3</p>
                       <div className="flex flex-wrap gap-2">
-                        <a
-                          className="px-3 py-1.5 rounded-full bg-green-500 text-white font-semibold shadow"
-                          href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                            shareMessage || sharePayload || shareLink,
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          WhatsApp
-                        </a>
-                        <a
-                          className="px-3 py-1.5 rounded-full bg-blue-600 text-white font-semibold shadow"
-                          href={`mailto:?subject=${encodeURIComponent(
-                            'Aether gallery',
-                          )}&body=${encodeURIComponent(shareMessage || sharePayload || shareLink)}`}
-                        >
-                          Email
-                        </a>
-                        <button
-                          className="relative px-3 py-1.5 rounded-full bg-slate-200 text-slate-800 font-semibold shadow"
-                          onClick={handleCopyLink}
-                        >
-                          Copy link
-                          {toastVisible && (
-                            <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-1 rounded-full bg-slate-900 text-white text-[10px] shadow-lg">
-                              Link copied
-                            </span>
-                          )}
+                        <button onClick={handleCopyLink} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow hover:bg-emerald-700 transition">
+                          Copy Link
                         </button>
+                        {/* If using WhatsApp specifically, you can add a direct WA button here too */}
                       </div>
-                      <p className="text-[11px] text-slate-500">
-                        Recipients open the link and instantly see your uploaded packet.
+                      <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all">
+                        {shareMessage}
                       </p>
                     </div>
                   )}
@@ -476,52 +440,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      <div
-        className={`
-          fixed bottom-8 right-8 z-20 transition-opacity duration-500
-          ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}
-        `}
-      >
-        <div className="relative">
-          <button
-            onClick={handleContactClick}
-            className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md hover:bg-white transition-all duration-300 text-slate-600 hover:text-slate-900 text-sm font-medium border border-white"
-          >
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
-            Contact
-          </button>
-
-          {contactMenuOpen && (
-            <div className="absolute bottom-12 right-0 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
-              {sanitizeWhatsapp(contactWhatsapp) && (
-                <button
-                  className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 w-full text-left"
-                  onClick={() => {
-                    window.open(`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`, '_blank');
-                    setContactMenuOpen(false);
-                  }}
-                >
-                  WhatsApp {sanitizeWhatsapp(contactWhatsapp)}
-                </button>
-              )}
-
-              {contactEmail && (
-                <button
-                  className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 w-full text-left"
-                  onClick={() => {
-                    window.open(`mailto:${contactEmail}`);
-                    setContactMenuOpen(false);
-                  }}
-                >
-                  Email {contactEmail}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
