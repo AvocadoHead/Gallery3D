@@ -356,23 +356,48 @@ export interface MediaItem {
   provider?: MediaProvider;
 
   previewUrl: string; // grid thumb
-  fullUrl: string;    // full-res image OR embed base
-  videoUrl?: string;  // direct mp4/webm
-  embedUrl?: string;  // iframe src (youtube/vimeo/drive preview)
+  fullUrl: string; // full-res image OR embed base
+  videoUrl?: string; // direct mp4/webm
+  embedUrl?: string; // iframe src (youtube/vimeo/drive preview)
 
+  fallbackPreview?: string; // optional static preview for videos
   aspectRatio?: number;
 }
 
 /* ------------------------- core builder ------------------------- */
 
+const extractPreviewFromParam = (url: string) => {
+  const match = url.match(/(?:[?#]|&)preview=([^&#]+)/i);
+  if (!match?.[1]) return "";
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+};
+
+const parseMediaInput = (raw: string) => {
+  const [maybeUrl, maybePreview] = raw.split("|").map((part) => part.trim());
+  if (maybeUrl && maybePreview && /^https?:\/\//i.test(maybeUrl) && /^https?:\/\//i.test(maybePreview)) {
+    return { source: maybeUrl, preview: maybePreview };
+  }
+
+  return {
+    source: raw,
+    preview: extractPreviewFromParam(raw),
+  };
+};
+
 export const createMediaItem = (url: string): MediaItem => {
-  const trimmed = (url || "").trim();
+  const rawInput = (url || "").trim();
+  const { source, preview } = parseMediaInput(rawInput);
+  const trimmed = source.trim();
 
   const youTubeId = getYouTubeId(trimmed);
   if (youTubeId) {
     return {
       id: uniqueId(),
-      originalUrl: trimmed,
+      originalUrl: rawInput,
       kind: "embed",
       provider: "youtube",
       previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
@@ -386,7 +411,7 @@ export const createMediaItem = (url: string): MediaItem => {
   if (vimeoId) {
     return {
       id: uniqueId(),
-      originalUrl: trimmed,
+      originalUrl: rawInput,
       kind: "embed",
       provider: "vimeo",
       previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
@@ -406,7 +431,7 @@ export const createMediaItem = (url: string): MediaItem => {
     // Drive itself decides if it’s an image or a video and renders it correctly.
     return {
       id: uniqueId(),
-      originalUrl: trimmed,
+      originalUrl: rawInput,
       kind: "embed",              // treat Drive as embed for overlay reliability
       provider: "gdrive",
       previewUrl: thumb,          // fast thumb
@@ -419,10 +444,11 @@ export const createMediaItem = (url: string): MediaItem => {
   if (isDirectVideo(trimmed)) {
     return {
       id: uniqueId(),
-      originalUrl: trimmed,
+      originalUrl: rawInput,
       kind: "video",
       provider: "html5",
-      previewUrl: trimmed,
+      previewUrl: preview || trimmed,
+      fallbackPreview: preview || undefined,
       fullUrl: trimmed,
       videoUrl: trimmed,
     };
@@ -431,7 +457,7 @@ export const createMediaItem = (url: string): MediaItem => {
   // If it looks like an image extension, treat as image; otherwise default to image anyway
   return {
     id: uniqueId(),
-    originalUrl: trimmed,
+    originalUrl: rawInput,
     kind: "image",
     provider: "unknown",
     previewUrl: trimmed,
