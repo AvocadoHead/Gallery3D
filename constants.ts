@@ -1,15 +1,5 @@
 /* constants.ts */
 
-
-/* constants.ts
-   Drop-in file. Paste your URLs into RAW_LINKS (or keep it empty for now).
-   This version is conservative + robust so the gallery won’t fail to load.
-
-   ✅ Drive items default to IMAGE (safer).
-   ✅ You can force a Drive item to be treated as video by adding "#video" at the end of the URL.
-      Example: https://drive.google.com/file/d/XYZ/view?usp=drive_link#video
-*/
-
 export const RAW_LINKS = [
   "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
   "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
@@ -297,108 +287,56 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
 
-/* =======================
-   URL helpers
-======================= */
+/* ------------------------- helpers ------------------------- */
 
 const extractUrls = (text: string): string[] => {
   if (!text) return [];
   return (text.match(/https?:\/\/[^\s,]+/g) || []).map((v) => v.trim());
 };
 
-// Helper to extract Google Drive ID
+export const sanitizeWhatsapp = (value?: string) => (value || "").replace(/\D+/g, "");
+
+const uniqueId = () =>
+  (globalThis.crypto as any)?.randomUUID
+    ? (globalThis.crypto as any).randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+/** Google Drive ID extractor */
 export const getDriveId = (url: string): string => {
-  if (!url) return '';
   const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (m && m[1]) return m[1].split('?', 1)[0];
+  if (m?.[1]) return m[1].split("?", 1)[0];
   const alt = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  return alt ? alt[1].split('?', 1)[0] : '';
+  return alt?.[1] ? alt[1].split("?", 1)[0] : "";
 };
 
-const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|#|$)/i.test(url);
-
+/** YouTube / Vimeo */
 const getYouTubeId = (url: string) => {
-  const match = url.match(
-    /(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/,
-  );
-  return match ? match[1] : '';
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  return match ? match[1] : "";
 };
 
 const getVimeoId = (url: string) => {
   const match = url.match(/vimeo\.com\/(\d+)/);
-  return match ? match[1] : '';
+  return match ? match[1] : "";
 };
 
+/** Direct video file (non-Drive) */
+const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
+
+/** Direct image file (non-Drive) */
+const isDirectImage = (url: string) => /\.(png|jpg|jpeg|gif|webp|avif|svg)(\?|$)/i.test(url);
+
+/** Drive urls: thumbnails via lh3, playback via /preview iframe */
 const buildDriveUrls = (id: string) => ({
-  preview: `https://lh3.googleusercontent.com/d/${id}=w500`,
+  thumb: `https://lh3.googleusercontent.com/d/${id}=w500`,
   full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
-  // For Drive playback, iframe preview is the most reliable cross-browser option:
-  embed: `https://drive.google.com/file/d/${id}/preview`,
+  previewIframe: `https://drive.google.com/file/d/${id}/preview`,
 });
 
-const safeUrl = (u: string) => {
-  try {
-    return new URL(u);
-  } catch {
-    return null;
-  }
-};
+/* ------------------------- types ------------------------- */
 
-export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
-
-/* =======================
-   IDs + image urls
-======================= */
-
-// Clean ID list (Drive IDs only)
-export const ARTWORK_IDS = RAW_LINKS.map((l) => (l || '').trim())
-  .filter(Boolean)
-  .map(getDriveId)
-  .filter(Boolean);
-
-// We use the lh3.googleusercontent.com CDN which is faster and avoids CORS issues for thumbnails
-export const getPreviewUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w500`;
-export const getFullUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w2000`;
-
-/* =======================
-   Sphere coordinates
-======================= */
-
-// Fibonacci sphere distribution
-export const getSphereCoordinates = (count: number, radius: number) => {
-  const points: {
-    position: [number, number, number];
-    rotation: [number, number, number];
-  }[] = [];
-
-  const safeCount = Math.max(1, count);
-  const phiSpan = Math.PI * (3 - Math.sqrt(5)); // golden angle
-
-  if (safeCount === 1) return [{ position: [0, 0, radius], rotation: [0, 0, 0] }];
-
-  for (let i = 0; i < safeCount; i++) {
-    const y = 1 - (i / (safeCount - 1)) * 2; // 1..-1
-    const radiusAtY = Math.sqrt(1 - y * y);
-    const theta = phiSpan * i;
-
-    const x = Math.cos(theta) * radiusAtY;
-    const z = Math.sin(theta) * radiusAtY;
-
-    points.push({
-      position: [x * radius, y * radius, z * radius],
-      rotation: [0, 0, 0],
-    });
-  }
-
-  return points;
-};
-
-/* =======================
-   Types
-======================= */
-
-export type MediaKind = 'image' | 'video' | 'embed';
-export type MediaProvider = 'html5' | 'gdrive' | 'youtube' | 'vimeo' | 'unknown';
+export type MediaKind = "image" | "video" | "embed";
+export type MediaProvider = "html5" | "gdrive" | "youtube" | "vimeo" | "unknown";
 
 export interface GalleryMetadata {
   displayName?: string;
@@ -413,45 +351,30 @@ export interface DecodedGalleryPayload extends GalleryMetadata {
 export interface MediaItem {
   id: string;
   originalUrl: string;
-  previewUrl: string;
-  fullUrl: string;
+
   kind: MediaKind;
   provider?: MediaProvider;
-  aspectRatio?: number;
-  fallbackPreview?: string;
 
-  // video:
-  videoUrl?: string; // direct video only (mp4/webm/etc)
-  embedUrl?: string; // youtube/vimeo/drive iframe url
+  previewUrl: string; // grid thumb
+  fullUrl: string;    // full-res image OR embed base
+  videoUrl?: string;  // direct mp4/webm
+  embedUrl?: string;  // iframe src (youtube/vimeo/drive preview)
+
+  aspectRatio?: number;
 }
 
-/* =======================
-   ID generator
-======================= */
+/* ------------------------- core builder ------------------------- */
 
-const uniqueId = () => {
-  // browser-safe random UUID fallback
-  const c: any = typeof crypto !== 'undefined' ? crypto : null;
-  if (c?.randomUUID) return c.randomUUID();
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-};
+export const createMediaItem = (url: string): MediaItem => {
+  const trimmed = (url || "").trim();
 
-/* =======================
-   Media item builder
-======================= */
-
-export const createMediaItem = (rawUrl: string): MediaItem => {
-  const trimmed = (rawUrl || '').trim();
-  const forcedVideo = /#video\b/i.test(trimmed);
-  const cleaned = trimmed.replace(/#video\b/i, '').trim();
-
-  const youTubeId = getYouTubeId(cleaned);
+  const youTubeId = getYouTubeId(trimmed);
   if (youTubeId) {
     return {
       id: uniqueId(),
       originalUrl: trimmed,
-      kind: 'embed',
-      provider: 'youtube',
+      kind: "embed",
+      provider: "youtube",
       previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
       fullUrl: `https://www.youtube.com/embed/${youTubeId}`,
       embedUrl: `https://www.youtube.com/embed/${youTubeId}`,
@@ -459,13 +382,13 @@ export const createMediaItem = (rawUrl: string): MediaItem => {
     };
   }
 
-  const vimeoId = getVimeoId(cleaned);
+  const vimeoId = getVimeoId(trimmed);
   if (vimeoId) {
     return {
       id: uniqueId(),
       originalUrl: trimmed,
-      kind: 'embed',
-      provider: 'vimeo',
+      kind: "embed",
+      provider: "vimeo",
       previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
       fullUrl: `https://player.vimeo.com/video/${vimeoId}`,
       embedUrl: `https://player.vimeo.com/video/${vimeoId}`,
@@ -473,80 +396,60 @@ export const createMediaItem = (rawUrl: string): MediaItem => {
     };
   }
 
-  const driveId = getDriveId(cleaned);
+  const driveId = getDriveId(trimmed);
   if (driveId) {
-    const { preview, full, embed } = buildDriveUrls(driveId);
+    const { thumb, full, previewIframe } = buildDriveUrls(driveId);
 
-    // Conservative default: Drive = IMAGE (prevents gallery trying to autoplay everything as video)
-    // If you add "#video" it becomes iframe-based video (most reliable for Drive).
-    if (forcedVideo) {
-      return {
-        id: uniqueId(),
-        originalUrl: trimmed,
-        kind: 'video',
-        provider: 'gdrive',
-        previewUrl: preview,
-        fullUrl: full,
-        fallbackPreview: full,
-        embedUrl: embed, // reliable playback in Overlay via iframe
-        aspectRatio: 16 / 9,
-      };
-    }
-
+    // ✅ Key decision:
+    // We DO NOT attempt to detect Drive mime-type.
+    // Instead: thumbnails via lh3, and on click we always open /preview in an iframe.
+    // Drive itself decides if it’s an image or a video and renders it correctly.
     return {
       id: uniqueId(),
       originalUrl: trimmed,
-      kind: 'image',
-      provider: 'gdrive',
-      previewUrl: preview,
-      fullUrl: full,
-      fallbackPreview: full,
-      embedUrl: embed, // kept for future use/detection
+      kind: "embed",              // treat Drive as embed for overlay reliability
+      provider: "gdrive",
+      previewUrl: thumb,          // fast thumb
+      fullUrl: full,              // still useful if you ever want image-only full
+      embedUrl: previewIframe,    // ✅ plays videos + shows images
+      aspectRatio: 16 / 9,        // safe default for the iframe container
     };
   }
 
-  if (isDirectVideo(cleaned)) {
+  if (isDirectVideo(trimmed)) {
     return {
       id: uniqueId(),
       originalUrl: trimmed,
-      kind: 'video',
-      provider: 'html5',
-      previewUrl: cleaned,
-      fullUrl: cleaned,
-      videoUrl: cleaned,
+      kind: "video",
+      provider: "html5",
+      previewUrl: trimmed,
+      fullUrl: trimmed,
+      videoUrl: trimmed,
     };
   }
 
-  // unknown -> treat as image URL
+  // If it looks like an image extension, treat as image; otherwise default to image anyway
   return {
     id: uniqueId(),
     originalUrl: trimmed,
-    kind: 'image',
-    provider: 'unknown',
-    previewUrl: cleaned,
-    fullUrl: cleaned,
+    kind: "image",
+    provider: "unknown",
+    previewUrl: trimmed,
+    fullUrl: trimmed,
+    aspectRatio: isDirectImage(trimmed) ? undefined : undefined,
   };
-};
-
-const isGalleryLink = (u: string) => {
-  const parsed = safeUrl(u);
-  if (!parsed) return /\bgallery=/.test(u);
-  return parsed.searchParams.has('gallery');
 };
 
 export const buildMediaItemsFromUrls = (urls: string[]) =>
   urls
-    .flatMap((u) => extractUrls(String(u || '')))
-    .map((u) => (u || '').trim())
-    .filter((u) => !!u)
-    .filter((u) => !isGalleryLink(u))
+    .flatMap((u) => extractUrls(u))
+    .map((u) => u.trim())
+    .filter((u) => u && !/\bgallery=/.test(u))
     .map(createMediaItem);
 
 export const buildDefaultMediaItems = () => buildMediaItemsFromUrls(RAW_LINKS);
 
-/* =======================
-   Share link encoding
-======================= */
+/* ------------------------- gallery param encode/decode ------------------------- */
 
 export const encodeGalleryParam = (items: MediaItem[], metadata: GalleryMetadata = {}) => {
   const payload = {
@@ -555,9 +458,9 @@ export const encodeGalleryParam = (items: MediaItem[], metadata: GalleryMetadata
   };
 
   const base64 = btoa(JSON.stringify(payload))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
   return encodeURIComponent(base64);
 };
@@ -567,8 +470,8 @@ const parsePayloadObject = (input: unknown): DecodedGalleryPayload | null => {
     return { urls: input.flatMap((v) => extractUrls(String(v))) } as DecodedGalleryPayload;
   }
 
-  if (input && typeof input === 'object') {
-    const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } =
+  if (input && typeof input === "object") {
+    const { urls = [], displayName = "", contactWhatsapp = "", contactEmail = "" } =
       input as DecodedGalleryPayload;
 
     return {
@@ -584,8 +487,7 @@ const parsePayloadObject = (input: unknown): DecodedGalleryPayload | null => {
 
 const tryParseJsonString = (value: string): DecodedGalleryPayload | null => {
   try {
-    const parsed = JSON.parse(value);
-    return parsePayloadObject(parsed);
+    return parsePayloadObject(JSON.parse(value));
   } catch {
     return null;
   }
@@ -593,11 +495,10 @@ const tryParseJsonString = (value: string): DecodedGalleryPayload | null => {
 
 const tryParseBase64Json = (value: string): DecodedGalleryPayload | null => {
   try {
-    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
     const raw = atob(padded);
-    const parsed = JSON.parse(raw);
-    return parsePayloadObject(parsed);
+    return parsePayloadObject(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -618,9 +519,9 @@ export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload 
     new Set(
       [
         value,
-        safeDecode(value || ''),
-        (value || '').replace(/\s+/g, '+'),
-        safeDecode((value || '').replace(/\s+/g, '+')),
+        safeDecode(value),
+        value.replace(/\s+/g, "+"),
+        safeDecode(value.replace(/\s+/g, "+")),
       ].filter(Boolean),
     ),
   );
@@ -633,9 +534,34 @@ export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload 
     if (base64Parsed) return base64Parsed;
   }
 
-  const text = safeDecode(value || '');
-  if (text.includes('http')) return { urls: extractUrls(text) };
+  const text = safeDecode(value);
+  if (text.includes("http")) return { urls: extractUrls(text) };
 
   return { urls: [] };
 };
 
+/* ------------------------- sphere coords ------------------------- */
+
+export const getSphereCoordinates = (count: number, radius: number) => {
+  const points: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
+  const safeCount = Math.max(1, count);
+  const phiSpan = Math.PI * (3 - Math.sqrt(5)); // Golden angle
+
+  if (safeCount === 1) return [{ position: [0, 0, radius], rotation: [0, 0, 0] }];
+
+  for (let i = 0; i < safeCount; i++) {
+    const y = 1 - (i / (safeCount - 1)) * 2;
+    const r = Math.sqrt(1 - y * y);
+    const theta = phiSpan * i;
+
+    const x = Math.cos(theta) * r;
+    const z = Math.sin(theta) * r;
+
+    points.push({
+      position: [x * radius, y * radius, z * radius],
+      rotation: [0, 0, 0],
+    });
+  }
+
+  return points;
+};
