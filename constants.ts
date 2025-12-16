@@ -1,5 +1,15 @@
 /* constants.ts */
 
+
+/* constants.ts
+   Drop-in file. Paste your URLs into RAW_LINKS (or keep it empty for now).
+   This version is conservative + robust so the gallery won’t fail to load.
+
+   ✅ Drive items default to IMAGE (safer).
+   ✅ You can force a Drive item to be treated as video by adding "#video" at the end of the URL.
+      Example: https://drive.google.com/file/d/XYZ/view?usp=drive_link#video
+*/
+
 export const RAW_LINKS = [
   "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
   "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
@@ -287,45 +297,87 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
 
+/* =======================
+   URL helpers
+======================= */
+
 const extractUrls = (text: string): string[] => {
   if (!text) return [];
   return (text.match(/https?:\/\/[^\s,]+/g) || []).map((v) => v.trim());
 };
 
 // Helper to extract Google Drive ID
-const getDriveId = (url: string): string => {
+export const getDriveId = (url: string): string => {
+  if (!url) return '';
   const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (m && m[1]) return m[1].split('?', 1)[0];
-  const alt = url.match(/id=([a-zA-Z0-9_-]+)/);
+  const alt = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   return alt ? alt[1].split('?', 1)[0] : '';
 };
 
-// Clean ID list
-export const ARTWORK_IDS = RAW_LINKS.map((l) => l && l.trim())
+const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|#|$)/i.test(url);
+
+const getYouTubeId = (url: string) => {
+  const match = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/,
+  );
+  return match ? match[1] : '';
+};
+
+const getVimeoId = (url: string) => {
+  const match = url.match(/vimeo\.com\/(\d+)/);
+  return match ? match[1] : '';
+};
+
+const buildDriveUrls = (id: string) => ({
+  preview: `https://lh3.googleusercontent.com/d/${id}=w500`,
+  full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
+  // For Drive playback, iframe preview is the most reliable cross-browser option:
+  embed: `https://drive.google.com/file/d/${id}/preview`,
+});
+
+const safeUrl = (u: string) => {
+  try {
+    return new URL(u);
+  } catch {
+    return null;
+  }
+};
+
+export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
+
+/* =======================
+   IDs + image urls
+======================= */
+
+// Clean ID list (Drive IDs only)
+export const ARTWORK_IDS = RAW_LINKS.map((l) => (l || '').trim())
   .filter(Boolean)
   .map(getDriveId)
   .filter(Boolean);
 
 // We use the lh3.googleusercontent.com CDN which is faster and avoids CORS issues for thumbnails
-// w500 is good for grid, w2000 is good for overlay
 export const getPreviewUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w500`;
 export const getFullUrl = (id: string) => `https://lh3.googleusercontent.com/d/${id}=w2000`;
 
-// Algorithm to distribute points on a sphere (Fibonacci Sphere)
+/* =======================
+   Sphere coordinates
+======================= */
+
+// Fibonacci sphere distribution
 export const getSphereCoordinates = (count: number, radius: number) => {
   const points: {
     position: [number, number, number];
     rotation: [number, number, number];
   }[] = [];
-  const safeCount = Math.max(1, count);
-  const phiSpan = Math.PI * (3 - Math.sqrt(5)); // Golden angle
 
-  if (safeCount === 1) {
-    return [{ position: [0, 0, radius], rotation: [0, 0, 0] }];
-  }
+  const safeCount = Math.max(1, count);
+  const phiSpan = Math.PI * (3 - Math.sqrt(5)); // golden angle
+
+  if (safeCount === 1) return [{ position: [0, 0, radius], rotation: [0, 0, 0] }];
 
   for (let i = 0; i < safeCount; i++) {
-    const y = 1 - (i / (safeCount - 1)) * 2; // y goes from 1 to -1
+    const y = 1 - (i / (safeCount - 1)) * 2; // 1..-1
     const radiusAtY = Math.sqrt(1 - y * y);
     const theta = phiSpan * i;
 
@@ -334,12 +386,16 @@ export const getSphereCoordinates = (count: number, radius: number) => {
 
     points.push({
       position: [x * radius, y * radius, z * radius],
-      rotation: [0, 0, 0], // Placeholder (usually handled by lookAt in the mesh)
+      rotation: [0, 0, 0],
     });
   }
 
   return points;
 };
+
+/* =======================
+   Types
+======================= */
 
 export type MediaKind = 'image' | 'video' | 'embed';
 export type MediaProvider = 'html5' | 'gdrive' | 'youtube' | 'vimeo' | 'unknown';
@@ -363,40 +419,33 @@ export interface MediaItem {
   provider?: MediaProvider;
   aspectRatio?: number;
   fallbackPreview?: string;
-  videoUrl?: string;   // html5/direct or drive stream
-  embedUrl?: string;   // ✅ drive preview iframe url (used by Overlay)
+
+  // video:
+  videoUrl?: string; // direct video only (mp4/webm/etc)
+  embedUrl?: string; // youtube/vimeo/drive iframe url
 }
 
-const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
+/* =======================
+   ID generator
+======================= */
 
-const getYouTubeId = (url: string) => {
-  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  return match ? match[1] : '';
+const uniqueId = () => {
+  // browser-safe random UUID fallback
+  const c: any = typeof crypto !== 'undefined' ? crypto : null;
+  if (c?.randomUUID) return c.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const getVimeoId = (url: string) => {
-  const match = url.match(/vimeo\.com\/(\d+)/);
-  return match ? match[1] : '';
-};
+/* =======================
+   Media item builder
+======================= */
 
-const buildDriveUrls = (id: string) => ({
-  preview: `https://lh3.googleusercontent.com/d/${id}=w500`,
-  full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
-  stream: `https://drive.google.com/uc?export=download&id=${id}`,
-  embed: `https://drive.google.com/file/d/${id}/preview`,
-});
+export const createMediaItem = (rawUrl: string): MediaItem => {
+  const trimmed = (rawUrl || '').trim();
+  const forcedVideo = /#video\b/i.test(trimmed);
+  const cleaned = trimmed.replace(/#video\b/i, '').trim();
 
-export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
-
-const uniqueId = () =>
-  (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-export const createMediaItem = (url: string): MediaItem => {
-  const trimmed = (url || '').trim();
-  const youTubeId = getYouTubeId(trimmed);
-  const vimeoId = getVimeoId(trimmed);
-  const driveId = getDriveId(trimmed);
-
+  const youTubeId = getYouTubeId(cleaned);
   if (youTubeId) {
     return {
       id: uniqueId(),
@@ -404,12 +453,13 @@ export const createMediaItem = (url: string): MediaItem => {
       kind: 'embed',
       provider: 'youtube',
       previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
-      // keep fullUrl as embed base; Overlay appends mute/autoplay parameters safely
       fullUrl: `https://www.youtube.com/embed/${youTubeId}`,
+      embedUrl: `https://www.youtube.com/embed/${youTubeId}`,
       aspectRatio: 16 / 9,
     };
   }
 
+  const vimeoId = getVimeoId(cleaned);
   if (vimeoId) {
     return {
       id: uniqueId(),
@@ -418,60 +468,85 @@ export const createMediaItem = (url: string): MediaItem => {
       provider: 'vimeo',
       previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
       fullUrl: `https://player.vimeo.com/video/${vimeoId}`,
+      embedUrl: `https://player.vimeo.com/video/${vimeoId}`,
       aspectRatio: 16 / 9,
     };
   }
 
+  const driveId = getDriveId(cleaned);
   if (driveId) {
-    const { preview, full, stream, embed } = buildDriveUrls(driveId);
+    const { preview, full, embed } = buildDriveUrls(driveId);
 
-    // NOTE: we treat drive items as video by default (matches your current usage).
-    // If you later want to detect image vs video, we can add a HEAD/content-type check server-side.
+    // Conservative default: Drive = IMAGE (prevents gallery trying to autoplay everything as video)
+    // If you add "#video" it becomes iframe-based video (most reliable for Drive).
+    if (forcedVideo) {
+      return {
+        id: uniqueId(),
+        originalUrl: trimmed,
+        kind: 'video',
+        provider: 'gdrive',
+        previewUrl: preview,
+        fullUrl: full,
+        fallbackPreview: full,
+        embedUrl: embed, // reliable playback in Overlay via iframe
+        aspectRatio: 16 / 9,
+      };
+    }
+
     return {
       id: uniqueId(),
       originalUrl: trimmed,
-      kind: 'video',
+      kind: 'image',
       provider: 'gdrive',
       previewUrl: preview,
       fullUrl: full,
-      videoUrl: stream,
       fallbackPreview: full,
-      embedUrl: embed, // ✅ used for reliable iframe playback in Overlay
-      aspectRatio: 16 / 9,
+      embedUrl: embed, // kept for future use/detection
     };
   }
 
-  if (isDirectVideo(trimmed)) {
+  if (isDirectVideo(cleaned)) {
     return {
       id: uniqueId(),
       originalUrl: trimmed,
       kind: 'video',
       provider: 'html5',
-      previewUrl: trimmed,
-      fullUrl: trimmed,
-      videoUrl: trimmed,
+      previewUrl: cleaned,
+      fullUrl: cleaned,
+      videoUrl: cleaned,
     };
   }
 
+  // unknown -> treat as image URL
   return {
     id: uniqueId(),
     originalUrl: trimmed,
     kind: 'image',
     provider: 'unknown',
-    previewUrl: trimmed,
-    fullUrl: trimmed,
+    previewUrl: cleaned,
+    fullUrl: cleaned,
   };
+};
+
+const isGalleryLink = (u: string) => {
+  const parsed = safeUrl(u);
+  if (!parsed) return /\bgallery=/.test(u);
+  return parsed.searchParams.has('gallery');
 };
 
 export const buildMediaItemsFromUrls = (urls: string[]) =>
   urls
-    .flatMap((url) => extractUrls(url))
-    .map((url) => url && url.trim())
-    .filter((url) => url && !/\bgallery=/.test(url))
+    .flatMap((u) => extractUrls(String(u || '')))
+    .map((u) => (u || '').trim())
+    .filter((u) => !!u)
+    .filter((u) => !isGalleryLink(u))
     .map(createMediaItem);
 
-export const buildDefaultMediaItems = () =>
-  ARTWORK_IDS.map((id) => createMediaItem(`https://drive.google.com/file/d/${id}/view?usp=drive_link`));
+export const buildDefaultMediaItems = () => buildMediaItemsFromUrls(RAW_LINKS);
+
+/* =======================
+   Share link encoding
+======================= */
 
 export const encodeGalleryParam = (items: MediaItem[], metadata: GalleryMetadata = {}) => {
   const payload = {
@@ -559,9 +634,8 @@ export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload 
   }
 
   const text = safeDecode(value || '');
-  if (text.includes('http')) {
-    return { urls: extractUrls(text) };
-  }
+  if (text.includes('http')) return { urls: extractUrls(text) };
 
   return { urls: [] };
 };
+
