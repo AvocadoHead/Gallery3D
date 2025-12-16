@@ -38,24 +38,27 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
-  // --- 1. PARSING LOGIC (Handles ?gallery= correctly) ---
+  // --- 1. ROBUST PARSING (Using Standards) ---
   useEffect(() => {
     const extractGalleryToken = (): string | null => {
-      const href = window.location.href;
+      // 1. Standard Query Param (?gallery=)
+      // URLSearchParams automatically handles decoding % characters
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryToken = searchParams.get('gallery');
+      if (queryToken) return queryToken;
 
-      // Check for Query Parameter (?gallery=) - This is the priority now
-      if (href.includes('gallery=')) {
-        // Regex to grab everything after gallery= until the next & or # or end of string
-        const match = href.match(/[?&]gallery=([^&#]*)/);
-        if (match && match[1]) {
-          try {
-            // Decode the URL-safe format back to Base64
-            return decodeURIComponent(match[1]);
-          } catch (e) {
-            return match[1];
-          }
+      // 2. Fallback for legacy Hash (#gallery=) logic
+      // We manually check this just in case an old link is clicked
+      const href = window.location.href;
+      if (href.includes('#gallery=')) {
+        const raw = href.split('#gallery=')[1];
+        try {
+          return decodeURIComponent(raw);
+        } catch (e) {
+          return raw;
         }
       }
+
       return null;
     };
 
@@ -70,13 +73,11 @@ const App: React.FC = () => {
     const syncFromUrl = () => {
       const token = extractGalleryToken();
 
-      // If bare link, load defaults
       if (!token) {
         loadDefaults();
         return;
       }
 
-      // Try decoding token
       try {
         const incoming = decodeGalleryParam(token);
 
@@ -101,16 +102,16 @@ const App: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error("Error parsing gallery token", err);
+        console.error("Error decoding gallery:", err);
       }
 
-      // If we are here, token was invalid
+      // If token was invalid
       loadDefaults();
     };
 
     syncFromUrl();
     window.addEventListener('popstate', syncFromUrl);
-    // We listen to hashchange just in case, but rely on query params
+    // Listen to hashchange too, just to be safe
     window.addEventListener('hashchange', syncFromUrl);
 
     return () => {
@@ -160,23 +161,27 @@ const App: React.FC = () => {
     return [...galleryItems, ...draftItems];
   }, [draftItems, galleryItems]);
 
-  // --- 2. GENERATING THE LINK (Using ?) ---
+  // --- 2. GENERATING THE LINK (Using URL API) ---
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
 
-    // 1. Create Base64 Token
     const token = encodeGalleryParam(effectiveItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
     });
 
-    // 2. URL Encode it. This is CRITICAL. 
-    // It turns '=' into '%3D', ensuring WhatsApp sees it as part of the URL.
-    const safeToken = encodeURIComponent(token);
-
-    // 3. Use ?gallery= (Query Param)
-    return `${shareBase}/?gallery=${safeToken}`;
+    try {
+      // Create a clean URL object. This handles slashes and ? automatically.
+      const url = new URL(shareBase);
+      // set() automatically encodes characters like '=' to '%3D'
+      // This is what fixes the WhatsApp highlighting issue.
+      url.searchParams.set('gallery', token);
+      return url.toString();
+    } catch (e) {
+      // Fallback if URL constructor fails (rare)
+      return `${shareBase}/?gallery=${encodeURIComponent(token)}`;
+    }
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
   useEffect(() => {
@@ -191,7 +196,7 @@ const App: React.FC = () => {
   const handleShare = async () => {
     if (!sharePayload) return;
     
-    // Update URL bar nicely
+    // Update the browser URL bar nicely
     window.history.replaceState(null, '', sharePayload);
 
     try {
