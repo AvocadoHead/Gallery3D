@@ -38,69 +38,82 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
+  // --- 1. ROBUST URL EXTRACTION & PARSING ---
   useEffect(() => {
-    const extractGallery = () => {
+    const extractGalleryToken = (): string | null => {
       const href = window.location.href;
-      
-      // 1. Try Hash (#gallery=...)
-      // We use split here instead of URLSearchParams to prevent '+' turning into spaces
+
+      // Priority 1: Hash (#gallery=...)
       if (href.includes('#gallery=')) {
-        const rawParam = href.split('#gallery=')[1];
-        // If the link was shared safely, it might be URI encoded. Try decoding it.
+        const raw = href.split('#gallery=')[1];
         try {
-          return decodeURIComponent(rawParam);
+          // Decode standard URL encoding (e.g. %3D to =)
+          return decodeURIComponent(raw);
         } catch (e) {
-          return rawParam;
+          return raw; 
         }
       }
 
-      // 2. Try Query (?gallery=...)
+      // Priority 2: Query (?gallery=...)
       if (href.includes('?gallery=')) {
-        const rawParam = href.split('?gallery=')[1].split('&')[0]; // Ensure we stop at next param
+        const raw = href.split('?gallery=')[1].split('&')[0];
         try {
-            return decodeURIComponent(rawParam);
+          return decodeURIComponent(raw);
         } catch (e) {
-            return rawParam;
+          return raw;
         }
       }
 
       return null;
     };
 
-    const syncFromUrl = () => {
-      const rawToken = extractGallery();
-      
-      // Attempt decode
-      const incoming = decodeGalleryParam(rawToken);
-
-      if (incoming) {
-        // Handle Object format (New)
-        if (incoming.urls && Array.isArray(incoming.urls)) {
-          setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
-          setIsCustom(true);
-          setDisplayName(incoming.displayName || '');
-          setContactWhatsapp(incoming.contactWhatsapp || '');
-          setContactEmail(incoming.contactEmail || '');
-          return;
-        }
-
-        // Handle Array format (Legacy)
-        if (Array.isArray(incoming)) {
-           setGalleryItems(buildMediaItemsFromUrls(incoming));
-           setIsCustom(true);
-           setDisplayName('');
-           setContactWhatsapp('');
-           setContactEmail('');
-           return;
-        }
-      }
-
-      // Fallback to default if no valid token
+    const loadDefaults = () => {
       setIsCustom(false);
       setDisplayName('');
       setContactWhatsapp('');
       setContactEmail('');
       setGalleryItems(buildDefaultMediaItems());
+    };
+
+    const syncFromUrl = () => {
+      const token = extractGalleryToken();
+
+      // CASE A: Bare URL -> Load Defaults
+      if (!token) {
+        loadDefaults();
+        return;
+      }
+
+      // CASE B: Token exists -> Try to decode
+      try {
+        const incoming = decodeGalleryParam(token);
+
+        if (incoming) {
+          // 1. New Object Format
+          if (incoming.urls && Array.isArray(incoming.urls)) {
+            setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
+            setIsCustom(true);
+            setDisplayName(incoming.displayName || '');
+            setContactWhatsapp(incoming.contactWhatsapp || '');
+            setContactEmail(incoming.contactEmail || '');
+            return;
+          }
+          // 2. Old Array Format
+          if (Array.isArray(incoming)) {
+            setGalleryItems(buildMediaItemsFromUrls(incoming));
+            setIsCustom(true);
+            setDisplayName('');
+            setContactWhatsapp('');
+            setContactEmail('');
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to decode gallery param:", err);
+      }
+
+      // CASE C: Token existed but was invalid -> Fallback to defaults
+      loadDefaults();
     };
 
     syncFromUrl();
@@ -113,6 +126,7 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // --- 2. BUILDER LOGIC ---
   const handleAddMedia = () => {
     const entries = inputValue
       .split(/[,\n]/)
@@ -140,6 +154,7 @@ const App: React.FC = () => {
     }, 650);
   };
 
+  // --- 3. SHARE LINK GENERATION ---
   const draftItems = useMemo(() => {
     const entries = inputValue
       .split(/[\n,]/)
@@ -156,22 +171,19 @@ const App: React.FC = () => {
 
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
-    
-    // Get the Base64 string from your helper
+
+    // 1. Generate the Base64 JSON token
     const token = encodeGalleryParam(effectiveItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
     });
 
-    /** 
-     * IMPORTANT FIX: 
-     * We wrap the token in encodeURIComponent.
-     * This turns characters like '=', '+', '/' into % codes.
-     * This ensures WhatsApp highlights the ENTIRE link, not just the beginning.
-     */
+    // 2. URI Encode it. This turns = into %3D, ensuring the link is
+    //    read as a single continuous string by WhatsApp/SMS apps.
     const safeToken = encodeURIComponent(token);
 
+    // 3. Construct URL with Hash
     return `${shareBase}/#gallery=${safeToken}`;
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
@@ -181,12 +193,15 @@ const App: React.FC = () => {
 
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    // Format: "Look at my Aether gallery https://..." (One line to help parsing)
+    // Keeping it on one line but using a space ensures highlighting works
     return `Look at my Aether gallery ${sharePayload}`;
   }, [sharePayload]);
 
+  // --- 4. SHARE ACTIONS ---
   const handleShare = async () => {
     if (!sharePayload) return;
+    
+    // Update URL bar without reloading
     window.history.replaceState(null, '', sharePayload);
 
     try {
@@ -194,11 +209,9 @@ const App: React.FC = () => {
         await navigator.share({
           title: 'Aether Gallery',
           text: shareMessage,
-          // url is omitted here deliberately to ensure the text+url string in 'text' is used
         });
         return;
       }
-      // Fallback to clipboard
       await navigator.clipboard.writeText(shareMessage);
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 1600);
@@ -220,13 +233,12 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper for generating the direct WhatsApp share link
+  // Direct Share Links
   const waShareUrl = useMemo(() => {
     if (!shareMessage) return '';
     return `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
   }, [shareMessage]);
 
-  // Helper for generating the direct Email share link
   const emailShareUrl = useMemo(() => {
     if (!sharePayload) return '';
     const subject = encodeURIComponent('Aether Gallery');
@@ -337,7 +349,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Create / Donate Grid */}
               <div className="grid grid-cols-2 gap-4 text-xs text-slate-600">
                 <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/70 border border-slate-100">
                   <p className="font-semibold text-slate-800">Create</p>
@@ -371,7 +382,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Contact Inputs */}
               <div className="grid grid-cols-3 gap-3 text-xs text-slate-600">
                 <label className="flex flex-col gap-1 p-3 rounded-xl bg-white/70 border border-slate-100">
                   <span className="font-semibold text-slate-800">Display name</span>
@@ -404,7 +414,6 @@ const App: React.FC = () => {
                 </label>
               </div>
 
-              {/* Build & Share Area */}
               {isCustom && (
                 <div className="space-y-3 rounded-2xl bg-white/70 border border-slate-100 p-3">
                   <label className="text-xs text-slate-700 font-semibold">Paste media URLs</label>
@@ -439,7 +448,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col gap-2 text-xs text-slate-600">
                       <p className="font-semibold text-slate-800">Share as easy as 1-2-3</p>
                       <div className="flex flex-wrap gap-2">
-                        {/* WhatsApp Button */}
+                         {/* WhatsApp Button */}
                         <a
                           href={waShareUrl}
                           target="_blank"
@@ -456,7 +465,7 @@ const App: React.FC = () => {
                         >
                           Email
                         </a>
-
+                        
                         {/* Copy Button */}
                         <button
                           onClick={handleCopyLink}
@@ -465,8 +474,8 @@ const App: React.FC = () => {
                           Copy Link
                         </button>
                       </div>
-
-                      {/* Read-only Text Area for manual copying */}
+                      
+                      {/* Text area for visual confirmation */}
                       <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all">
                         {shareMessage}
                       </p>
