@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MediaItem } from '../constants';
 
 interface OverlayProps {
@@ -42,14 +42,21 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const previewUrl = media.previewUrl;
   const fullUrl = media.fullUrl;
 
-  const renderContent = useMemo(() => {
+  const embedUrl = useMemo(() => {
+    if (media.kind !== 'embed') return '';
+    const separator = fullUrl.includes('?') ? '&' : '?';
+    return `${fullUrl}${separator}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
+  }, [fullUrl, media.kind, modalMuted]);
+
+  const renderContent = () => {
     if (media.kind === 'video' && !hasError) {
+      const videoSource = media.videoUrl || fullUrl;
       return (
         <div className="relative">
           <video
-            src={fullUrl}
+            src={videoSource}
             className={`
-              max-w-full max-h-[85vh] object-contain rounded-xl select-none
+              max-w-[90vw] max-h-[82vh] object-contain rounded-2xl select-none
               transition-opacity duration-500
               ${loaded ? 'opacity-100' : 'opacity-0'}
             `}
@@ -72,9 +79,8 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
     }
 
     if (media.kind === 'embed') {
-      const embedUrl = `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
       return (
-        <div className="relative w-[80vw] max-w-5xl aspect-video">
+        <div className="relative w-[88vw] max-w-5xl aspect-video">
           {!loaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
               <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
@@ -83,7 +89,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           <iframe
             src={embedUrl}
             allow="autoplay; fullscreen; picture-in-picture"
-            className={`w-full h-full rounded-xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
+            className={`w-full h-full rounded-2xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
             onLoad={() => setLoaded(true)}
           />
           <button
@@ -101,7 +107,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         src={hasError ? media.fallbackPreview || previewUrl : fullUrl}
         alt="Artwork"
         className={`
-          max-w-full max-h-[85vh] object-contain rounded-xl select-none
+          max-w-[90vw] max-h-[82vh] object-contain rounded-2xl select-none
           transition-opacity duration-500
           ${loaded ? 'opacity-100' : 'opacity-0'}
         `}
@@ -111,7 +117,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         }}
       />
     );
-  }, [fullUrl, hasError, loaded, media.fallbackPreview, media.kind, modalMuted, previewUrl]);
+  };
 
   return (
     <div 
@@ -152,7 +158,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           </div>
         )}
 
-        {renderContent}
+        {renderContent()}
       </div>
     </div>
   );
