@@ -38,32 +38,24 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
-  // --- 1. ROBUST URL EXTRACTION & PARSING ---
+  // --- 1. PARSING LOGIC (Handles ?gallery= correctly) ---
   useEffect(() => {
     const extractGalleryToken = (): string | null => {
       const href = window.location.href;
 
-      // Priority 1: Hash (#gallery=...)
-      if (href.includes('#gallery=')) {
-        const raw = href.split('#gallery=')[1];
-        try {
-          // Decode standard URL encoding (e.g. %3D to =)
-          return decodeURIComponent(raw);
-        } catch (e) {
-          return raw; 
+      // Check for Query Parameter (?gallery=) - This is the priority now
+      if (href.includes('gallery=')) {
+        // Regex to grab everything after gallery= until the next & or # or end of string
+        const match = href.match(/[?&]gallery=([^&#]*)/);
+        if (match && match[1]) {
+          try {
+            // Decode the URL-safe format back to Base64
+            return decodeURIComponent(match[1]);
+          } catch (e) {
+            return match[1];
+          }
         }
       }
-
-      // Priority 2: Query (?gallery=...)
-      if (href.includes('?gallery=')) {
-        const raw = href.split('?gallery=')[1].split('&')[0];
-        try {
-          return decodeURIComponent(raw);
-        } catch (e) {
-          return raw;
-        }
-      }
-
       return null;
     };
 
@@ -78,18 +70,18 @@ const App: React.FC = () => {
     const syncFromUrl = () => {
       const token = extractGalleryToken();
 
-      // CASE A: Bare URL -> Load Defaults
+      // If bare link, load defaults
       if (!token) {
         loadDefaults();
         return;
       }
 
-      // CASE B: Token exists -> Try to decode
+      // Try decoding token
       try {
         const incoming = decodeGalleryParam(token);
 
         if (incoming) {
-          // 1. New Object Format
+          // New Object Format
           if (incoming.urls && Array.isArray(incoming.urls)) {
             setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
             setIsCustom(true);
@@ -98,7 +90,7 @@ const App: React.FC = () => {
             setContactEmail(incoming.contactEmail || '');
             return;
           }
-          // 2. Old Array Format
+          // Old Array Format
           if (Array.isArray(incoming)) {
             setGalleryItems(buildMediaItemsFromUrls(incoming));
             setIsCustom(true);
@@ -109,15 +101,16 @@ const App: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error("Failed to decode gallery param:", err);
+        console.error("Error parsing gallery token", err);
       }
 
-      // CASE C: Token existed but was invalid -> Fallback to defaults
+      // If we are here, token was invalid
       loadDefaults();
     };
 
     syncFromUrl();
     window.addEventListener('popstate', syncFromUrl);
+    // We listen to hashchange just in case, but rely on query params
     window.addEventListener('hashchange', syncFromUrl);
 
     return () => {
@@ -126,7 +119,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // --- 2. BUILDER LOGIC ---
   const handleAddMedia = () => {
     const entries = inputValue
       .split(/[,\n]/)
@@ -154,7 +146,6 @@ const App: React.FC = () => {
     }, 650);
   };
 
-  // --- 3. SHARE LINK GENERATION ---
   const draftItems = useMemo(() => {
     const entries = inputValue
       .split(/[\n,]/)
@@ -169,22 +160,23 @@ const App: React.FC = () => {
     return [...galleryItems, ...draftItems];
   }, [draftItems, galleryItems]);
 
+  // --- 2. GENERATING THE LINK (Using ?) ---
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
 
-    // 1. Generate the Base64 JSON token
+    // 1. Create Base64 Token
     const token = encodeGalleryParam(effectiveItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
     });
 
-    // 2. URI Encode it. This turns = into %3D, ensuring the link is
-    //    read as a single continuous string by WhatsApp/SMS apps.
+    // 2. URL Encode it. This is CRITICAL. 
+    // It turns '=' into '%3D', ensuring WhatsApp sees it as part of the URL.
     const safeToken = encodeURIComponent(token);
 
-    // 3. Construct URL with Hash
-    return `${shareBase}/#gallery=${safeToken}`;
+    // 3. Use ?gallery= (Query Param)
+    return `${shareBase}/?gallery=${safeToken}`;
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
   useEffect(() => {
@@ -193,15 +185,13 @@ const App: React.FC = () => {
 
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    // Keeping it on one line but using a space ensures highlighting works
     return `Look at my Aether gallery ${sharePayload}`;
   }, [sharePayload]);
 
-  // --- 4. SHARE ACTIONS ---
   const handleShare = async () => {
     if (!sharePayload) return;
     
-    // Update URL bar without reloading
+    // Update URL bar nicely
     window.history.replaceState(null, '', sharePayload);
 
     try {
@@ -233,7 +223,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Direct Share Links
   const waShareUrl = useMemo(() => {
     if (!shareMessage) return '';
     return `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
@@ -448,7 +437,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col gap-2 text-xs text-slate-600">
                       <p className="font-semibold text-slate-800">Share as easy as 1-2-3</p>
                       <div className="flex flex-wrap gap-2">
-                         {/* WhatsApp Button */}
+                        {/* WhatsApp Button */}
                         <a
                           href={waShareUrl}
                           target="_blank"
@@ -465,7 +454,7 @@ const App: React.FC = () => {
                         >
                           Email
                         </a>
-                        
+
                         {/* Copy Button */}
                         <button
                           onClick={handleCopyLink}
@@ -474,7 +463,7 @@ const App: React.FC = () => {
                           Copy Link
                         </button>
                       </div>
-                      
+
                       {/* Text area for visual confirmation */}
                       <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all">
                         {shareMessage}
