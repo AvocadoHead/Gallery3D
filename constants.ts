@@ -359,6 +359,7 @@ export interface MediaItem {
   aspectRatio?: number;
   fallbackPreview?: string;
   videoUrl?: string;
+   embedUrl?: string;
 }
 
 const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(url);
@@ -377,6 +378,7 @@ const buildDriveUrls = (id: string) => ({
   preview: `https://lh3.googleusercontent.com/d/${id}=w500`,
   full: `https://lh3.googleusercontent.com/d/${id}=w2000`,
   stream: `https://drive.google.com/uc?export=download&id=${id}`,
+  embed: `https://drive.google.com/file/d/${id}/preview`,
 });
 
 export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
@@ -414,7 +416,7 @@ export const createMediaItem = (url: string): MediaItem => {
   }
 
   if (driveId) {
-    const { preview, full, stream } = buildDriveUrls(driveId);
+    const { preview, full, stream, embed } = buildDriveUrls(driveId);
 
     return {
       id: uniqueId(),
@@ -425,6 +427,7 @@ export const createMediaItem = (url: string): MediaItem => {
       fullUrl: full,
       videoUrl: stream,
       fallbackPreview: full,
+      embedUrl: embed,
     };
   }
 
@@ -471,28 +474,35 @@ export const encodeGalleryParam = (
 
 export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload => {
   if (!value) return { urls: [] };
-  try {
-    const raw = atob(decodeURIComponent(value));
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return { urls: parsed };
+
+  const attempts = [value, decodeURIComponent(value || ''), (value || '').replace(/\s+/g, '+')];
+
+  for (const candidate of attempts) {
+    try {
+      const normalized = decodeURIComponent(candidate);
+      const raw = atob(normalized.replace(/-/g, '+').replace(/_/g, '/'));
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return { urls: parsed };
+      }
+      if (parsed && typeof parsed === 'object') {
+        const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } = parsed as DecodedGalleryPayload;
+        return { urls, displayName, contactWhatsapp, contactEmail };
+      }
+    } catch (err) {
+      continue;
     }
-    if (parsed && typeof parsed === 'object') {
-      const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } = parsed as DecodedGalleryPayload;
-      return { urls, displayName, contactWhatsapp, contactEmail };
-    }
-    return { urls: [] };
-  } catch (err) {
-    console.warn('Failed to decode gallery payload', err);
-    const text = decodeURIComponent(value || '');
-    if (text.includes('http')) {
-      return {
-        urls: text
-          .split(/[\s,]+/)
-          .map((v) => v.trim())
-          .filter((v) => v.startsWith('http')),
-      };
-    }
-    return { urls: [] };
   }
+
+  const text = decodeURIComponent(value || '');
+  if (text.includes('http')) {
+    return {
+      urls: text
+        .split(/[\s,]+/)
+        .map((v) => v.trim())
+        .filter((v) => v.startsWith('http')),
+    };
+  }
+
+  return { urls: [] };
 };

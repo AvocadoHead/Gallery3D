@@ -50,6 +50,26 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
 
   const renderContent = () => {
     if (media.kind === 'video' && !hasError) {
+      // Prefer the Google Drive embed to guarantee playback permissions
+      if (media.provider === 'gdrive' && media.embedUrl) {
+        return (
+          <div className="relative w-[88vw] max-w-5xl aspect-video">
+            {!loaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
+                <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
+              </div>
+            )}
+            <iframe
+              src={media.embedUrl}
+              allow="autoplay; fullscreen; picture-in-picture"
+              className={`w-full h-full rounded-2xl border-0 ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}
+              onLoad={() => setLoaded(true)}
+              allowFullScreen
+            />
+          </div>
+        );
+      }
+
       const videoSource = media.videoUrl || fullUrl;
       return (
         <div className="relative">
