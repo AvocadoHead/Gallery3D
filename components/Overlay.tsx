@@ -33,10 +33,20 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  // ✅ Embed URL logic:
+  // - Google Drive: use embedUrl as-is (no autoplay/mute query params)
+  // - YouTube/Vimeo: add autoplay + mute params
   const embedUrl = useMemo(() => {
     if (!artwork || artwork.kind !== 'embed') return '';
-    const separator = artwork.fullUrl.includes('?') ? '&' : '?';
-    return `${artwork.fullUrl}${separator}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
+
+    if (artwork.provider === 'gdrive' && artwork.embedUrl) {
+      return artwork.embedUrl;
+    }
+
+    const base = artwork.fullUrl || '';
+    if (!base) return '';
+    const separator = base.includes('?') ? '&' : '?';
+    return `${base}${separator}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
   }, [artwork, modalMuted]);
 
   const media = artwork;
@@ -46,30 +56,12 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const fullUrl = media.fullUrl;
 
   const renderContent = () => {
-    // ---- VIDEO (prefer gdrive iframe when available) ----
+    // ---- VIDEO (HTML5 / Direct) ----
+    // Note: Drive videos should usually be "embed" with embedUrl; but if any video slips through here,
+    // we still try to play it via <video>.
     if (media.kind === 'video' && !hasError) {
-      if (media.provider === 'gdrive' && media.embedUrl) {
-        return (
-          <div className="relative w-[88vw] max-w-5xl aspect-video">
-            {!loaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
-                <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
-              </div>
-            )}
-            <iframe
-              src={media.embedUrl}
-              allow="autoplay; fullscreen; picture-in-picture"
-              className={`w-full h-full rounded-2xl border-0 ${
-                loaded ? 'opacity-100' : 'opacity-0'
-              } transition-opacity duration-500`}
-              onLoad={() => setLoaded(true)}
-              allowFullScreen
-            />
-          </div>
-        );
-      }
-
       const videoSource = media.videoUrl || fullUrl;
+
       return (
         <div className="relative">
           <video
@@ -97,8 +89,10 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       );
     }
 
-    // ---- EMBED (YouTube/Vimeo) ----
+    // ---- EMBED (Drive / YouTube / Vimeo) ----
     if (media.kind === 'embed') {
+      const isDrive = media.provider === 'gdrive';
+
       return (
         <div className="relative w-[88vw] max-w-5xl aspect-video">
           {!loaded && (
@@ -106,6 +100,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
               <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
             </div>
           )}
+
           <iframe
             src={embedUrl}
             allow="autoplay; fullscreen; picture-in-picture"
@@ -115,12 +110,16 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             onLoad={() => setLoaded(true)}
             allowFullScreen
           />
-          <button
-            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
-            onClick={() => setModalMuted((prev) => !prev)}
-          >
-            {modalMuted ? 'Enable sound' : 'Mute'}
-          </button>
+
+          {/* ✅ Mute toggle makes sense for YT/Vimeo embeds, not Drive preview */}
+          {!isDrive && (
+            <button
+              className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
+              onClick={() => setModalMuted((prev) => !prev)}
+            >
+              {modalMuted ? 'Enable sound' : 'Mute'}
+            </button>
+          )}
         </div>
       );
     }
@@ -162,8 +161,15 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           absolute top-8 right-8 w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-lg text-gray-800 hover:scale-105 transition-all duration-300 z-50 border border-gray-100
           ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}
         `}
+        aria-label="Close"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
