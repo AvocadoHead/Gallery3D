@@ -20,7 +20,6 @@ const Loader = () => (
 );
 
 const App: React.FC = () => {
-  // Use the current origin so previews work in forks/preview deploys too.
   const shareBase =
     typeof window !== 'undefined' && window.location?.origin
       ? window.location.origin
@@ -40,41 +39,42 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   useEffect(() => {
-    // FIX 1: Robust extraction that doesn't break Base64 '+' characters
     const extractGallery = () => {
       const href = window.location.href;
       
-      // Check Hash first (#gallery=...)
-      // We manually substring to avoid URLSearchParams turning '+' into spaces
-      const hashIndex = href.indexOf('#gallery=');
-      if (hashIndex !== -1) {
-        return href.substring(hashIndex + 9); // 9 is length of "#gallery="
+      // 1. Try Hash (#gallery=...)
+      // We use split here instead of URLSearchParams to prevent '+' turning into spaces
+      if (href.includes('#gallery=')) {
+        const rawParam = href.split('#gallery=')[1];
+        // If the link was shared safely, it might be URI encoded. Try decoding it.
+        try {
+          return decodeURIComponent(rawParam);
+        } catch (e) {
+          return rawParam;
+        }
       }
 
-      // Fallback: Check Query Param (?gallery=...)
-      const searchIndex = href.indexOf('?gallery=');
-      if (searchIndex !== -1) {
-        const match = href.match(/[?&]gallery=([^&#]+)/);
-        return match ? match[1] : null;
+      // 2. Try Query (?gallery=...)
+      if (href.includes('?gallery=')) {
+        const rawParam = href.split('?gallery=')[1].split('&')[0]; // Ensure we stop at next param
+        try {
+            return decodeURIComponent(rawParam);
+        } catch (e) {
+            return rawParam;
+        }
       }
 
       return null;
     };
 
     const syncFromUrl = () => {
-      const token = extractGallery();
+      const rawToken = extractGallery();
       
-      // If no token, load defaults
-      if (!token) {
-        loadDefaults();
-        return;
-      }
+      // Attempt decode
+      const incoming = decodeGalleryParam(rawToken);
 
-      const incoming = decodeGalleryParam(token);
-
-      // FIX 2: Handle valid data or fallback if decoding failed
       if (incoming) {
-        // Scenario A: New Object Format { urls: [...], displayName: ... }
+        // Handle Object format (New)
         if (incoming.urls && Array.isArray(incoming.urls)) {
           setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
           setIsCustom(true);
@@ -84,7 +84,7 @@ const App: React.FC = () => {
           return;
         }
 
-        // Scenario B: Old Array Format (Legacy support)
+        // Handle Array format (Legacy)
         if (Array.isArray(incoming)) {
            setGalleryItems(buildMediaItemsFromUrls(incoming));
            setIsCustom(true);
@@ -95,17 +95,13 @@ const App: React.FC = () => {
         }
       }
 
-      // If decoding returned null or invalid structure
-      loadDefaults();
-    };
-
-    const loadDefaults = () => {
+      // Fallback to default if no valid token
       setIsCustom(false);
       setDisplayName('');
       setContactWhatsapp('');
       setContactEmail('');
       setGalleryItems(buildDefaultMediaItems());
-    }
+    };
 
     syncFromUrl();
     window.addEventListener('popstate', syncFromUrl);
@@ -160,34 +156,37 @@ const App: React.FC = () => {
 
   const sharePayload = useMemo(() => {
     if (!effectiveItems.length) return '';
+    
+    // Get the Base64 string from your helper
     const token = encodeGalleryParam(effectiveItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
     });
 
-    // Use hash: it’s usually treated as part of the clickable URL.
-    return `${shareBase}/#gallery=${token}`;
+    /** 
+     * IMPORTANT FIX: 
+     * We wrap the token in encodeURIComponent.
+     * This turns characters like '=', '+', '/' into % codes.
+     * This ensures WhatsApp highlights the ENTIRE link, not just the beginning.
+     */
+    const safeToken = encodeURIComponent(token);
+
+    return `${shareBase}/#gallery=${safeToken}`;
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
   useEffect(() => {
     setShareLink(sharePayload);
   }, [sharePayload]);
 
-  /**
-   * FIX 3: Removed the newline formatting to match the old style.
-   * This ensures WhatsApp treats the text and URL as one block,
-   * or highlights the link correctly inline.
-   */
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
+    // Format: "Look at my Aether gallery https://..." (One line to help parsing)
     return `Look at my Aether gallery ${sharePayload}`;
   }, [sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
-
-    // Keep URL bar updated so copying from address bar also works.
     window.history.replaceState(null, '', sharePayload);
 
     try {
@@ -195,16 +194,14 @@ const App: React.FC = () => {
         await navigator.share({
           title: 'Aether Gallery',
           text: shareMessage,
-          // url: sharePayload // Often better to leave URL out of this field if included in 'text' to prevent duplication on some Android devices
+          // url is omitted here deliberately to ensure the text+url string in 'text' is used
         });
         return;
       }
-
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareMessage);
-        setToastVisible(true);
-        setTimeout(() => setToastVisible(false), 1600);
-      }
+      // Fallback to clipboard
+      await navigator.clipboard.writeText(shareMessage);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 1600);
     } catch (error) {
       console.warn('Share cancelled', error);
     }
@@ -222,6 +219,20 @@ const App: React.FC = () => {
       console.warn('Clipboard unavailable', err);
     }
   };
+
+  // Helper for generating the direct WhatsApp share link
+  const waShareUrl = useMemo(() => {
+    if (!shareMessage) return '';
+    return `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
+  }, [shareMessage]);
+
+  // Helper for generating the direct Email share link
+  const emailShareUrl = useMemo(() => {
+    if (!sharePayload) return '';
+    const subject = encodeURIComponent('Aether Gallery');
+    const body = encodeURIComponent(shareMessage);
+    return `mailto:?subject=${subject}&body=${body}`;
+  }, [shareMessage, sharePayload]);
 
   const handleContactClick = () => {
     const phone = sanitizeWhatsapp(contactWhatsapp);
@@ -310,7 +321,7 @@ const App: React.FC = () => {
                 </span>
               </div>
 
-              {/* ... (Donation Section kept as is) ... */}
+              {/* Donation Section */}
               <div className="bg-slate-900 text-white rounded-3xl p-5 flex items-center gap-4 shadow-inner ring-1 ring-white/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-pink-500 flex items-center justify-center text-slate-900 font-bold shadow-lg text-lg">
                   1$
@@ -326,6 +337,7 @@ const App: React.FC = () => {
                 </div>
               </div>
 
+              {/* Create / Donate Grid */}
               <div className="grid grid-cols-2 gap-4 text-xs text-slate-600">
                 <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/70 border border-slate-100">
                   <p className="font-semibold text-slate-800">Create</p>
@@ -359,6 +371,7 @@ const App: React.FC = () => {
                 </div>
               </div>
 
+              {/* Contact Inputs */}
               <div className="grid grid-cols-3 gap-3 text-xs text-slate-600">
                 <label className="flex flex-col gap-1 p-3 rounded-xl bg-white/70 border border-slate-100">
                   <span className="font-semibold text-slate-800">Display name</span>
@@ -391,6 +404,7 @@ const App: React.FC = () => {
                 </label>
               </div>
 
+              {/* Build & Share Area */}
               {isCustom && (
                 <div className="space-y-3 rounded-2xl bg-white/70 border border-slate-100 p-3">
                   <label className="text-xs text-slate-700 font-semibold">Paste media URLs</label>
@@ -425,14 +439,43 @@ const App: React.FC = () => {
                     <div className="flex flex-col gap-2 text-xs text-slate-600">
                       <p className="font-semibold text-slate-800">Share as easy as 1-2-3</p>
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={handleCopyLink} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow hover:bg-emerald-700 transition">
+                        {/* WhatsApp Button */}
+                        <a
+                          href={waShareUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 rounded-lg bg-green-500 text-white shadow hover:bg-green-600 transition flex items-center gap-1"
+                        >
+                          WhatsApp
+                        </a>
+
+                        {/* Email Button */}
+                        <a
+                          href={emailShareUrl}
+                          className="px-3 py-1.5 rounded-lg bg-blue-500 text-white shadow hover:bg-blue-600 transition flex items-center gap-1"
+                        >
+                          Email
+                        </a>
+
+                        {/* Copy Button */}
+                        <button
+                          onClick={handleCopyLink}
+                          className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 shadow hover:bg-slate-300 transition"
+                        >
                           Copy Link
                         </button>
-                        {/* If using WhatsApp specifically, you can add a direct WA button here too */}
                       </div>
+
+                      {/* Read-only Text Area for manual copying */}
                       <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all">
                         {shareMessage}
                       </p>
+
+                      {toastVisible && (
+                        <span className="text-emerald-600 font-semibold animate-pulse">
+                          Copied to clipboard!
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
