@@ -1,5 +1,8 @@
 /* constants.ts */
 
+
+/* constants.ts */
+
 export const RAW_LINKS = [
   "https://drive.google.com/file/d/1dIqrswjsCHoktMCdeGJ0GMgEd6K7EzVf/view?usp=drive_link",
   "https://drive.google.com/file/d/1b-cLwlDgBOzYEyP83u5un-bVRgty5pP5/view?usp=drive_link",
@@ -286,7 +289,6 @@ export const RAW_LINKS = [
   "https://drive.google.com/file/d/1rboDD4Fki6XOi0PWmEgP6WYSnkSLMhMy/view?usp=drive_link",
   "https://drive.google.com/file/d/1xQDe3vGxDCE6bLf6WhDReaKDvgbKLKv8/view?usp=drive_link"
 ];
-
 /* ------------------------- helpers ------------------------- */
 
 const extractUrls = (text: string): string[] => {
@@ -294,7 +296,7 @@ const extractUrls = (text: string): string[] => {
   return (text.match(/https?:\/\/[^\s,]+/g) || []).map((v) => v.trim());
 };
 
-export const sanitizeWhatsapp = (value?: string) => (value || "").replace(/\D+/g, "");
+export const sanitizeWhatsapp = (value?: string) => (value || '').replace(/\D+/g, '');
 
 const uniqueId = () =>
   (globalThis.crypto as any)?.randomUUID
@@ -304,20 +306,20 @@ const uniqueId = () =>
 /** Google Drive ID extractor */
 export const getDriveId = (url: string): string => {
   const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (m?.[1]) return m[1].split("?", 1)[0];
+  if (m?.[1]) return m[1].split('?', 1)[0];
   const alt = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  return alt?.[1] ? alt[1].split("?", 1)[0] : "";
+  return alt?.[1] ? alt[1].split('?', 1)[0] : '';
 };
 
 /** YouTube / Vimeo */
 const getYouTubeId = (url: string) => {
   const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  return match ? match[1] : "";
+  return match ? match[1] : '';
 };
 
 const getVimeoId = (url: string) => {
   const match = url.match(/vimeo\.com\/(\d+)/);
-  return match ? match[1] : "";
+  return match ? match[1] : '';
 };
 
 /** Direct video file (non-Drive) */
@@ -325,6 +327,22 @@ const isDirectVideo = (url: string) => /\.(mp4|mov|webm|ogg|m4v)(\?|$)/i.test(ur
 
 /** Direct image file (non-Drive) */
 const isDirectImage = (url: string) => /\.(png|jpg|jpeg|gif|webp|avif|svg)(\?|$)/i.test(url);
+
+/** Safe “always loads” thumbnail for videos (same-origin, works as WebGL texture) */
+const VIDEO_PLACEHOLDER_SVG = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#334155"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" rx="28" fill="url(#g)"/>
+  <circle cx="400" cy="225" r="86" fill="rgba(255,255,255,0.12)"/>
+  <path d="M380 185 L380 265 L455 225 Z" fill="rgba(255,255,255,0.85)"/>
+  <text x="24" y="420" fill="rgba(255,255,255,0.55)" font-family="Arial" font-size="18">video</text>
+</svg>
+`)}`;
 
 /** Drive urls: thumbnails via lh3, playback via /preview iframe */
 const buildDriveUrls = (id: string) => ({
@@ -335,8 +353,8 @@ const buildDriveUrls = (id: string) => ({
 
 /* ------------------------- types ------------------------- */
 
-export type MediaKind = "image" | "video" | "embed";
-export type MediaProvider = "html5" | "gdrive" | "youtube" | "vimeo" | "unknown";
+export type MediaKind = 'image' | 'video' | 'embed';
+export type MediaProvider = 'html5' | 'gdrive' | 'youtube' | 'vimeo' | 'unknown';
 
 export interface GalleryMetadata {
   displayName?: string;
@@ -355,12 +373,12 @@ export interface MediaItem {
   kind: MediaKind;
   provider?: MediaProvider;
 
-  previewUrl: string; // grid thumb
+  previewUrl: string; // grid thumb (must be an IMAGE for WebGL textures)
   fullUrl: string; // full-res image OR embed base
   videoUrl?: string; // direct mp4/webm
   embedUrl?: string; // iframe src (youtube/vimeo/drive preview)
 
-  fallbackPreview?: string; // optional static preview for videos
+  fallbackPreview?: string; // optional static preview for videos / failures
   aspectRatio?: number;
 }
 
@@ -368,7 +386,7 @@ export interface MediaItem {
 
 const extractPreviewFromParam = (url: string) => {
   const match = url.match(/(?:[?#]|&)preview=([^&#]+)/i);
-  if (!match?.[1]) return "";
+  if (!match?.[1]) return '';
   try {
     return decodeURIComponent(match[1]);
   } catch {
@@ -377,8 +395,13 @@ const extractPreviewFromParam = (url: string) => {
 };
 
 const parseMediaInput = (raw: string) => {
-  const [maybeUrl, maybePreview] = raw.split("|").map((part) => part.trim());
-  if (maybeUrl && maybePreview && /^https?:\/\//i.test(maybeUrl) && /^https?:\/\//i.test(maybePreview)) {
+  const [maybeUrl, maybePreview] = raw.split('|').map((part) => part.trim());
+  if (
+    maybeUrl &&
+    maybePreview &&
+    /^https?:\/\//i.test(maybeUrl) &&
+    /^https?:\/\//i.test(maybePreview)
+  ) {
     return { source: maybeUrl, preview: maybePreview };
   }
 
@@ -389,7 +412,7 @@ const parseMediaInput = (raw: string) => {
 };
 
 export const createMediaItem = (url: string): MediaItem => {
-  const rawInput = (url || "").trim();
+  const rawInput = (url || '').trim();
   const { source, preview } = parseMediaInput(rawInput);
   const trimmed = source.trim();
 
@@ -398,8 +421,8 @@ export const createMediaItem = (url: string): MediaItem => {
     return {
       id: uniqueId(),
       originalUrl: rawInput,
-      kind: "embed",
-      provider: "youtube",
+      kind: 'embed',
+      provider: 'youtube',
       previewUrl: `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`,
       fullUrl: `https://www.youtube.com/embed/${youTubeId}`,
       embedUrl: `https://www.youtube.com/embed/${youTubeId}`,
@@ -412,8 +435,8 @@ export const createMediaItem = (url: string): MediaItem => {
     return {
       id: uniqueId(),
       originalUrl: rawInput,
-      kind: "embed",
-      provider: "vimeo",
+      kind: 'embed',
+      provider: 'vimeo',
       previewUrl: `https://vumbnail.com/${vimeoId}.jpg`,
       fullUrl: `https://player.vimeo.com/video/${vimeoId}`,
       embedUrl: `https://player.vimeo.com/video/${vimeoId}`,
@@ -425,41 +448,41 @@ export const createMediaItem = (url: string): MediaItem => {
   if (driveId) {
     const { thumb, full, previewIframe } = buildDriveUrls(driveId);
 
-    // ✅ Key decision:
-    // We DO NOT attempt to detect Drive mime-type.
-    // Instead: thumbnails via lh3, and on click we always open /preview in an iframe.
-    // Drive itself decides if it’s an image or a video and renders it correctly.
+    // Treat Drive as embed for overlay reliability.
+    // IMPORTANT: previewUrl must be an IMAGE (for WebGL).
     return {
       id: uniqueId(),
       originalUrl: rawInput,
-      kind: "embed",              // treat Drive as embed for overlay reliability
-      provider: "gdrive",
-      previewUrl: thumb,          // fast thumb
-      fullUrl: full,              // still useful if you ever want image-only full
-      embedUrl: previewIframe,    // ✅ plays videos + shows images
-      aspectRatio: 16 / 9,        // safe default for the iframe container
+      kind: 'embed',
+      provider: 'gdrive',
+      previewUrl: thumb,
+      fallbackPreview: VIDEO_PLACEHOLDER_SVG,
+      fullUrl: full,
+      embedUrl: previewIframe,
+      aspectRatio: 16 / 9,
     };
   }
 
   if (isDirectVideo(trimmed)) {
+    // IMPORTANT: previewUrl must be an IMAGE. Never point previewUrl to an .mp4.
     return {
       id: uniqueId(),
       originalUrl: rawInput,
-      kind: "video",
-      provider: "html5",
-      previewUrl: preview || trimmed,
-      fallbackPreview: preview || undefined,
+      kind: 'video',
+      provider: 'html5',
+      previewUrl: preview || VIDEO_PLACEHOLDER_SVG,
+      fallbackPreview: preview || VIDEO_PLACEHOLDER_SVG,
       fullUrl: trimmed,
       videoUrl: trimmed,
     };
   }
 
-  // If it looks like an image extension, treat as image; otherwise default to image anyway
+  // Image (or unknown but treated as image)
   return {
     id: uniqueId(),
     originalUrl: rawInput,
-    kind: "image",
-    provider: "unknown",
+    kind: 'image',
+    provider: 'unknown',
     previewUrl: trimmed,
     fullUrl: trimmed,
     aspectRatio: isDirectImage(trimmed) ? undefined : undefined,
@@ -477,18 +500,36 @@ export const buildDefaultMediaItems = () => buildMediaItemsFromUrls(RAW_LINKS);
 
 /* ------------------------- gallery param encode/decode ------------------------- */
 
+const b64urlEncodeUtf8 = (obj: unknown) => {
+  const json = JSON.stringify(obj);
+  const utf8 = encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+    String.fromCharCode(parseInt(p1, 16)),
+  );
+  const base64 = btoa(utf8)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return base64; // URL-safe already
+};
+
+const b64urlDecodeUtf8 = (value: string) => {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const raw = atob(padded);
+  const json = decodeURIComponent(
+    Array.from(raw)
+      .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+      .join(''),
+  );
+  return JSON.parse(json);
+};
+
 export const encodeGalleryParam = (items: MediaItem[], metadata: GalleryMetadata = {}) => {
   const payload = {
     urls: items.map((item) => item.originalUrl),
     ...metadata,
   };
-
-  const base64 = btoa(JSON.stringify(payload))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-
-  return encodeURIComponent(base64);
+  return b64urlEncodeUtf8(payload);
 };
 
 const parsePayloadObject = (input: unknown): DecodedGalleryPayload | null => {
@@ -496,12 +537,12 @@ const parsePayloadObject = (input: unknown): DecodedGalleryPayload | null => {
     return { urls: input.flatMap((v) => extractUrls(String(v))) } as DecodedGalleryPayload;
   }
 
-  if (input && typeof input === "object") {
-    const { urls = [], displayName = "", contactWhatsapp = "", contactEmail = "" } =
+  if (input && typeof input === 'object') {
+    const { urls = [], displayName = '', contactWhatsapp = '', contactEmail = '' } =
       input as DecodedGalleryPayload;
 
     return {
-      urls: urls.flatMap((v) => extractUrls(String(v))),
+      urls: (urls || []).flatMap((v) => extractUrls(String(v))),
       displayName,
       contactWhatsapp,
       contactEmail,
@@ -519,12 +560,9 @@ const tryParseJsonString = (value: string): DecodedGalleryPayload | null => {
   }
 };
 
-const tryParseBase64Json = (value: string): DecodedGalleryPayload | null => {
+const tryParseBase64UrlJson = (value: string): DecodedGalleryPayload | null => {
   try {
-    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    const raw = atob(padded);
-    return parsePayloadObject(JSON.parse(raw));
+    return parsePayloadObject(b64urlDecodeUtf8(value));
   } catch {
     return null;
   }
@@ -546,8 +584,8 @@ export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload 
       [
         value,
         safeDecode(value),
-        value.replace(/\s+/g, "+"),
-        safeDecode(value.replace(/\s+/g, "+")),
+        value.replace(/\s+/g, '+'),
+        safeDecode(value.replace(/\s+/g, '+')),
       ].filter(Boolean),
     ),
   );
@@ -556,12 +594,12 @@ export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload 
     const jsonParsed = tryParseJsonString(candidate);
     if (jsonParsed) return jsonParsed;
 
-    const base64Parsed = tryParseBase64Json(candidate);
+    const base64Parsed = tryParseBase64UrlJson(candidate);
     if (base64Parsed) return base64Parsed;
   }
 
   const text = safeDecode(value);
-  if (text.includes("http")) return { urls: extractUrls(text) };
+  if (text.includes('http')) return { urls: extractUrls(text) };
 
   return { urls: [] };
 };
@@ -591,3 +629,4 @@ export const getSphereCoordinates = (count: number, radius: number) => {
 
   return points;
 };
+
