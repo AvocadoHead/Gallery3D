@@ -481,13 +481,18 @@ const decodeBase64Url = (value: string) => {
 };
 
 export const encodeGalleryParam = (
-  items: MediaItem[],
+  items: MediaItem[] | string[],
   metadata: GalleryMetadata = {}
-) =>
-  encodeBase64Url({
-    urls: items.map((i) => i.originalUrl),
+) => {
+  const urls = (items as (MediaItem | string)[])
+    .map((item) => (typeof item === 'string' ? item : item.originalUrl))
+    .filter(Boolean);
+
+  return encodeBase64Url({
+    urls,
     ...metadata,
   });
+};
 
 export const decodeGalleryParam = (
   value: string | null

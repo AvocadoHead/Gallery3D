@@ -221,6 +221,13 @@ const App: React.FC = () => {
     return `Look at my Aether gallery:\n${sharePayload}`;
   }, [sharePayload]);
 
+  const shareQrUrl = useMemo(() => {
+    if (!sharePayload) return '';
+    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+      sharePayload,
+    )}`;
+  }, [sharePayload]);
+
   const handleShare = async () => {
     if (!sharePayload) return;
 
@@ -461,34 +468,50 @@ const App: React.FC = () => {
                 {shareLink && (
                   <div className="flex flex-col gap-2 text-xs text-slate-600">
                     <p className="font-semibold text-slate-800">Share as easy as 1-2-3</p>
-                    <div className="flex flex-wrap gap-2">
-                      <a
-                        href={waShareUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-1.5 rounded-lg bg-green-500 text-white shadow hover:bg-green-600 transition flex items-center gap-1"
-                      >
-                        WhatsApp
-                      </a>
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={waShareUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 rounded-lg bg-green-500 text-white shadow hover:bg-green-600 transition flex items-center gap-1"
+                          >
+                            WhatsApp
+                          </a>
 
-                      <a
-                        href={emailShareUrl}
-                        className="px-3 py-1.5 rounded-lg bg-blue-500 text-white shadow hover:bg-blue-600 transition flex items-center gap-1"
-                      >
-                        Email
-                      </a>
+                          <a
+                            href={emailShareUrl}
+                            className="px-3 py-1.5 rounded-lg bg-blue-500 text-white shadow hover:bg-blue-600 transition flex items-center gap-1"
+                          >
+                            Email
+                          </a>
 
-                      <button
-                        onClick={handleCopyLink}
-                        className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 shadow hover:bg-slate-300 transition"
-                      >
-                        Copy Link
-                      </button>
+                          <button
+                            onClick={handleCopyLink}
+                            className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 shadow hover:bg-slate-300 transition"
+                          >
+                            Copy Link
+                          </button>
+                        </div>
+
+                        <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all whitespace-pre-wrap">
+                          {shareMessage}
+                        </p>
+                      </div>
+
+                      {shareQrUrl && (
+                        <div className="flex flex-col items-center gap-1 p-3 bg-white/80 rounded-2xl border border-slate-200 shadow-inner">
+                          <span className="text-[11px] font-semibold text-slate-700">Scan to open</span>
+                          <img
+                            src={shareQrUrl}
+                            alt="QR code for your gallery"
+                            className="w-32 h-32 md:w-40 md:h-40 object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
                     </div>
-
-                    <p className="p-2 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] break-all select-all whitespace-pre-wrap">
-                      {shareMessage}
-                    </p>
 
                     {toastVisible && (
                       <span className="text-emerald-600 font-semibold animate-pulse">
