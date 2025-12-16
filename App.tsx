@@ -92,27 +92,44 @@ const App: React.FC = () => {
     }, 650);
   };
 
+  const draftItems = useMemo(() => {
+    const entries = inputValue
+      .split(/[\n,]/)
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    return entries.length ? buildMediaItemsFromUrls(entries) : [];
+  }, [inputValue]);
+
+  // Include un-added draft items in the share payload so the outgoing message always lists
+  // every URL the user has typed, even if they forgot to hit "Add" first.
+  const effectiveItems = useMemo(() => {
+    if (!draftItems.length) return galleryItems;
+    return [...galleryItems, ...draftItems];
+  }, [draftItems, galleryItems]);
+
   const sharePayload = useMemo(() => {
-    if (!galleryItems.length) return '';
-    return `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, {
+    if (!effectiveItems.length) return '';
+    return `${shareBase}/?gallery=${encodeGalleryParam(effectiveItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
     })}`;
-  }, [contactEmail, contactWhatsapp, displayName, galleryItems]);
+  }, [contactEmail, contactWhatsapp, displayName, effectiveItems]);
 
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    const mediaUrls = galleryItems
+    const mediaUrls = effectiveItems
       .map((item) => item.originalUrl)
       .filter((url) => /^https?:\/\//i.test(url));
 
     const urlsBlock = mediaUrls.length ? `\n\n${mediaUrls.join('\n')}` : '';
     return `Look at my Aether gallery ${sharePayload}${urlsBlock}`;
-  }, [galleryItems, sharePayload]);
+  }, [effectiveItems, sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
+    // Persist the latest link for the quick-share buttons and replace the URL so a refresh keeps the packet.
     setShareLink(sharePayload);
     window.history.replaceState(null, '', sharePayload);
     try {
