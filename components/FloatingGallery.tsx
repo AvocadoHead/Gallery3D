@@ -40,7 +40,13 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [useVideo, setUseVideo] = useState(item.kind === 'video' && item.provider !== 'gdrive');
+  const hasDedicatedPreview = useMemo(
+    () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
+    [item.fallbackPreview, item.previewUrl, item.videoUrl],
+  );
+  const [useVideo, setUseVideo] = useState(
+    item.kind === 'video' && item.provider !== 'gdrive' && !hasDedicatedPreview,
+  );
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() => normalizeSize(item.aspectRatio));
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -65,7 +71,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   });
 
   useEffect(() => {
-    if (!videoRef.current) return;
+    if (!useVideo || !videoRef.current) return;
 
     const play = () => {
       const el = videoRef.current!;
@@ -76,18 +82,19 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
     };
 
     play();
-  }, [item.previewUrl]);
+  }, [item.previewUrl, useVideo]);
 
   useEffect(() => {
-    if (!videoRef.current) return;
+    if (!useVideo || !videoRef.current) return;
     const el = videoRef.current;
     const promise = el.play();
     if (promise && typeof promise.then === 'function') {
       promise.catch(() => {});
     }
-  }, [hovered]);
+  }, [hovered, useVideo]);
 
   useEffect(() => {
+    if (!useVideo) return;
     let raf: number;
     const fadeVolume = () => {
       if (!videoRef.current) return;
@@ -103,7 +110,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
 
     raf = requestAnimationFrame(fadeVolume);
     return () => cancelAnimationFrame(raf);
-  }, [hovered, muted]);
+  }, [hovered, muted, useVideo]);
 
   const handleSize = (width: number, height: number) => {
     const aspect = width && height ? width / height : undefined;

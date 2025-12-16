@@ -130,8 +130,8 @@ const App: React.FC = () => {
       .map((item) => item.originalUrl)
       .filter((url) => /^https?:\/\//i.test(url));
 
-    const urlsBlock = mediaUrls.length ? `\n\n${mediaUrls.join('\n')}` : '';
-    return `Look at my Aether gallery ${sharePayload}${urlsBlock}`;
+    const urlsBlock = mediaUrls.length ? `\n${mediaUrls.join('\n')}` : '';
+    return `Look at my Aether gallery:\n${sharePayload}${urlsBlock}`;
   }, [effectiveItems, sharePayload]);
 
   const handleShare = async () => {
