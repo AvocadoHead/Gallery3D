@@ -40,7 +40,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [useVideo, setUseVideo] = useState(item.kind === 'video');
+  const [useVideo, setUseVideo] = useState(item.kind === 'video' && item.provider !== 'gdrive');
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() => normalizeSize(item.aspectRatio));
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -139,10 +139,11 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
     }
 
     if (useVideo) {
+      const videoSource = item.videoUrl || item.previewUrl;
       return (
         <video
           ref={videoRef}
-          src={item.previewUrl}
+          src={videoSource}
           className={`
             w-full h-full object-contain rounded-xl
             transition-opacity duration-500

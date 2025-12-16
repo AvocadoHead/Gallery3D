@@ -20,6 +20,7 @@ const Loader = () => (
 );
 
 const App: React.FC = () => {
+  const shareBase = 'https://gallery3-d.vercel.app';
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -39,20 +40,30 @@ const App: React.FC = () => {
       const encoded = params.get('gallery');
       if (encoded) return encoded;
 
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashEncoded = hashParams.get('gallery');
+      if (hashEncoded) return hashEncoded;
+
       const match = window.location.href.match(/[?&]gallery=([^&#]+)/);
       return match ? match[1] : null;
     };
 
-    const incoming = decodeGalleryParam(extractGallery());
-    if (incoming.urls.length) {
-      setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
-      setIsCustom(true);
-      setDisplayName(incoming.displayName || '');
-      setContactWhatsapp(incoming.contactWhatsapp || '');
-      setContactEmail(incoming.contactEmail || '');
-      return;
-    }
-    setGalleryItems(buildDefaultMediaItems());
+    const syncFromQuery = () => {
+      const incoming = decodeGalleryParam(extractGallery());
+      if (incoming.urls.length) {
+        setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
+        setIsCustom(true);
+        setDisplayName(incoming.displayName || '');
+        setContactWhatsapp(incoming.contactWhatsapp || '');
+        setContactEmail(incoming.contactEmail || '');
+        return;
+      }
+      setGalleryItems(buildDefaultMediaItems());
+    };
+
+    syncFromQuery();
+    window.addEventListener('popstate', syncFromQuery);
+    return () => window.removeEventListener('popstate', syncFromQuery);
   }, []);
 
   const handleAddMedia = () => {
@@ -83,12 +94,22 @@ const App: React.FC = () => {
 
   const sharePayload = useMemo(() => {
     if (!galleryItems.length) return '';
-    return `${window.location.origin}${window.location.pathname}?gallery=${encodeGalleryParam(galleryItems, {
+    return `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, {
       displayName,
       contactWhatsapp,
       contactEmail,
     })}`;
   }, [contactEmail, contactWhatsapp, displayName, galleryItems]);
+
+  const shareMessage = useMemo(() => {
+    if (!sharePayload) return '';
+    const mediaUrls = galleryItems
+      .map((item) => item.originalUrl)
+      .filter((url) => /^https?:\/\//i.test(url));
+
+    const urlsBlock = mediaUrls.length ? `\n\n${mediaUrls.join('\n')}` : '';
+    return `Look at my Aether gallery ${sharePayload}${urlsBlock}`;
+  }, [galleryItems, sharePayload]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
@@ -96,9 +117,9 @@ const App: React.FC = () => {
     window.history.replaceState(null, '', sharePayload);
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Aether Gallery', url: sharePayload });
+        await navigator.share({ title: 'Aether Gallery', text: shareMessage || sharePayload, url: sharePayload });
       } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(sharePayload);
+        await navigator.clipboard.writeText(shareMessage || sharePayload);
         setToastVisible(true);
         setTimeout(() => setToastVisible(false), 1600);
       }
@@ -116,7 +137,7 @@ const App: React.FC = () => {
     if (!sharePayload && !shareLink) return;
     if (!shareLink && sharePayload) setShareLink(sharePayload);
     try {
-      await navigator.clipboard.writeText(sharePayload || shareLink);
+      await navigator.clipboard.writeText(shareMessage || sharePayload || shareLink);
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 1600);
     } catch (err) {
@@ -184,14 +205,22 @@ const App: React.FC = () => {
         </button>
 
         {builderOpen && (
-          <div className="w-[720px] max-w-[calc(100vw-2.5rem)] bg-gradient-to-br from-white/95 via-white/90 to-slate-50/90 backdrop-blur-2xl border border-white/80 rounded-[32px] shadow-[0_35px_120px_rgba(15,23,42,0.18)] p-7 space-y-6 ring-1 ring-slate-100/80">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Build your own gallery</p>
-                <p className="text-xs text-slate-500">Share a custom Aether sphere with your media.</p>
+          <div className="fixed inset-0 z-30 flex items-start justify-center pt-16 md:items-center md:pt-0 pointer-events-none">
+            <div className="w-[720px] max-w-[calc(100vw-2.5rem)] max-h-[82vh] overflow-y-auto bg-gradient-to-br from-white/95 via-white/90 to-slate-50/90 backdrop-blur-2xl border border-white/80 rounded-[32px] shadow-[0_35px_120px_rgba(15,23,42,0.18)] p-7 space-y-6 ring-1 ring-slate-100/80 pointer-events-auto relative">
+              <button
+                onClick={() => setBuilderOpen(false)}
+                className="absolute top-4 right-4 w-9 h-9 inline-flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 shadow-sm"
+                aria-label="Close builder"
+              >
+                ×
+              </button>
+              <div className="flex items-start justify-between gap-3 pr-10">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Build your own gallery</p>
+                  <p className="text-xs text-slate-500">Share a custom Aether sphere with your media.</p>
+                </div>
+                <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">New</span>
               </div>
-              <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">New</span>
-            </div>
 
             <div className="bg-slate-900 text-white rounded-3xl p-5 flex items-center gap-4 shadow-inner ring-1 ring-white/10">
               <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-pink-500 flex items-center justify-center text-slate-900 font-bold shadow-lg text-lg">1$</div>
@@ -200,8 +229,7 @@ const App: React.FC = () => {
                 <p className="text-slate-200 text-xs">A friendly tip (1$ / 5₪) keeps the lights on.</p>
                 <div className="flex items-center flex-wrap gap-2 mt-2">
                   <a href="https://www.bitpay.co.il/app/me/705695EF-357F-6632-4165-6032ED7F44AE0278" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Bit</a>
-                  <a href="https://links.payboxapp.com/hyc1wV1p0Yb" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Pay</a>
-                  <a href="https://pay.google.com" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Google&nbsp;Pay</a>
+                  <a href="https://links.payboxapp.com/hyc1wV1p0Yb" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Paybox</a>
                   <a href="https://buymeacoffee.com/Optopia" target="_blank" rel="noreferrer" className="text-xs underline hover:text-amber-200">Buy&nbsp;Me&nbsp;a&nbsp;Coffee</a>
                 </div>
               </div>
@@ -221,10 +249,19 @@ const App: React.FC = () => {
               <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/70 border border-slate-100">
                 <p className="font-semibold text-slate-800">Donate</p>
                 <p>Quick scan for Israeli friends.</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" alt="Bit QR" className="w-full rounded-lg shadow" />
-                  <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" alt="Pay QR" className="w-full rounded-lg shadow" />
-                  <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" alt="Buy Me a Coffee QR" className="w-full rounded-lg shadow" />
+                <div className="grid grid-cols-3 gap-2 text-[11px] font-semibold text-slate-700">
+                  <div className="flex flex-col items-center gap-1">
+                    <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" alt="Bit QR" className="w-full rounded-lg shadow" />
+                    <span>Bit</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" alt="Pay QR" className="w-full rounded-lg shadow" />
+                    <span>Paybox</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" alt="Buy Me a Coffee QR" className="w-full rounded-lg shadow" />
+                    <span>Buy me cofee</span>
+                  </div>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-auto">054-773-1650 works for both.</p>
               </div>
@@ -292,7 +329,7 @@ const App: React.FC = () => {
                     <div className="flex flex-wrap gap-2">
                       <a
                         className="px-3 py-1.5 rounded-full bg-green-500 text-white font-semibold shadow"
-                        href={`https://api.whatsapp.com/send?text=${encodeURIComponent('Look at my Aether gallery ' + shareLink)}`}
+                        href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareMessage || sharePayload || shareLink)}`}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -300,7 +337,7 @@ const App: React.FC = () => {
                       </a>
                       <a
                         className="px-3 py-1.5 rounded-full bg-blue-600 text-white font-semibold shadow"
-                        href={`mailto:?subject=Aether%20gallery&body=${encodeURIComponent(shareLink)}`}
+                        href={`mailto:?subject=Aether%20gallery&body=${encodeURIComponent(shareMessage || sharePayload || shareLink)}`}
                       >
                         Email
                       </a>
@@ -322,8 +359,9 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
 
       {/* Footer */}
       <div className={`
