@@ -87,7 +87,6 @@ const App: React.FC = () => {
     setBuilderOpen(true);
     setShareLink('');
 
-    // Gentle wipe-out animation before emptying items
     setTimeout(() => {
       setGalleryItems([]);
       setIsClearing(false);
@@ -103,8 +102,6 @@ const App: React.FC = () => {
     return entries.length ? buildMediaItemsFromUrls(entries) : [];
   }, [inputValue]);
 
-  // Include un-added draft items in the share payload so the outgoing message always lists
-  // every URL the user has typed, even if they forgot to hit "Add" first.
   const effectiveItems = useMemo(() => {
     if (!draftItems.length) return galleryItems;
     return [...galleryItems, ...draftItems];
@@ -120,14 +117,20 @@ const App: React.FC = () => {
   }, [contactEmail, contactWhatsapp, displayName, effectiveItems, shareBase]);
 
   useEffect(() => {
-    // Keep the latest encoded link available for quick-share buttons even before hitting "Finalize"
     setShareLink(sharePayload);
   }, [sharePayload]);
 
+  // ✅ IMPORTANT FIX:
+  // Make the outgoing message include the link AND the raw URLs, like it used to.
   const shareMessage = useMemo(() => {
     if (!sharePayload) return '';
-    return `Look at my Aether gallery ${sharePayload}`;
-  }, [sharePayload]);
+    const urlLines = effectiveItems
+      .map((i) => (i.originalUrl || '').trim())
+      .filter(Boolean)
+      .join('\n');
+
+    return `Look at my Aether gallery ${sharePayload}\n\n${urlLines}`;
+  }, [sharePayload, effectiveItems]);
 
   const handleShare = async () => {
     if (!sharePayload) return;
@@ -192,7 +195,6 @@ const App: React.FC = () => {
 
   return (
     <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
-      {/* 3D Scene Wrapper */}
       <div
         className={`
           absolute inset-0 transition-all duration-700 ease-out
@@ -201,7 +203,6 @@ const App: React.FC = () => {
       >
         <Suspense fallback={<Loader />}>
           <Canvas
-            // Position z: 75 ensures the whole sphere (radius 58) is visible on load
             camera={{ position: [0, 0, 75], fov: 50 }}
             dpr={[1, 1.5]}
             gl={{ antialias: false, alpha: true }}
@@ -212,7 +213,6 @@ const App: React.FC = () => {
         </Suspense>
       </div>
 
-      {/* UI Overlay for Zoomed Image */}
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
       {/* Header */}
