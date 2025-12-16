@@ -184,14 +184,22 @@ const App: React.FC = () => {
         </button>
 
         {builderOpen && (
-          <div className="w-[720px] max-w-[calc(100vw-2.5rem)] bg-gradient-to-br from-white/95 via-white/90 to-slate-50/90 backdrop-blur-2xl border border-white/80 rounded-[32px] shadow-[0_35px_120px_rgba(15,23,42,0.18)] p-7 space-y-6 ring-1 ring-slate-100/80">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Build your own gallery</p>
-                <p className="text-xs text-slate-500">Share a custom Aether sphere with your media.</p>
+          <div className="fixed inset-0 z-30 flex items-start justify-center pt-16 md:items-center md:pt-0 pointer-events-none">
+            <div className="w-[720px] max-w-[calc(100vw-2.5rem)] max-h-[82vh] overflow-y-auto bg-gradient-to-br from-white/95 via-white/90 to-slate-50/90 backdrop-blur-2xl border border-white/80 rounded-[32px] shadow-[0_35px_120px_rgba(15,23,42,0.18)] p-7 space-y-6 ring-1 ring-slate-100/80 pointer-events-auto relative">
+              <button
+                onClick={() => setBuilderOpen(false)}
+                className="absolute top-4 right-4 w-9 h-9 inline-flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 shadow-sm"
+                aria-label="Close builder"
+              >
+                ×
+              </button>
+              <div className="flex items-start justify-between gap-3 pr-10">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Build your own gallery</p>
+                  <p className="text-xs text-slate-500">Share a custom Aether sphere with your media.</p>
+                </div>
+                <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">New</span>
               </div>
-              <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">New</span>
-            </div>
 
             <div className="bg-slate-900 text-white rounded-3xl p-5 flex items-center gap-4 shadow-inner ring-1 ring-white/10">
               <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-pink-500 flex items-center justify-center text-slate-900 font-bold shadow-lg text-lg">1$</div>
@@ -221,10 +229,19 @@ const App: React.FC = () => {
               <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/70 border border-slate-100">
                 <p className="font-semibold text-slate-800">Donate</p>
                 <p>Quick scan for Israeli friends.</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" alt="Bit QR" className="w-full rounded-lg shadow" />
-                  <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" alt="Pay QR" className="w-full rounded-lg shadow" />
-                  <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" alt="Buy Me a Coffee QR" className="w-full rounded-lg shadow" />
+                <div className="grid grid-cols-3 gap-2 text-[11px] font-semibold text-slate-700">
+                  <div className="flex flex-col items-center gap-1">
+                    <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" alt="Bit QR" className="w-full rounded-lg shadow" />
+                    <span>Bit</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" alt="Pay QR" className="w-full rounded-lg shadow" />
+                    <span>Paybox</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" alt="Buy Me a Coffee QR" className="w-full rounded-lg shadow" />
+                    <span>Buy me cofee</span>
+                  </div>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-auto">054-773-1650 works for both.</p>
               </div>
@@ -322,8 +339,9 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
 
       {/* Footer */}
       <div className={`
