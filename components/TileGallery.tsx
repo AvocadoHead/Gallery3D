@@ -22,7 +22,7 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
 
   return (
     <div
-      className="w-full h-full overflow-y-auto px-3 pb-8 pt-14"
+      className="w-full h-full overflow-y-auto px-2 pb-6 pt-12"
       style={{ columnGap: `${gutter}px` }}
     >
       <div
@@ -35,7 +35,7 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
             <article
               key={item.id}
               className="break-inside-avoid cursor-pointer transition-transform duration-300 hover:-translate-y-1"
-              style={{ width: '100%', maxWidth: baseWidth, marginBottom: Math.max(0, gutter * 0.15) }}
+              style={{ width: '100%', maxWidth: baseWidth, marginBottom: 0 }}
               onClick={() => onSelect(item)}
             >
               <div
