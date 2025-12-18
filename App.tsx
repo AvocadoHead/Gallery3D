@@ -538,29 +538,31 @@ const App: React.FC = () => {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700">
-                <button
-                  onClick={() => {
-                    setBuilderOpen(true);
-                    handleCreateNew();
-                  }}
-                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-white font-semibold shadow hover:-translate-y-[1px] transition"
-                >
-                  Add a gallery
-                </button>
-                <button
-                  onClick={handleShare}
-                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 font-semibold shadow hover:-translate-y-[1px] transition"
-                >
-                  Share gallery
-                </button>
-                <button
-                  onClick={() => setBuilderOpen(true)}
-                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-semibold shadow hover:-translate-y-[1px] transition"
-                >
-                  My galleries
-                </button>
-              </div>
+              {session && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700">
+                  <button
+                    onClick={() => {
+                      setBuilderOpen(true);
+                      handleCreateNew();
+                    }}
+                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-white font-semibold shadow hover:-translate-y-[1px] transition"
+                  >
+                    Add a gallery
+                  </button>
+                  <button
+                    onClick={handleShare}
+                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 font-semibold shadow hover:-translate-y-[1px] transition"
+                  >
+                    Share gallery
+                  </button>
+                  <button
+                    onClick={() => setBuilderOpen(true)}
+                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-semibold shadow hover:-translate-y-[1px] transition"
+                  >
+                    My galleries
+                  </button>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700">
                 <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/80 border border-slate-100">
@@ -646,23 +648,22 @@ const App: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/80 border border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-800">Admin</span>
-                  </div>
-                  <p className="text-[11px] text-slate-600">
-                    Admin access is limited to eyalizenman@gmail.com. Sign in to manage galleries.
-                  </p>
-                  {session?.user?.email === 'eyalizenman@gmail.com' ? (
-                    <div className="space-y-1 text-[11px] text-slate-600">
-                      <p className="font-semibold text-slate-800">Actions</p>
-                      <p>- Load any gallery from the list to inspect.</p>
-                      <p>- Use Save as new to duplicate variants.</p>
+                {session && (
+                  <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/80 border border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-800">Admin</span>
                     </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-500">Sign in as admin to see management options.</p>
-                  )}
-                </div>
+                    {session?.user?.email === 'eyalizenman@gmail.com' ? (
+                      <div className="space-y-1 text-[11px] text-slate-600">
+                        <p className="font-semibold text-slate-800">Actions</p>
+                        <p>- Load any gallery from the list to inspect.</p>
+                        <p>- Use Save as new to duplicate variants.</p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-500">Admin tools available to authorized users.</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-900 text-white rounded-3xl p-5 flex items-center gap-4 shadow-inner ring-1 ring-white/10">

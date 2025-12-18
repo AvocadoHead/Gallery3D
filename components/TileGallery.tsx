@@ -27,15 +27,17 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
     >
       <div
         className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4"
-        style={{ columnGap: `${gutter}px` }}
+        style={{ columnGap: `${gutter}px`, columnWidth: `${baseWidth}px` }}
       >
         {items.map((item, index) => {
-          const height = baseWidth * pickHeightMultiplier(item.id, index);
+          const ratio = item.aspectRatio && !Number.isNaN(item.aspectRatio) ? item.aspectRatio : undefined;
+          const baseHeight = ratio ? baseWidth / ratio : baseWidth * pickHeightMultiplier(item.id, index);
+          const height = Math.max(120, baseHeight);
           return (
             <article
               key={item.id}
               className="break-inside-avoid cursor-pointer transition-transform duration-300 hover:-translate-y-1"
-              style={{ width: '100%', maxWidth: baseWidth, marginBottom: 0 }}
+              style={{ width: '100%', marginBottom: Math.max(0, gutter * 0.1) }}
               onClick={() => onSelect(item)}
             >
               <div
@@ -44,12 +46,12 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
               >
                 <div
                   className="relative w-full bg-slate-50"
-                  style={{ height, minHeight: height * 0.92 }}
+                  style={{ height, minHeight: height }}
                 >
                   {item.kind === 'video' ? (
                     <video
                       src={item.videoUrl || item.fullUrl}
-                      className="w-full h-full rounded-2xl object-cover"
+                      className="w-full h-full rounded-2xl object-contain"
                       autoPlay
                       muted
                       loop
@@ -59,7 +61,7 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
                     <img
                       src={item.fallbackPreview || item.previewUrl}
                       alt="gallery item"
-                      className="w-full h-full rounded-2xl object-cover"
+                      className="w-full h-full rounded-2xl object-contain"
                       loading="lazy"
                     />
                   )}
