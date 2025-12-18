@@ -512,9 +512,10 @@ export const decodeGalleryParam = (
 export const getSphereCoordinates = (count: number, radius: number) => {
   const points: { position: [number, number, number] }[] = [];
   const golden = Math.PI * (3 - Math.sqrt(5));
+  const divisor = Math.max(1, count - 1);
 
   for (let i = 0; i < count; i++) {
-    const y = 1 - (i / (count - 1)) * 2;
+    const y = 1 - (i / divisor) * 2;
     const r = Math.sqrt(1 - y * y);
     const theta = golden * i;
 

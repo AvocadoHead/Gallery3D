@@ -12,12 +12,13 @@ interface ItemProps {
   index: number;
   radius: number;
   clearing: boolean;
+  scale: number;
 }
 
-const normalizeSize = (aspectRatio?: number) => {
-  const base = 220;
-  const min = 150;
-  const max = 260;
+const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
+  const base = 220 * scale;
+  const min = 150 * scale;
+  const max = 260 * scale;
 
   if (!aspectRatio || Number.isNaN(aspectRatio)) {
     return { width: base, height: base };
@@ -34,7 +35,7 @@ const normalizeSize = (aspectRatio?: number) => {
   return { width, height };
 };
 
-const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemProps) => {
+const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -46,7 +47,9 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
   );
   const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
   const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
-  const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() => normalizeSize(item.aspectRatio));
+  const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() =>
+    normalizeSize(item.aspectRatio, scale),
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -111,9 +114,16 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing }: ItemP
     return () => cancelAnimationFrame(raf);
   }, [hovered, muted, useVideo]);
 
+  useEffect(() => {
+    setComputedSize((prev) => {
+      const aspect = prev.width && prev.height ? prev.width / prev.height : item.aspectRatio;
+      return normalizeSize(aspect, scale);
+    });
+  }, [scale, item.aspectRatio]);
+
   const handleSize = (width: number, height: number) => {
     const aspect = width && height ? width / height : undefined;
-    setComputedSize(normalizeSize(aspect));
+    setComputedSize(normalizeSize(aspect, scale));
   };
 
   const renderMedia = () => {
@@ -243,10 +253,15 @@ interface GallerySceneProps {
   onSelect: (item: MediaItem) => void;
   items: MediaItem[];
   clearing: boolean;
+  cardScale: number;
+  radiusBase: number;
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }) => {
-  const radius = Math.min(62, (38 + items.length * 0.1) * 0.92);
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
+  const radius = Math.max(
+    24,
+    Math.min(95, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
+  );
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
@@ -264,6 +279,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing }
             onClick={onSelect}
             radius={radius}
             clearing={clearing}
+            scale={cardScale}
           />
         ))}
       </group>
