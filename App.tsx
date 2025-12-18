@@ -515,18 +515,9 @@ const App: React.FC = () => {
           </p>
         )}
 
-        <div className="w-[320px] rounded-2xl bg-white/85 backdrop-blur shadow-lg border border-slate-100 p-3 space-y-2">
+        <div className="w-[280px] rounded-2xl bg-white/85 backdrop-blur shadow-md border border-slate-100 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-800">Account</span>
-            <span
-              className={`text-[10px] px-2 py-1 rounded-full border ${
-                isSupabaseConfigured
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                  : 'bg-amber-50 text-amber-700 border-amber-100'
-              }`}
-            >
-              {isSupabaseConfigured ? 'Supabase ready' : 'Add Supabase keys'}
-            </span>
+            <span className="text-sm font-semibold text-slate-800">Log in</span>
           </div>
 
           {!session ? (
