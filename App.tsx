@@ -515,6 +515,64 @@ const App: React.FC = () => {
           </p>
         )}
 
+        <div className="w-[320px] rounded-2xl bg-white/85 backdrop-blur shadow-lg border border-slate-100 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Account</span>
+            <span
+              className={`text-[10px] px-2 py-1 rounded-full border ${
+                isSupabaseConfigured
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                  : 'bg-amber-50 text-amber-700 border-amber-100'
+              }`}
+            >
+              {isSupabaseConfigured ? 'Supabase ready' : 'Add Supabase keys'}
+            </span>
+          </div>
+
+          {!session ? (
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold shadow hover:-translate-y-[1px] transition disabled:opacity-60"
+                disabled={!isSupabaseConfigured}
+              >
+                Continue with Google
+              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="flex-1 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                />
+                <button
+                  onClick={handleEmailLogin}
+                  className="px-3 py-2 rounded-lg bg-white text-slate-800 text-xs font-semibold shadow border border-slate-200 hover:-translate-y-[1px] transition disabled:opacity-60"
+                  disabled={!isSupabaseConfigured}
+                >
+                  Email link
+                </button>
+              </div>
+              {authMessage && <p className="text-[11px] text-emerald-600">{authMessage}</p>}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold text-slate-700">Signed in</span>
+                <span className="text-[11px] text-slate-500">
+                  {session.user.email || session.user.user_metadata?.name || 'Google user'}
+                </span>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-2 rounded-lg bg-white text-slate-800 text-xs font-semibold shadow border border-slate-200 hover:-translate-y-[1px] transition"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+
         {builderOpen && (
           <div className="fixed inset-0 z-30 flex items-start justify-center pt-16 md:items-center md:pt-0 pointer-events-none">
             <div className="w-[720px] max-w-[calc(100vw-2.5rem)] max-h-[82vh] overflow-y-auto bg-gradient-to-br from-white/95 via-white/90 to-slate-50/90 backdrop-blur-2xl border border-white/80 rounded-[32px] shadow-[0_35px_120px_rgba(15,23,42,0.18)] p-7 space-y-6 ring-1 ring-slate-100/80 pointer-events-auto relative">

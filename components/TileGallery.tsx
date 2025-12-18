@@ -10,14 +10,14 @@ interface TileGalleryProps {
 
 const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, gap }) => {
   const baseWidth = 240 * mediaScale;
-  const gutter = Math.max(2, gap);
+  const gutter = Math.max(1, gap);
 
   const pickHeightMultiplier = (id: string, index: number) => {
     const seed = Array.from(id || `${index}`)
       .slice(0, 8)
       .reduce((acc, char, idx) => acc + char.charCodeAt(0) * (idx + 1), 0);
     const normalized = (Math.sin(seed) + 1) / 2; // 0 - 1
-    return 0.82 + normalized * 0.55; // 0.82 - 1.37
+    return 0.72 + normalized * 0.9; // 0.72 - 1.62 for more organic variance
   };
 
   return (
@@ -34,8 +34,8 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
           return (
             <article
               key={item.id}
-              className="mb-4 break-inside-avoid cursor-pointer transition-transform duration-300 hover:-translate-y-1"
-              style={{ width: '100%', maxWidth: baseWidth, marginBottom: gutter }}
+              className="break-inside-avoid cursor-pointer transition-transform duration-300 hover:-translate-y-1"
+              style={{ width: '100%', maxWidth: baseWidth, marginBottom: Math.max(1, gutter * 0.4) }}
               onClick={() => onSelect(item)}
             >
               <div
