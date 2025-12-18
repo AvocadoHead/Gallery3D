@@ -5,7 +5,7 @@ import { MediaItem } from './constants';
  * Expected Supabase table (public.galleries):
  * - id: uuid (primary key, default uuid_generate_v4())
  * - slug: text (unique)
- * - owner_id: uuid
+ * - owner_id: uuid (index for listing per user)
  * - display_name: text
  * - contact_whatsapp: text
  * - contact_email: text
@@ -24,6 +24,14 @@ export interface GalleryRecord {
   items: MediaItem[];
   created_at?: string;
   updated_at?: string;
+}
+
+export interface GallerySummary {
+  id: string;
+  slug: string | null;
+  display_name: string | null;
+  updated_at: string | null;
+  created_at: string | null;
 }
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -78,23 +86,23 @@ const generateSlug = () => crypto.randomUUID().slice(0, 8);
 export const saveGalleryRecord = async (
   payload: Omit<GalleryRecord, 'id'> & { id?: string },
   session: Session | null,
+  options?: { asNew?: boolean },
 ) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
 
-  const slug = payload.slug || generateSlug();
+  const slug = options?.asNew ? generateSlug() : payload.slug || generateSlug();
   const ownerId = payload.owner_id || session?.user?.id || null;
+  const writePayload = {
+    ...payload,
+    id: options?.asNew ? undefined : payload.id,
+    slug,
+    owner_id: ownerId,
+    updated_at: new Date().toISOString(),
+  };
 
   const { data, error } = await supabase
     .from(TABLE)
-    .upsert(
-      {
-        ...payload,
-        slug,
-        owner_id: ownerId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'slug' },
-    )
+    .upsert(writePayload, { onConflict: 'slug' })
     .select('*')
     .single();
 
@@ -114,4 +122,18 @@ export const loadGalleryRecord = async (slugOrId: string) => {
 
   if (error) throw error;
   return data as GalleryRecord | null;
+};
+
+export const listUserGalleries = async (ownerId: string) => {
+  if (!supabase) throw new Error('Supabase is not configured yet.');
+
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select('id, slug, display_name, updated_at, created_at')
+    .eq('owner_id', ownerId)
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .limit(50);
+
+  if (error) throw error;
+  return (data || []) as GallerySummary[];
 };

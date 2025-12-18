@@ -1,13 +1,16 @@
-import React, { useEffect, useMemo, useState, Suspense } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
 import TileGallery from './components/TileGallery';
 import {
+  GalleryRecord,
+  GallerySummary,
   isSupabaseConfigured,
   listenToAuth,
   loadGalleryRecord,
+  listUserGalleries,
   saveGalleryRecord,
   signInWithEmail,
   signInWithGoogle,
@@ -50,7 +53,7 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
   const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
-  const [tileGap, setTileGap] = useState(14);
+  const [tileGap, setTileGap] = useState(8);
   const [savedGalleryId, setSavedGalleryId] = useState('');
   const [loadingRemote, setLoadingRemote] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -58,6 +61,24 @@ const App: React.FC = () => {
   const [authEmail, setAuthEmail] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
+  const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
+
+  const applyLoadedRecord = useCallback(
+    (record: GalleryRecord) => {
+      setGalleryItems(record.items || []);
+      setIsCustom(true);
+      setDisplayName(record.display_name || '');
+      setContactWhatsapp(record.contact_whatsapp || '');
+      setContactEmail(record.contact_email || '');
+      const id = record.slug || record.id;
+      setSavedGalleryId(id);
+      const link = `${shareBase}/?gallery=${id}`;
+      setShareLink(link);
+      return link;
+    },
+    [shareBase],
+  );
 
   useEffect(() => {
     const extractGallery = () => {
@@ -93,13 +114,7 @@ const App: React.FC = () => {
         try {
           const record = await loadGalleryRecord(encoded);
           if (record?.items?.length) {
-            setGalleryItems(record.items);
-            setIsCustom(true);
-            setDisplayName(record.display_name || '');
-            setContactWhatsapp(record.contact_whatsapp || '');
-            setContactEmail(record.contact_email || '');
-            setSavedGalleryId(record.slug || record.id);
-            setShareLink(`${shareBase}/?gallery=${record.slug || record.id}`);
+            applyLoadedRecord(record);
             return;
           }
           setLoadError('No saved gallery found for this link.');
@@ -123,7 +138,7 @@ const App: React.FC = () => {
     syncFromQuery();
     window.addEventListener('popstate', syncFromQuery);
     return () => window.removeEventListener('popstate', syncFromQuery);
-  }, [shareBase]);
+  }, [applyLoadedRecord, shareBase]);
 
   const handleAddMedia = () => {
     const entries = inputValue
@@ -203,7 +218,59 @@ const App: React.FC = () => {
 
   const shareMessage = useMemo(() => composeShareMessage(sharePayload), [sharePayload, effectiveItems]);
 
-  const handleSaveGallery = async () => {
+  const formatDate = (value?: string | null) => {
+    if (!value) return 'just now';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+
+  const refreshMyGalleries = useCallback(async () => {
+    if (!session?.user?.id || !isSupabaseConfigured) return;
+    setIsLoadingMyGalleries(true);
+    try {
+      const data = await listUserGalleries(session.user.id);
+      setMyGalleries(data);
+    } catch (err) {
+      console.warn('Unable to list user galleries', err);
+    } finally {
+      setIsLoadingMyGalleries(false);
+    }
+  }, [isSupabaseConfigured, session?.user?.id]);
+
+  useEffect(() => {
+    if (!session) {
+      setMyGalleries([]);
+      return;
+    }
+    refreshMyGalleries();
+  }, [refreshMyGalleries, session]);
+
+  const loadSavedGallery = async (slugOrId: string) => {
+    if (!isSupabaseConfigured) {
+      setLoadError('Supabase is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+      return;
+    }
+    setLoadError('');
+    setLoadingRemote(true);
+    try {
+      const record = await loadGalleryRecord(slugOrId);
+      if (record?.items?.length) {
+        const link = applyLoadedRecord(record);
+        window.history.replaceState(null, '', link);
+        setBuilderOpen(true);
+        return;
+      }
+      setLoadError('No saved gallery found for this link.');
+    } catch (err) {
+      console.warn('Failed to load gallery from Supabase', err);
+      setLoadError('Unable to load saved gallery right now.');
+    } finally {
+      setLoadingRemote(false);
+    }
+  };
+
+  const handleSaveGallery = async (options?: { asNew?: boolean }) => {
     if (!galleryItems.length) return null;
     if (!isSupabaseConfigured) {
       setLoadError('Supabase is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
@@ -215,19 +282,18 @@ const App: React.FC = () => {
     try {
       const record = await saveGalleryRecord(
         {
-          id: savedGalleryId || undefined,
-          slug: savedGalleryId || undefined,
+          id: options?.asNew ? undefined : savedGalleryId || undefined,
+          slug: options?.asNew ? undefined : savedGalleryId || undefined,
           items: galleryItems,
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
         },
         session,
+        { asNew: options?.asNew },
       );
-      const id = record.slug || record.id;
-      const link = `${shareBase}/?gallery=${id}`;
-      setSavedGalleryId(id);
-      setShareLink(link);
+      const link = applyLoadedRecord(record);
+      refreshMyGalleries();
       return link;
     } catch (err: any) {
       console.warn('Unable to save gallery', err);
@@ -354,6 +420,9 @@ const App: React.FC = () => {
     await signOut();
     setSession(null);
     setSavedGalleryId('');
+    setShareLink('');
+    setMyGalleries([]);
+    setAuthMessage('');
   };
 
   return (
@@ -606,8 +675,8 @@ const App: React.FC = () => {
                     <span className="text-[11px] font-semibold text-slate-700">Tile spacing</span>
                     <input
                       type="range"
-                      min={8}
-                      max={28}
+                      min={4}
+                      max={22}
                       step={1}
                       value={tileGap}
                       onChange={(e) => {
@@ -617,7 +686,7 @@ const App: React.FC = () => {
                       }}
                       className="accent-slate-900"
                     />
-                    <span className="text-[11px] text-slate-500">Gap set to {tileGap}px</span>
+                    <span className="text-[11px] text-slate-500">Gap set to {tileGap}px (tighter masonry)</span>
                   </label>
                 </div>
 
@@ -698,7 +767,7 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-slate-600">
                     <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/70 border border-slate-100">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-slate-800">Account</span>
@@ -762,14 +831,21 @@ const App: React.FC = () => {
                         <span className="font-semibold text-slate-800">Save & share</span>
                         {isSaving && <span className="text-[11px] text-slate-500">Saving…</span>}
                       </div>
-                      <p>Persist your gallery to Supabase for short links.</p>
+                      <p>Persist your gallery to Supabase for short links. Save a fresh link to keep multiple versions.</p>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
-                          onClick={handleSaveGallery}
+                          onClick={() => handleSaveGallery()}
                           className="px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold shadow hover:-translate-y-[1px] transition disabled:opacity-60"
                           disabled={!isSupabaseConfigured || isSaving}
                         >
-                          Save to Supabase
+                          Save / update link
+                        </button>
+                        <button
+                          onClick={() => handleSaveGallery({ asNew: true })}
+                          className="px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 font-semibold shadow-sm border border-emerald-100 hover:-translate-y-[1px] transition disabled:opacity-60"
+                          disabled={!isSupabaseConfigured || isSaving}
+                        >
+                          Save as new link
                         </button>
                         <button
                           onClick={handleCopyLink}
@@ -782,6 +858,50 @@ const App: React.FC = () => {
                         <p className="text-[11px] text-slate-500">
                           Saved as <span className="font-semibold">{savedGalleryId}</span>
                         </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/70 border border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-800">My galleries</span>
+                        {isLoadingMyGalleries && (
+                          <span className="text-[11px] text-slate-500">Refreshing…</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Load any gallery you have saved without overwriting others.
+                      </p>
+
+                      {!session && (
+                        <p className="text-[11px] text-slate-500">
+                          Sign in to see a list of your saved galleries.
+                        </p>
+                      )}
+
+                      {session && (
+                        <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1">
+                          {myGalleries.length === 0 && !isLoadingMyGalleries ? (
+                            <p className="text-[11px] text-slate-500">Save your first gallery to list it here.</p>
+                          ) : (
+                            myGalleries.map((record) => (
+                              <button
+                                key={record.id}
+                                onClick={() => loadSavedGallery(record.slug || record.id)}
+                                className="w-full text-left px-3 py-2 rounded-lg border border-slate-200 bg-white/70 hover:bg-slate-50 transition shadow-sm"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-slate-800 text-[12px] truncate">
+                                    {record.display_name || record.slug || record.id}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500">{formatDate(record.updated_at)}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 break-all">
+                                  Link: {record.slug || record.id}
+                                </p>
+                              </button>
+                            ))
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
