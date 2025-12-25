@@ -4,7 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
 import TileGallery from './components/TileGallery';
-import BuilderModal from './components/BuilderModal'; // Make sure to import the new component
+import BuilderModal from './components/BuilderModal';
 import {
   GalleryRecord,
   GallerySummary,
@@ -33,7 +33,6 @@ const Loader = () => (
 );
 
 const App: React.FC = () => {
-  // --- Constants ---
   const shareBase = useMemo(
     () => (typeof window !== 'undefined' ? window.location.origin : 'https://gallery3-d.vercel.app'),
     [],
@@ -45,13 +44,13 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
-  // --- Gallery Configuration State ---
+  // --- Gallery Configuration ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
   const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(8);
 
-  // --- Gallery Data State ---
+  // --- Data State ---
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -60,20 +59,59 @@ const App: React.FC = () => {
   const [savedGalleryId, setSavedGalleryId] = useState('');
   const [isClearing, setIsClearing] = useState(false);
 
-  // --- Async/Remote State ---
+  // --- Remote/Auth State ---
   const [loadingRemote, setLoadingRemote] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  
-  // --- Auth State ---
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
-  // --- URL & Routing Logic ---
+  // --- 1. HANDLE AUTH REDIRECTS (FIX FOR THE "CLOSED MENU" ISSUE) ---
+  useEffect(() => {
+    // Check if we are returning from an OAuth redirect
+    const hash = window.location.hash;
+    const search = window.location.search;
+    if ((hash && hash.includes('access_token')) || (search && search.includes('code='))) {
+      // We are coming back from a login!
+      setBuilderOpen(true);
+      // Clean the URL slightly to avoid ugly history (optional, but nice)
+      // window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
+  // --- 2. AUTH LISTENER ---
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const unsubscribe = listenToAuth((newSession) => {
+      setSession(newSession);
+      if (newSession) {
+        // Refresh galleries whenever session becomes active
+        refreshMyGalleries(newSession.user.id);
+      } else {
+        setMyGalleries([]);
+      }
+    });
+    return () => unsubscribe && unsubscribe();
+  }, []);
+
+  const refreshMyGalleries = useCallback(async (userId?: string) => {
+    const uid = userId || session?.user?.id;
+    if (!uid || !isSupabaseConfigured) return;
+    setIsLoadingMyGalleries(true);
+    try {
+      const data = await listUserGalleries(uid);
+      setMyGalleries(data);
+    } catch (err) {
+      console.warn('Unable to list user galleries', err);
+    } finally {
+      setIsLoadingMyGalleries(false);
+    }
+  }, [session, isSupabaseConfigured]);
+
+  // --- 3. URL PARSING (GALLERY LOADING) ---
   const applyLoadedRecord = useCallback(
     (record: GalleryRecord) => {
       setGalleryItems(record.items || []);
@@ -101,44 +139,38 @@ const App: React.FC = () => {
       const encoded = extractGallery();
       const incoming = decodeGalleryParam(encoded);
 
-      // Case A: URL contains raw links (Custom, unsaved)
+      // Case: Raw URLs
       if (incoming.urls.length) {
         setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
         setDisplayName(incoming.displayName || '');
         setContactWhatsapp(incoming.contactWhatsapp || '');
         setContactEmail(incoming.contactEmail || '');
         setSavedGalleryId('');
-        // Populate input value so editor shows current links
         setInputValue(incoming.urls.join('\n')); 
         return;
       }
 
-      // Case B: URL contains an ID (Saved in DB)
+      // Case: Saved ID
       if (encoded && isSupabaseConfigured) {
         setLoadingRemote(true);
         try {
           const record = await loadGalleryRecord(encoded);
           if (record?.items?.length) {
             applyLoadedRecord(record);
-            // Populate input value from loaded record
             const urls = record.items.map(i => i.originalUrl).join('\n');
             setInputValue(urls);
             return;
           }
-          setLoadError('No saved gallery found for this link.');
+          setLoadError('Gallery not found.');
         } catch (err) {
-          console.warn('Failed to load gallery from Supabase', err);
-          setLoadError('Unable to load saved gallery right now.');
+          console.warn(err);
+          setLoadError('Unable to load gallery.');
         } finally {
           setLoadingRemote(false);
         }
       }
 
-      // Case C: Default/Empty
-      setSavedGalleryId('');
-      setDisplayName('');
-      setContactWhatsapp('');
-      setContactEmail('');
+      // Case: Default
       setGalleryItems(buildDefaultMediaItems());
     };
 
@@ -147,21 +179,15 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', syncFromQuery);
   }, [applyLoadedRecord]);
 
-  // --- Handlers ---
+  // --- HANDLERS ---
 
   const handleAddMedia = () => {
-    const entries = inputValue
-      .split(/[,\n]/)
-      .map((v) => v.trim())
-      .filter(Boolean);
-
+    const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     if (!entries.length) return;
-
     const nextItems = buildMediaItemsFromUrls(entries);
-    setGalleryItems(nextItems); // Replace items instead of append to keep it synced with TextArea
-    // We don't clear input value here, we keep it as "source of truth"
+    setGalleryItems(nextItems);
     setSelectedItem(null);
-    setSavedGalleryId(''); // Modifying makes it a "new" unsaved version potentially
+    // Note: We don't clear inputValue so the user can keep editing
   };
 
   const handleClear = () => {
@@ -174,52 +200,13 @@ const App: React.FC = () => {
     }, 650);
   };
 
-  // Auth Handling
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    const unsubscribe = listenToAuth(setSession);
-    return () => unsubscribe && unsubscribe();
-  }, []);
-
-  const refreshMyGalleries = useCallback(async () => {
-    if (!session?.user?.id || !isSupabaseConfigured) return;
-    setIsLoadingMyGalleries(true);
-    try {
-      const data = await listUserGalleries(session.user.id);
-      setMyGalleries(data);
-    } catch (err) {
-      console.warn('Unable to list user galleries', err);
-    } finally {
-      setIsLoadingMyGalleries(false);
-    }
-  }, [isSupabaseConfigured, session?.user?.id]);
-
-  useEffect(() => {
-    if (!session) {
-      setMyGalleries([]);
-    } else {
-      refreshMyGalleries();
-    }
-  }, [refreshMyGalleries, session]);
-
-  // Persistence Handling
   const handleSaveGallery = async (options?: { asNew?: boolean }) => {
-    // Sync input before saving
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
 
-    if (!itemsToSave.length) {
-      setLoadError('Cannot save an empty gallery');
-      return;
-    }
-
-    if (!isSupabaseConfigured) {
-      setLoadError('Supabase config missing.');
-      return;
-    }
+    if (!itemsToSave.length || !isSupabaseConfigured) return;
 
     setIsSaving(true);
-    setLoadError('');
     try {
       const record = await saveGalleryRecord(
         {
@@ -237,75 +224,36 @@ const App: React.FC = () => {
       window.history.replaceState(null, '', link);
       refreshMyGalleries();
     } catch (err: any) {
-      setLoadError(err?.message || 'Unable to save gallery.');
+      setLoadError(err?.message || 'Save failed.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const loadSavedGallery = async (slugOrId: string) => {
-     if (!isSupabaseConfigured) return;
-     setLoadError('');
-     setLoadingRemote(true);
-     try {
-       const record = await loadGalleryRecord(slugOrId);
-       if (record?.items?.length) {
-         const link = applyLoadedRecord(record);
-         window.history.replaceState(null, '', link);
-         // Update Text Area
-         const urls = record.items.map(i => i.originalUrl).join('\n');
-         setInputValue(urls);
-         // setBuilderOpen(false); // Optional: close builder on load?
-       }
-     } catch (err) {
-       setLoadError('Load failed.');
-     } finally {
-       setLoadingRemote(false);
-     }
-  };
-
-  const getShareLink = () => {
-    if (savedGalleryId) return `${shareBase}/?gallery=${savedGalleryId}`;
-    if (!galleryItems.length) return '';
-    return `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, {
-      displayName,
-      contactWhatsapp,
-      contactEmail,
-    })}`;
-  };
-
-  const handleShare = async () => {
-    let link = getShareLink();
+  const handleCopyLink = async (specificLink?: string) => {
+    // If a specific link is provided (from the library), use it.
+    // Otherwise calculate the current share link.
+    let link = specificLink;
     
-    // Auto-save if logged in and not saved yet
-    if (isSupabaseConfigured && session && !savedGalleryId && galleryItems.length) {
-       await handleSaveGallery();
-       // Re-get link after save
-       link = getShareLink(); 
+    if (!link) {
+        if (savedGalleryId) {
+            link = `${shareBase}/?gallery=${savedGalleryId}`;
+        } else if (galleryItems.length) {
+            link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
+        }
     }
 
     if (!link) return;
 
-    if (navigator.share) {
-      navigator.share({ title: 'Aether Gallery', url: link }).catch(console.warn);
-    } else {
-      handleCopyLink();
-    }
-  };
-
-  const handleCopyLink = async () => {
-    const link = getShareLink();
-    if (!link) return;
     try {
       await navigator.clipboard.writeText(link);
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 2000);
     } catch (err) {
-      console.warn('Clipboard failed', err);
+      console.warn('Clipboard error', err);
     }
   };
 
-  // Login Handlers
   const handleGoogleLogin = async () => {
     try {
       setAuthMessage('Redirecting...');
@@ -316,7 +264,7 @@ const App: React.FC = () => {
   const handleEmailLogin = async () => {
     if (!authEmail) return;
     try {
-      setAuthMessage('Check your email!');
+      setAuthMessage('Check email!');
       await signInWithEmail(authEmail, window.location.origin);
     } catch (err: any) { setLoadError(err.message); }
   };
@@ -325,15 +273,12 @@ const App: React.FC = () => {
     await signOut();
     setSession(null);
     setMyGalleries([]);
-    setAuthMessage('');
   };
-
-  // --- Render ---
 
   return (
     <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
-      {/* 3D Scene / Background */}
+      {/* 3D Scene */}
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
@@ -350,17 +295,12 @@ const App: React.FC = () => {
         ) : (
           <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
         )}
-
-        {loadingRemote && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10">
-             <Loader />
-          </div>
-        )}
+        {loadingRemote && <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10"><Loader /></div>}
       </div>
 
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
-      {/* Header UI */}
+      {/* Header */}
       <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <button onClick={() => setBuilderOpen(true)} className="group text-left">
           <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900">Aether</h1>
@@ -371,11 +311,9 @@ const App: React.FC = () => {
         </button>
         
         <div className="mt-4 flex gap-2">
-            <button onClick={() => setBuilderOpen(true)} className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-full shadow-lg hover:transform hover:-translate-y-0.5 transition">
-               Open Builder
-            </button>
-            <button onClick={handleShare} className="px-4 py-2 bg-white text-slate-700 text-xs font-semibold rounded-full shadow-md hover:bg-slate-50 transition border border-slate-100">
-               Share
+            <button onClick={() => setBuilderOpen(true)} className="px-5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-full shadow-lg hover:shadow-xl hover:translate-y-[-1px] transition flex items-center gap-2">
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+               {session ? 'Dashboard' : 'Build Gallery'}
             </button>
         </div>
         
@@ -386,7 +324,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Footer / Contact Button */}
+      {/* Footer Contact */}
       <div className={`fixed bottom-8 right-8 z-20 transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="relative">
           <button
@@ -400,31 +338,23 @@ const App: React.FC = () => {
           {contactMenuOpen && (
             <div className="absolute bottom-14 right-0 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden min-w-[200px] animate-in slide-in-from-bottom-2">
               <div className="p-3 border-b border-slate-50 text-xs text-slate-400 font-semibold uppercase">Contact Artist</div>
-              {contactWhatsapp && (
-                 <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">
-                   WhatsApp
-                 </a>
-              )}
-              {contactEmail && (
-                 <a href={`mailto:${contactEmail}`} className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">
-                   Email
-                 </a>
-              )}
-              {!contactWhatsapp && !contactEmail && (
-                 <div className="px-4 py-3 text-xs text-slate-400 italic">No contact info provided</div>
-              )}
+              {contactWhatsapp ? (
+                 <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">WhatsApp</a>
+              ) : null}
+              {contactEmail ? (
+                 <a href={`mailto:${contactEmail}`} className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">Email</a>
+              ) : null}
+              {!contactWhatsapp && !contactEmail && <div className="px-4 py-3 text-xs text-slate-400 italic">No contact info provided</div>}
             </div>
           )}
         </div>
       </div>
 
-      {/* The New Builder Modal */}
       <BuilderModal
         isOpen={builderOpen}
         onClose={() => setBuilderOpen(false)}
         session={session}
         galleryItemsCount={galleryItems.length}
-        // State Props
         inputValue={inputValue}
         setInputValue={setInputValue}
         displayName={displayName}
@@ -441,7 +371,6 @@ const App: React.FC = () => {
         setSphereBase={setSphereBase}
         tileGap={tileGap}
         setTileGap={setTileGap}
-        // Data Props
         myGalleries={myGalleries}
         isLoadingMyGalleries={isLoadingMyGalleries}
         savedGalleryId={savedGalleryId}
@@ -451,13 +380,11 @@ const App: React.FC = () => {
         authMessage={authMessage}
         authEmail={authEmail}
         setAuthEmail={setAuthEmail}
-        // Action Handlers
         onAddMedia={handleAddMedia}
         onClear={handleClear}
         onSave={handleSaveGallery}
-        onShare={handleShare}
         onCopyLink={handleCopyLink}
-        onLoadGallery={loadSavedGallery}
+        onLoadGallery={(slug) => { loadGalleryRecord(slug); /* Then trigger UI update handled by useEffect */ }}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
