@@ -52,6 +52,10 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 export const listenToAuth = (cb: (session: Session | null) => void) => {
   if (!supabase) return () => {};
   supabase.auth.getSession().then(({ data }) => cb(data.session ?? null));
+    // Clean up OAuth hash immediately if present
+      if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              }
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
           cb(session);
           // Clean up OAuth hash after successful sign-in

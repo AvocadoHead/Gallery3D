@@ -200,7 +200,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-    const unsubscribe = listenToAuth(setSession);
+        const unsubscribe = listenToAuth(setSession);
     return () => unsubscribe && unsubscribe();
   }, []);
 
@@ -619,7 +619,8 @@ const App: React.FC = () => {
                     {isLoadingMyGalleries && <span className="text-[11px] text-slate-500">Refreshing…</span>}
                   </div>
                   {!session && (
-                    <p className="text-[11px] text-slate-500">Sign in to view your saved galleries.</p>
+                    <p className="text-[11px] text-slate-500">:610
+                     your saved galleries.</p>
                   )}
                   {session && (
                     <div className="flex flex-col gap-2 max-h-32 overflow-y-auto pr-1">
