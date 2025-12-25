@@ -16,6 +16,7 @@ import {
   signInWithEmail,
   signInWithGoogle,
   signOut,
+  supabase, // Import the raw client to force checks
 } from './supabaseClient';
 import {
   buildDefaultMediaItems,
@@ -69,23 +70,42 @@ const App: React.FC = () => {
   const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
-  // --- 1. HANDLE AUTH REDIRECTS ---
+  // --- 1. HANDLE AUTH REDIRECTS (FIXED TIMING) ---
   useEffect(() => {
-    // If we have an access token, it means we just logged in. Open the builder.
-    const hash = window.location.hash;
-    const search = window.location.search;
-    if ((hash && hash.includes('access_token')) || (search && search.includes('code='))) {
-      setBuilderOpen(true);
-    }
+    const handleAuthRedirect = async () => {
+      const hash = window.location.hash;
+      const search = window.location.search;
+      
+      // If we see an access token, we know we are returning from login
+      if ((hash && hash.includes('access_token')) || (search && search.includes('code='))) {
+        setBuilderOpen(true);
+        
+        // CRITICAL FIX: Give Supabase a moment to process the hash, then force fetch the session
+        // This fixes the "menu looks the same" bug by manually updating the state
+        if (supabase) {
+           // Small delay to ensure the client has parsed the URL
+           setTimeout(async () => {
+             const { data } = await supabase.auth.getSession();
+             if (data.session) {
+               setSession(data.session);
+               refreshMyGalleries(data.session.user.id);
+             }
+           }, 500);
+        }
+      }
+    };
+
+    handleAuthRedirect();
   }, []);
 
   // --- 2. AUTH LISTENER ---
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+    
+    // Standard listener for auth changes (sign out, token refresh)
     const unsubscribe = listenToAuth((newSession) => {
       setSession(newSession);
       if (newSession) {
-        // Load user galleries immediately
         refreshMyGalleries(newSession.user.id);
       } else {
         setMyGalleries([]);
@@ -127,7 +147,12 @@ const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const encoded = params.get('gallery');
       if (encoded) return encoded;
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      // Note: We ignore the hash for gallery loading if it contains access_token
+      // to prevents confusing auth hashes with gallery slugs
+      const hash = window.location.hash;
+      if (hash.includes('access_token')) return null;
+
+      const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
       return hashParams.get('gallery');
     };
 
