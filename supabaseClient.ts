@@ -60,6 +60,7 @@ export const listenToAuth = (cb: (session: Session | null) => void) => {
                 }
         });
   return () => data.subscription.unsubscribe();
+  };
 export const signInWithGoogle = async (redirectTo?: string) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
   return supabase.auth.signInWithOAuth({
