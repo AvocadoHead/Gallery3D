@@ -8,33 +8,20 @@ interface TileGalleryProps {
   gap: number;
 }
 
-const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, gap }) => {
-  const baseWidth = 240 * mediaScale;
+const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, gap }) => {
+  // We remove the complex height math. Let the browser calculate natural height.
   const gutter = Math.max(1, gap);
 
-  const pickHeightMultiplier = (id: string, index: number) => {
-    const seed = Array.from(id || `${index}`)
-      .slice(0, 8)
-      .reduce((acc, char, idx) => acc + char.charCodeAt(0) * (idx + 1), 0);
-    const normalized = (Math.sin(seed) + 1) / 2; // 0 - 1
-    return 0.55 + normalized * 1.45; // 0.55 - 2.0
-  };
-
   return (
-    <div
-      className="w-full h-full overflow-y-auto px-4 pb-10 pt-24"
-    >
+    <div className="w-full h-full overflow-y-auto px-4 pb-10 pt-24">
       <div
-        className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 mx-auto max-w-[1600px]"
+        // standard tailwind columns. 
+        // gap-x handles horizontal space, gap-y isn't supported in columns directly usually, 
+        // so we use marginBottom on the item.
+        className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 mx-auto max-w-[1920px]"
         style={{ columnGap: `${gutter}px` }}
       >
-        {items.map((item, index) => {
-          const ratio = item.aspectRatio && !Number.isNaN(item.aspectRatio) ? item.aspectRatio : undefined;
-          
-          // Calculate height for fallback (if no ratio exists)
-          const multiplier = pickHeightMultiplier(item.id, index);
-          const estimatedHeight = baseWidth * multiplier;
-
+        {items.map((item) => {
           return (
             <article
               key={item.id}
@@ -42,40 +29,34 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
               style={{ marginBottom: `${gutter}px` }}
               onClick={() => onSelect(item)}
             >
-              <div
-                className="bg-white rounded-xl shadow-sm hover:shadow-md overflow-hidden border border-slate-100"
-                style={{ width: '100%' }}
-              >
-                <div
-                  className="relative w-full bg-slate-50"
-                  style={{ 
-                    // If we have a ratio, let CSS handle height (auto). 
-                    // If not, force the calculated randomized height.
-                    height: ratio ? 'auto' : `${estimatedHeight}px`,
-                    aspectRatio: ratio ? `${ratio}` : undefined 
-                  }}
-                >
-                  {item.kind === 'video' ? (
-                    <video
-                      src={item.videoUrl || item.fullUrl}
-                      className="block w-full h-full object-cover"
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                    />
-                  ) : (
-                    <img
-                      src={item.fallbackPreview || item.previewUrl}
-                      alt="gallery item"
-                      className="block w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  )}
-                  
-                  {/* Optional: Hover overlay effect */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none" />
-                </div>
+              <div className="bg-white rounded-xl shadow-sm hover:shadow-md overflow-hidden border border-slate-100">
+                {item.kind === 'video' ? (
+                  <video
+                    src={item.videoUrl || item.fullUrl}
+                    // w-full makes it fill column width
+                    // h-auto makes it calculate height based on intrinsic ratio
+                    className="block w-full h-auto"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    // If we happen to know aspect ratio from DB, use it to prevent layout shift
+                    style={item.aspectRatio ? { aspectRatio: item.aspectRatio } : undefined}
+                  />
+                ) : (
+                  <img
+                    src={item.fallbackPreview || item.previewUrl}
+                    alt="gallery item"
+                    // w-full + h-auto is the key to original ratio
+                    className="block w-full h-auto"
+                    loading="lazy"
+                    // If we happen to know aspect ratio from DB, use it to prevent layout shift
+                    style={item.aspectRatio ? { aspectRatio: item.aspectRatio } : undefined}
+                  />
+                )}
+                
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none rounded-xl" />
               </div>
             </article>
           );
