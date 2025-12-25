@@ -69,16 +69,12 @@ const App: React.FC = () => {
   const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
-  // --- 1. HANDLE AUTH REDIRECTS (FIX FOR THE "CLOSED MENU" ISSUE) ---
+  // --- 1. HANDLE AUTH REDIRECTS ---
   useEffect(() => {
-    // Check if we are returning from an OAuth redirect
     const hash = window.location.hash;
     const search = window.location.search;
     if ((hash && hash.includes('access_token')) || (search && search.includes('code='))) {
-      // We are coming back from a login!
       setBuilderOpen(true);
-      // Clean the URL slightly to avoid ugly history (optional, but nice)
-      // window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);
 
@@ -88,7 +84,6 @@ const App: React.FC = () => {
     const unsubscribe = listenToAuth((newSession) => {
       setSession(newSession);
       if (newSession) {
-        // Refresh galleries whenever session becomes active
         refreshMyGalleries(newSession.user.id);
       } else {
         setMyGalleries([]);
@@ -111,7 +106,7 @@ const App: React.FC = () => {
     }
   }, [session, isSupabaseConfigured]);
 
-  // --- 3. URL PARSING (GALLERY LOADING) ---
+  // --- 3. URL PARSING ---
   const applyLoadedRecord = useCallback(
     (record: GalleryRecord) => {
       setGalleryItems(record.items || []);
@@ -139,7 +134,6 @@ const App: React.FC = () => {
       const encoded = extractGallery();
       const incoming = decodeGalleryParam(encoded);
 
-      // Case: Raw URLs
       if (incoming.urls.length) {
         setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
         setDisplayName(incoming.displayName || '');
@@ -150,7 +144,6 @@ const App: React.FC = () => {
         return;
       }
 
-      // Case: Saved ID
       if (encoded && isSupabaseConfigured) {
         setLoadingRemote(true);
         try {
@@ -170,7 +163,6 @@ const App: React.FC = () => {
         }
       }
 
-      // Case: Default
       setGalleryItems(buildDefaultMediaItems());
     };
 
@@ -180,14 +172,12 @@ const App: React.FC = () => {
   }, [applyLoadedRecord]);
 
   // --- HANDLERS ---
-
   const handleAddMedia = () => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     if (!entries.length) return;
     const nextItems = buildMediaItemsFromUrls(entries);
     setGalleryItems(nextItems);
     setSelectedItem(null);
-    // Note: We don't clear inputValue so the user can keep editing
   };
 
   const handleClear = () => {
@@ -231,10 +221,7 @@ const App: React.FC = () => {
   };
 
   const handleCopyLink = async (specificLink?: string) => {
-    // If a specific link is provided (from the library), use it.
-    // Otherwise calculate the current share link.
     let link = specificLink;
-    
     if (!link) {
         if (savedGalleryId) {
             link = `${shareBase}/?gallery=${savedGalleryId}`;
@@ -242,7 +229,6 @@ const App: React.FC = () => {
             link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
         }
     }
-
     if (!link) return;
 
     try {
@@ -301,24 +287,38 @@ const App: React.FC = () => {
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
       {/* Header */}
-      <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        {/* Title Button (Triggers Builder) */}
         <button onClick={() => setBuilderOpen(true)} className="group text-left">
-          <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900">Aether</h1>
+          <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900 transition-colors">Aether</h1>
           <div className="flex items-center gap-2">
-            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1">Gallery</p>
+            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 group-hover:text-slate-600 transition-colors">Gallery</p>
             {displayName && <span className="text-[11px] bg-white/50 px-2 py-0.5 rounded-full border border-slate-200 text-slate-500">{displayName}</span>}
           </div>
         </button>
         
-        <div className="mt-4 flex gap-2">
-            <button onClick={() => setBuilderOpen(true)} className="px-5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-full shadow-lg hover:shadow-xl hover:translate-y-[-1px] transition flex items-center gap-2">
-               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-               {session ? 'Dashboard' : 'Build Gallery'}
+        {/* View Toggle (Restored) */}
+        <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
+            <button
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              onClick={() => setViewMode('sphere')}
+            >
+              Sphere
+            </button>
+            <button
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              onClick={() => setViewMode('tile')}
+            >
+              Masonry
             </button>
         </div>
         
         {toastVisible && (
-          <div className="mt-2 px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce">
+          <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce">
             Link Copied!
           </div>
         )}
@@ -329,9 +329,9 @@ const App: React.FC = () => {
         <div className="relative">
           <button
             onClick={() => setContactMenuOpen(!contactMenuOpen)}
-            className="flex items-center gap-3 px-5 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition text-slate-600 text-sm font-medium"
+            className="flex items-center gap-3 px-5 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition text-slate-600 text-sm font-medium border border-white"
           >
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
             Contact
           </button>
           
@@ -384,7 +384,7 @@ const App: React.FC = () => {
         onClear={handleClear}
         onSave={handleSaveGallery}
         onCopyLink={handleCopyLink}
-        onLoadGallery={(slug) => { loadGalleryRecord(slug); /* Then trigger UI update handled by useEffect */ }}
+        onLoadGallery={(slug) => { loadGalleryRecord(slug); }}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
