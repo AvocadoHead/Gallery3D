@@ -44,30 +44,27 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
                 className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-100"
                 style={{ width: '100%' }}
               >
-                <div
-                  className="relative w-full bg-slate-50"
-                  style={{ height, minHeight: height }}
-                >
-                  {item.kind === 'video' ? (
-                    <video
-                      src={item.videoUrl || item.fullUrl}
-                      className="w-full h-full rounded-2xl object-contain"
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                    />
-                  ) : (
-                    <img
-                      src={item.fallbackPreview || item.previewUrl}
-                      alt="gallery item"
-                      className="w-full h-full rounded-2xl object-contain"
-                      loading="lazy"
-                    />
-                  )}
-                  <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/60 pointer-events-none" />
-                </div>
-              </div>
+               <div
+  className="relative w-full" // Remove bg-slate-50
+  style={{ aspectRatio: ratio || 'auto' }} // Use aspectRatio instead of fixed height
+>
+  {item.kind === 'video' ? (
+    <video
+      src={item.videoUrl || item.fullUrl}
+      className="w-full h-full rounded-2xl object-cover" // Changed to object-cover
+      autoPlay
+      muted
+      loop
+      playsInline
+    />
+  ) : (
+    <img
+      src={item.fallbackPreview || item.previewUrl}
+      alt="gallery item"
+      className="w-full h-full rounded-2xl object-cover" // Changed to object-cover
+      loading="lazy"
+    />
+  )}
             </article>
           );
         })}
