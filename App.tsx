@@ -71,6 +71,7 @@ const App: React.FC = () => {
 
   // --- 1. HANDLE AUTH REDIRECTS ---
   useEffect(() => {
+    // If we have an access token, it means we just logged in. Open the builder.
     const hash = window.location.hash;
     const search = window.location.search;
     if ((hash && hash.includes('access_token')) || (search && search.includes('code='))) {
@@ -84,6 +85,7 @@ const App: React.FC = () => {
     const unsubscribe = listenToAuth((newSession) => {
       setSession(newSession);
       if (newSession) {
+        // Load user galleries immediately
         refreshMyGalleries(newSession.user.id);
       } else {
         setMyGalleries([]);
@@ -297,7 +299,7 @@ const App: React.FC = () => {
           </div>
         </button>
         
-        {/* View Toggle (Restored) */}
+        {/* View Toggle */}
         <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
             <button
               className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
