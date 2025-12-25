@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { GallerySummary } from '../supabaseClient';
 
-// --- ICONS ---
 const IconGoogle = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
     <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.64 2 12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c5.19 0 9.49-3.73 9.49-10c0-1.3-.15-2.29-.14-2.9z" />
@@ -61,13 +60,6 @@ interface BuilderModalProps {
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'editor' | 'library' | 'settings' | 'support'>('editor');
   
-  // Reset tab logic when session changes
-  useEffect(() => {
-    if (props.session && activeTab === 'editor' && props.myGalleries.length > 0 && !props.inputValue) {
-       // Optional: Could redirect, but keeping user in control is better
-    }
-  }, [props.session]);
-
   if (!props.isOpen) return null;
 
   const NavItem = ({ id, label, icon: Icon }: any) => (
@@ -103,7 +95,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
           </nav>
 
           <div className="mt-auto pt-4 border-t border-slate-200 space-y-3">
-            {/* LOGIC FIX: Check props.session strictly */}
             {!props.session ? (
               <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                 <p className="text-xs text-slate-500 mb-3 font-medium">Save your work</p>
@@ -122,7 +113,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                  </div>
                  <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-slate-700 truncate">{props.session.user.email}</p>
-                    <button onClick={props.onSignOut} className="text-[10px] text-red-500 hover:text-red-600 font-medium">
+                    <button onClick={props.onSignOut} className="text-[10px] text-red-500 hover:text-red-600 font-medium hover:underline">
                        Sign out
                     </button>
                  </div>
@@ -190,7 +181,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                         </div>
                      </div>
 
-                     {/* Save Action Area - LOGIC FIX: Check props.session */}
                      <div className="pt-6 mt-4">
                         {!props.session ? (
                            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-center justify-between">
@@ -221,7 +211,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                               </div>
                            </div>
                         )}
-                        {/* Share is available to everyone for current state */}
                         <button onClick={() => props.onCopyLink()} className="w-full mt-2 py-2 text-slate-400 hover:text-slate-600 text-xs font-medium transition">
                             Share current view (Copy Link)
                         </button>
@@ -335,7 +324,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   </div>
                )}
 
-               {/* === SUPPORT TAB (Restoring QR Codes) === */}
+               {/* === SUPPORT TAB === */}
                {activeTab === 'support' && (
                   <div className="space-y-6 animate-in fade-in duration-300">
                      <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
@@ -344,7 +333,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                      </div>
                      
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                         {/* RESTORED VISUALS: Full Images */}
                          <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
                            <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
                              <img 
