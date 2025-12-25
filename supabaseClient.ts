@@ -32,6 +32,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true, // This handles the hash automatically!
+        flowType: 'pkce',
       },
     })
   : null;
