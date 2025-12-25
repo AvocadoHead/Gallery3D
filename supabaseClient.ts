@@ -1,19 +1,6 @@
 import { createClient, Session, SupabaseClient } from '@supabase/supabase-js';
 import { MediaItem } from './constants';
 
-/**
- * Expected Supabase table (public.galleries):
- * - id: uuid (primary key, default uuid_generate_v4())
- * - slug: text (unique)
- * - owner_id: uuid (index for listing per user)
- * - display_name: text
- * - contact_whatsapp: text
- * - contact_email: text
- * - items: jsonb
- * - created_at: timestamptz (default now())
- * - updated_at: timestamptz
- */
-
 export interface GalleryRecord {
   id: string;
   slug?: string | null;
@@ -30,7 +17,7 @@ export interface GallerySummary {
   id: string;
   slug: string | null;
   display_name: string | null;
-  updated_at: string; // Enforced as string because we sort by it
+  updated_at: string;
   created_at: string | null;
 }
 
@@ -44,7 +31,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: true, // This handles the hash automatically!
       },
     })
   : null;
@@ -58,8 +45,6 @@ export const listenToAuth = (cb: (session: Session | null) => void) => {
   // 2. Listen for changes
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
     cb(session);
-    // NOTE: We removed the URL cleaning logic here.
-    // We let App.tsx detect the #access_token to open the Builder UI first.
   });
 
   return () => data.subscription.unsubscribe();
@@ -67,26 +52,17 @@ export const listenToAuth = (cb: (session: Session | null) => void) => {
 
 export const signInWithGoogle = async (redirectTo?: string) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
-  
-  // Ensure we redirect back to the app root or specific page
-  const redirectUrl = redirectTo || (typeof window !== 'undefined' ? window.location.origin : undefined);
-
   return supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: redirectUrl },
+    options: { redirectTo: redirectTo || window.location.origin },
   });
 };
 
 export const signInWithEmail = async (email: string, redirectTo?: string) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
-  
-  const redirectUrl = redirectTo || (typeof window !== 'undefined' ? window.location.origin : undefined);
-
   return supabase.auth.signInWithOtp({
     email,
-    options: {
-      emailRedirectTo: redirectUrl,
-    },
+    options: { emailRedirectTo: redirectTo || window.location.origin },
   });
 };
 
@@ -96,8 +72,6 @@ export const signOut = async () => {
 };
 
 const TABLE = 'galleries';
-
-// Generate a short random string for slugs
 const generateSlug = () => crypto.randomUUID().slice(0, 8);
 
 export const saveGalleryRecord = async (
@@ -107,14 +81,9 @@ export const saveGalleryRecord = async (
 ) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
 
-  // Logic: 
-  // 1. If 'asNew' is true -> Generate new Slug, Remove ID (force insert)
-  // 2. If 'asNew' is false -> Use existing Slug/ID if available, else generate new
-  
   const slug = options?.asNew ? generateSlug() : (payload.slug || generateSlug());
   const ownerId = payload.owner_id || session?.user?.id || null;
-
-  // Prepare the object for DB
+  
   const writePayload: any = {
     ...payload,
     slug,
@@ -122,18 +91,15 @@ export const saveGalleryRecord = async (
     updated_at: new Date().toISOString(),
   };
 
-  // Vital: Delete the ID if we want a new record so Postgres generates a new UUID
   if (options?.asNew) {
-    delete writePayload.id;
+    delete writePayload.id; // Force new ID generation
   } else {
-    // If we have an ID, keep it to ensure we update the specific row
-    writePayload.id = payload.id; 
+    writePayload.id = payload.id; // Update existing
   }
 
-  // We use Upsert based on ID if present, otherwise it might rely on Slug uniqueness
   const { data, error } = await supabase
     .from(TABLE)
-    .upsert(writePayload, { onConflict: options?.asNew ? undefined : 'id' }) 
+    .upsert(writePayload, { onConflict: options?.asNew ? undefined : 'id' })
     .select('*')
     .single();
 
@@ -147,7 +113,6 @@ export const loadGalleryRecord = async (slugOrId: string) => {
   const { data, error } = await supabase
     .from(TABLE)
     .select('*')
-    // Search by Slug OR ID
     .or(`slug.eq.${slugOrId},id.eq.${slugOrId}`)
     .limit(1)
     .maybeSingle();
