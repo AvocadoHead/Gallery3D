@@ -9,14 +9,13 @@ import {
   GalleryRecord,
   GallerySummary,
   isSupabaseConfigured,
-  listenToAuth,
   loadGalleryRecord,
   listUserGalleries,
   saveGalleryRecord,
   signInWithEmail,
   signInWithGoogle,
   signOut,
-  supabase, // Import the raw client to force checks
+  supabase, // We use the raw client for events
 } from './supabaseClient';
 import {
   buildDefaultMediaItems,
@@ -70,48 +69,33 @@ const App: React.FC = () => {
   const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
-  // --- 1. HANDLE AUTH REDIRECTS (FIXED TIMING) ---
+  // --- AUTH LOGIC (SIMPLIFIED & FIXED) ---
   useEffect(() => {
-    const handleAuthRedirect = async () => {
-      const hash = window.location.hash;
-      const search = window.location.search;
-      
-      // If we see an access token, we know we are returning from login
-      if ((hash && hash.includes('access_token')) || (search && search.includes('code='))) {
-        setBuilderOpen(true);
-        
-        // CRITICAL FIX: Give Supabase a moment to process the hash, then force fetch the session
-        // This fixes the "menu looks the same" bug by manually updating the state
-        if (supabase) {
-           // Small delay to ensure the client has parsed the URL
-           setTimeout(async () => {
-             const { data } = await supabase.auth.getSession();
-             if (data.session) {
-               setSession(data.session);
-               refreshMyGalleries(data.session.user.id);
-             }
-           }, 500);
-        }
-      }
-    };
+    if (!supabase) return;
 
-    handleAuthRedirect();
-  }, []);
+    // 1. Get current session immediately on mount
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (data.session) refreshMyGalleries(data.session.user.id);
+    });
 
-  // --- 2. AUTH LISTENER ---
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    
-    // Standard listener for auth changes (sign out, token refresh)
-    const unsubscribe = listenToAuth((newSession) => {
+    // 2. Listen for auth changes (including redirects!)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
-      if (newSession) {
-        refreshMyGalleries(newSession.user.id);
-      } else {
+      
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (newSession) {
+           refreshMyGalleries(newSession.user.id);
+           // If we just signed in, force the menu open so the user sees they are logged in
+           if (event === 'SIGNED_IN') setBuilderOpen(true);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setMyGalleries([]);
+        setBuilderOpen(true); // Keep open so they see the login form again
       }
     });
-    return () => unsubscribe && unsubscribe();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const refreshMyGalleries = useCallback(async (userId?: string) => {
@@ -128,7 +112,7 @@ const App: React.FC = () => {
     }
   }, [session, isSupabaseConfigured]);
 
-  // --- 3. URL PARSING ---
+  // --- URL PARSING (Legacy & Sharing) ---
   const applyLoadedRecord = useCallback(
     (record: GalleryRecord) => {
       setGalleryItems(record.items || []);
@@ -147,10 +131,10 @@ const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const encoded = params.get('gallery');
       if (encoded) return encoded;
-      // Note: We ignore the hash for gallery loading if it contains access_token
-      // to prevents confusing auth hashes with gallery slugs
+      
+      // Ignore auth hashes
       const hash = window.location.hash;
-      if (hash.includes('access_token')) return null;
+      if (hash.includes('access_token') || hash.includes('type=recovery')) return null;
 
       const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
       return hashParams.get('gallery');
@@ -284,6 +268,7 @@ const App: React.FC = () => {
 
   const handleSignOut = async () => {
     await signOut();
+    // Force state clear immediately
     setSession(null);
     setMyGalleries([]);
   };
