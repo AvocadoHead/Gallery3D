@@ -33,6 +33,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
         autoRefreshToken: true,
         detectSessionInUrl: true, // This handles the hash automatically!
         flowType: 'pkce',
+                storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       },
     })
   : null;
