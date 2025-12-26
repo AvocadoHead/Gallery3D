@@ -18,7 +18,6 @@ interface BuilderModalProps {
   onClose: () => void;
   session: Session | null;
   galleryItemsCount: number;
-  // State
   inputValue: string;
   setInputValue: (val: string) => void;
   displayName: string;
@@ -27,7 +26,6 @@ interface BuilderModalProps {
   setContactWhatsapp: (val: string) => void;
   contactEmail: string;
   setContactEmail: (val: string) => void;
-  // Settings
   viewMode: 'sphere' | 'tile';
   setViewMode: (mode: 'sphere' | 'tile') => void;
   mediaScale: number;
@@ -36,7 +34,6 @@ interface BuilderModalProps {
   setSphereBase: (val: number) => void;
   tileGap: number;
   setTileGap: (val: number) => void;
-  // Data
   myGalleries: GallerySummary[];
   isLoadingMyGalleries: boolean;
   savedGalleryId: string;
@@ -46,7 +43,6 @@ interface BuilderModalProps {
   authMessage: string;
   authEmail: string;
   setAuthEmail: (val: string) => void;
-  // Actions
   onAddMedia: () => void;
   onClear: () => void;
   onSave: (asNew?: boolean) => void;
@@ -162,22 +158,27 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                      <div className="space-y-4 pt-4 border-t border-slate-100">
                         <h3 className="text-sm font-bold text-slate-800">Details</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-3">
                            <input 
                               value={props.displayName} 
                               onChange={(e) => props.setDisplayName(e.target.value)}
                               placeholder="Gallery Title"
-                              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
                            />
-                           <input 
-                              value={props.contactEmail || props.contactWhatsapp} 
-                              onChange={(e) => {
-                                 if(e.target.value.includes('@')) { props.setContactEmail(e.target.value); props.setContactWhatsapp(''); }
-                                 else { props.setContactWhatsapp(e.target.value); props.setContactEmail(''); }
-                              }}
-                              placeholder="Contact (Email/Phone)"
-                              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                           />
+                           <div className="grid grid-cols-2 gap-4">
+                              <input 
+                                 value={props.contactEmail} 
+                                 onChange={(e) => props.setContactEmail(e.target.value)}
+                                 placeholder="Email Address"
+                                 className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                              />
+                              <input 
+                                 value={props.contactWhatsapp} 
+                                 onChange={(e) => props.setContactWhatsapp(e.target.value)}
+                                 placeholder="WhatsApp (Number)"
+                                 className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                              />
+                           </div>
                         </div>
                      </div>
 
@@ -194,20 +195,34 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                  {props.savedGalleryId && <span className="text-[10px] font-mono text-emerald-600">ID: {props.savedGalleryId}</span>}
                               </div>
                               <div className="flex gap-2">
-                                 <button 
-                                    onClick={() => props.onSave(false)}
-                                    disabled={props.isSaving}
-                                    className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
-                                 >
-                                    {props.isSaving ? 'Saving...' : props.savedGalleryId ? 'Update Existing' : 'Save Gallery'}
-                                 </button>
-                                 <button 
-                                    onClick={() => props.onSave(true)}
-                                    disabled={props.isSaving}
-                                    className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
-                                 >
-                                    Save as New
-                                 </button>
+                                 {/* SMART SAVE BUTTONS: Only show what's relevant */}
+                                 {props.savedGalleryId ? (
+                                    <>
+                                       <button 
+                                          onClick={() => props.onSave(false)}
+                                          disabled={props.isSaving}
+                                          className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
+                                       >
+                                          {props.isSaving ? 'Updating...' : 'Update Gallery'}
+                                       </button>
+                                       <button 
+                                          onClick={() => props.onSave(true)}
+                                          disabled={props.isSaving}
+                                          className="px-4 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-200 transition shadow-sm"
+                                          title="Save as a new copy"
+                                       >
+                                          Save New
+                                       </button>
+                                    </>
+                                 ) : (
+                                    <button 
+                                       onClick={() => props.onSave(true)}
+                                       disabled={props.isSaving}
+                                       className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition shadow-lg"
+                                    >
+                                       {props.isSaving ? 'Saving...' : 'Save Gallery'}
+                                    </button>
+                                 )}
                               </div>
                            </div>
                         )}
