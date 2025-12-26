@@ -44,11 +44,11 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
-  // --- Gallery Configuration ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
+  // --- Gallery Configuration (Defaults) ---
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('tile'); // Default to Masonry
   const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
-  const [tileGap, setTileGap] = useState(8);
+  const [tileGap, setTileGap] = useState(12);
 
   // --- Data State ---
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
@@ -69,20 +69,17 @@ const App: React.FC = () => {
   const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
-  // Lock to prevent double-firing auth in StrictMode
   const authProcessing = useRef(false);
 
-  // --- AUTH LOGIC (ROBUST MANUAL PKCE) ---
+  // --- AUTH LOGIC ---
   useEffect(() => {
     if (!supabase) return;
 
     const handleAuth = async () => {
-      // 1. Check for Auth Code in URL (Redirect back from Google)
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
 
       if (code) {
-        // Prevent double execution
         if (authProcessing.current) return;
         authProcessing.current = true;
 
@@ -91,11 +88,9 @@ const App: React.FC = () => {
           if (!error && data.session) {
             setSession(data.session);
             refreshMyGalleries(data.session.user.id);
-            setBuilderOpen(true); // Open menu to show logged-in state
-            // Remove code from URL to prevent reload loops
+            setBuilderOpen(true);
             window.history.replaceState(null, '', window.location.pathname);
           } else {
-             console.error('Auth exchange error:', error);
              setLoadError('Login failed. Please try again.');
           }
         } catch (err) {
@@ -104,7 +99,6 @@ const App: React.FC = () => {
           authProcessing.current = false;
         }
       } else {
-        // 2. No code? Just check existing session
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           setSession(data.session);
@@ -115,7 +109,6 @@ const App: React.FC = () => {
 
     handleAuth();
 
-    // 3. Listen for future auth changes (Sign out / Token Refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setSession(newSession);
@@ -123,7 +116,7 @@ const App: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setSession(null);
         setMyGalleries([]);
-        setBuilderOpen(true); // Show login form on sign out
+        setBuilderOpen(true);
       }
     });
 
@@ -144,13 +137,22 @@ const App: React.FC = () => {
     }
   }, [session, isSupabaseConfigured]);
 
-  // --- URL PARSING (Legacy & Sharing) ---
+  // --- URL PARSING & LOADING ---
   const applyLoadedRecord = useCallback(
     (record: GalleryRecord) => {
       setGalleryItems(record.items || []);
       setDisplayName(record.display_name || '');
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
+      
+      // Apply saved layout settings if they exist
+      if (record.layout_settings) {
+        if (record.layout_settings.viewMode) setViewMode(record.layout_settings.viewMode);
+        if (record.layout_settings.mediaScale) setMediaScale(record.layout_settings.mediaScale);
+        if (record.layout_settings.sphereBase) setSphereBase(record.layout_settings.sphereBase);
+        if (record.layout_settings.tileGap) setTileGap(record.layout_settings.tileGap);
+      }
+
       const id = record.slug || record.id;
       setSavedGalleryId(id);
       return `${shareBase}/?gallery=${id}`;
@@ -164,7 +166,6 @@ const App: React.FC = () => {
       const encoded = params.get('gallery');
       if (encoded) return encoded;
       
-      // Ignore auth hashes or codes to prevent conflict
       const hash = window.location.hash;
       if (hash.includes('access_token') || hash.includes('type=recovery')) return null;
       if (window.location.search.includes('code=')) return null;
@@ -250,6 +251,13 @@ const App: React.FC = () => {
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
+          // Save layout preferences
+          layout_settings: {
+            viewMode,
+            mediaScale,
+            sphereBase,
+            tileGap
+          }
         },
         session,
         { asNew: options?.asNew },
@@ -301,7 +309,6 @@ const App: React.FC = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    // Force state clear immediately
     setSession(null);
     setMyGalleries([]);
   };
@@ -313,7 +320,8 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
-            <Canvas camera={{ position: [0, 0, 75], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
+            {/* Tweaked Camera Position (Z: 65) for closer start */}
+            <Canvas camera={{ position: [0, 0, 65], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
               <GalleryScene
                 onSelect={setSelectedItem}
                 items={galleryItems}
@@ -333,7 +341,6 @@ const App: React.FC = () => {
 
       {/* Header */}
       <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        {/* Title Button (Triggers Builder) */}
         <button onClick={() => setBuilderOpen(true)} className="group text-left">
           <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900 transition-colors">Aether</h1>
           <div className="flex items-center gap-2">
@@ -342,7 +349,6 @@ const App: React.FC = () => {
           </div>
         </button>
         
-        {/* View Toggle */}
         <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
             <button
               className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
