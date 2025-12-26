@@ -31,9 +31,11 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true, // This handles the hash automatically!
+        // CRITICAL FIX: Set to false to prevent race conditions with React StrictMode.
+        // We handle the code exchange manually in App.tsx.
+        detectSessionInUrl: false, 
         flowType: 'pkce',
-                storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       },
     })
   : null;
