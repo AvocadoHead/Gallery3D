@@ -9,6 +9,13 @@ export interface GalleryRecord {
   contact_whatsapp?: string | null;
   contact_email?: string | null;
   items: MediaItem[];
+  // New field for saving view preferences
+  layout_settings?: {
+    viewMode?: 'sphere' | 'tile';
+    mediaScale?: number;
+    sphereBase?: number;
+    tileGap?: number;
+  };
   created_at?: string;
   updated_at?: string;
 }
@@ -31,9 +38,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        // CRITICAL FIX: Set to false to prevent race conditions with React StrictMode.
-        // We handle the code exchange manually in App.tsx.
-        detectSessionInUrl: false, 
+        detectSessionInUrl: false, // Manual handling in App.tsx
         flowType: 'pkce',
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       },
@@ -42,15 +47,10 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 
 export const listenToAuth = (cb: (session: Session | null) => void) => {
   if (!supabase) return () => {};
-
-  // 1. Get initial session
   supabase.auth.getSession().then(({ data }) => cb(data.session ?? null));
-
-  // 2. Listen for changes
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
     cb(session);
   });
-
   return () => data.subscription.unsubscribe();
 };
 
@@ -96,9 +96,9 @@ export const saveGalleryRecord = async (
   };
 
   if (options?.asNew) {
-    delete writePayload.id; // Force new ID generation
+    delete writePayload.id;
   } else {
-    writePayload.id = payload.id; // Update existing
+    writePayload.id = payload.id;
   }
 
   const { data, error } = await supabase
@@ -114,12 +114,22 @@ export const saveGalleryRecord = async (
 export const loadGalleryRecord = async (slugOrId: string) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
 
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('*')
-    .or(`slug.eq.${slugOrId},id.eq.${slugOrId}`)
-    .limit(1)
-    .maybeSingle();
+  // FIX FOR 400 ERROR:
+  // Check if string is a valid UUID. If not, only search the slug column.
+  // Postgres crashes if you try to compare a short text slug against a UUID column.
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
+
+  let query = supabase.from(TABLE).select('*');
+
+  if (isUUID) {
+    // If it looks like a UUID, check both ID and Slug
+    query = query.or(`slug.eq.${slugOrId},id.eq.${slugOrId}`);
+  } else {
+    // If it's a short slug, ONLY check slug
+    query = query.eq('slug', slugOrId);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
 
   if (error) throw error;
   return data as GalleryRecord | null;
