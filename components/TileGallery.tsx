@@ -9,46 +9,36 @@ interface TileGalleryProps {
 }
 
 const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, gap }) => {
-  // Use a tight gap by default for that "Midjourney" density, or use the slider value
   const gutter = gap ? gap : 12;
+
+  // Function to determine if we should nudge this item to create uneven stagger
+  // We use a simple hash of ID to be deterministic but look random
+  const getStaggerClass = (index: number) => {
+    // Only apply to first few items to offset columns? 
+    // Actually, pure CSS columns don't allow easy individual nudging.
+    // Instead, we will rely on natural height variance.
+    // If you REALLY want to break the grid of 1:1 squares, we can add small random margins.
+    const randomShift = (index % 3 === 0) ? 'mt-4' : (index % 7 === 0) ? 'mt-8' : '';
+    return randomShift;
+  };
 
   return (
     <div className="w-full h-full overflow-y-auto px-4 pt-24 pb-12 custom-scrollbar">
-      {/* 
-        CSS Columns (Masonry) Configuration:
-        - columns-xs/sm/md/lg controls how many columns appear based on screen width.
-        - gap-x handles horizontal spacing.
-        - space-y handles vertical spacing.
-      */}
       <div 
         className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6 gap-x-4 space-y-4 mx-auto"
-        style={{ 
-          columnGap: `${gutter}px`,
-          maxWidth: '1800px' // Prevent lines from getting too wide on massive screens
-        }}
+        style={{ columnGap: `${gutter}px`, maxWidth: '1800px' }}
       >
-        {items.map((item) => (
+        {items.map((item, idx) => (
           <div
             key={item.id}
-            // break-inside-avoid is CRITICAL. It prevents the browser from slicing an image in half 
-            // at the bottom of a column.
-            className="break-inside-avoid relative group mb-4" 
+            className={`break-inside-avoid relative group mb-4 ${getStaggerClass(idx)}`}
             style={{ marginBottom: `${gutter}px` }}
             onClick={() => onSelect(item)}
           >
-            {/* 
-               The Card Container 
-               - Removed 'h-full', 'aspect-ratio'.
-               - 'w-full' ensures it fills the column width.
-               - 'fit-content' allows it to shrink to the image height.
-            */}
             <div className="w-full bg-slate-200 rounded-lg overflow-hidden cursor-pointer shadow-sm transition-all duration-200 hover:shadow-md hover:brightness-110">
-              
               {item.kind === 'video' ? (
                 <video
                   src={item.videoUrl || item.fullUrl}
-                  // w-full makes it fit the column.
-                  // h-auto allows the video to set its own height based on resolution.
                   className="block w-full h-auto align-middle"
                   autoPlay
                   muted
@@ -59,20 +49,11 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, gap }) => {
                 <img
                   src={item.fallbackPreview || item.previewUrl}
                   alt={item.title || 'Gallery artwork'}
-                  // w-full makes it fit the column.
-                  // h-auto ensures 1:1 stays 1:1, 9:16 stays 9:16, etc.
                   className="block w-full h-auto align-middle"
                   loading="lazy"
                 />
               )}
-
-              {/* Midjourney-style Hover Overlay */}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 pointer-events-none flex items-end p-4">
-                 <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-                    {/* Optional: Add icon or text here if desired */}
-                 </div>
-              </div>
-
+               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 pointer-events-none" />
             </div>
           </div>
         ))}
