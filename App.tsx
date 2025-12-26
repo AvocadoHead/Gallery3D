@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, Suspense, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
@@ -15,7 +15,7 @@ import {
   signInWithEmail,
   signInWithGoogle,
   signOut,
-  supabase, // We use the raw client for events
+  supabase,
 } from './supabaseClient';
 import {
   buildDefaultMediaItems,
@@ -69,29 +69,61 @@ const App: React.FC = () => {
   const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
-  // --- AUTH LOGIC (SIMPLIFIED & FIXED) ---
+  // Lock to prevent double-firing auth in StrictMode
+  const authProcessing = useRef(false);
+
+  // --- AUTH LOGIC (ROBUST MANUAL PKCE) ---
   useEffect(() => {
     if (!supabase) return;
 
-    // 1. Get current session immediately on mount
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session) refreshMyGalleries(data.session.user.id);
-    });
+    const handleAuth = async () => {
+      // 1. Check for Auth Code in URL (Redirect back from Google)
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
 
-    // 2. Listen for auth changes (including redirects!)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
-      
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (newSession) {
-           refreshMyGalleries(newSession.user.id);
-           // If we just signed in, force the menu open so the user sees they are logged in
-           if (event === 'SIGNED_IN') setBuilderOpen(true);
+      if (code) {
+        // Prevent double execution
+        if (authProcessing.current) return;
+        authProcessing.current = true;
+
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data.session) {
+            setSession(data.session);
+            refreshMyGalleries(data.session.user.id);
+            setBuilderOpen(true); // Open menu to show logged-in state
+            // Remove code from URL to prevent reload loops
+            window.history.replaceState(null, '', window.location.pathname);
+          } else {
+             console.error('Auth exchange error:', error);
+             setLoadError('Login failed. Please try again.');
+          }
+        } catch (err) {
+          console.error('Auth exception:', err);
+        } finally {
+          authProcessing.current = false;
         }
+      } else {
+        // 2. No code? Just check existing session
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          setSession(data.session);
+          refreshMyGalleries(data.session.user.id);
+        }
+      }
+    };
+
+    handleAuth();
+
+    // 3. Listen for future auth changes (Sign out / Token Refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setSession(newSession);
+        if (newSession) refreshMyGalleries(newSession.user.id);
       } else if (event === 'SIGNED_OUT') {
+        setSession(null);
         setMyGalleries([]);
-        setBuilderOpen(true); // Keep open so they see the login form again
+        setBuilderOpen(true); // Show login form on sign out
       }
     });
 
@@ -132,9 +164,10 @@ const App: React.FC = () => {
       const encoded = params.get('gallery');
       if (encoded) return encoded;
       
-      // Ignore auth hashes
+      // Ignore auth hashes or codes to prevent conflict
       const hash = window.location.hash;
       if (hash.includes('access_token') || hash.includes('type=recovery')) return null;
+      if (window.location.search.includes('code=')) return null;
 
       const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
       return hashParams.get('gallery');
