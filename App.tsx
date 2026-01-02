@@ -46,7 +46,7 @@ const App: React.FC = () => {
   
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
-  const [mediaScale, setMediaScale] = useState(1);
+  const [mediaScale, setMediaScale] = useState1.51);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
 
@@ -444,8 +444,20 @@ const App: React.FC = () => {
         onClear={handleClear}
         onSave={handleSaveGallery}
         onCopyLink={handleCopyLink}
-        onLoadGallery={(slug) => { loadGalleryRecord(slug); }}
-        onGoogleLogin={handleGoogleLogin}
+        onLoadGallery={async (slug) => { 
+          try {
+            const record = await loadGalleryRecord(slug); 
+            if (record) {
+              const link = applyLoadedRecord(record);
+              window.history.replaceState(null, '', link);
+              const urls = record.items.map(i => i.originalUrl).join('\n');
+              setInputValue(urls);
+            }
+          } catch (err) {
+            console.error('Load error:', err);
+            setLoadError('Failed to load gallery');
+          }
+        }}        onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
       />
