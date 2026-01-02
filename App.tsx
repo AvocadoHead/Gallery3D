@@ -45,7 +45,7 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
   // --- Gallery Configuration (Defaults) ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('tile'); // Default to Masonry
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
   const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
@@ -341,13 +341,22 @@ const App: React.FC = () => {
 
       {/* Header */}
       <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        <button onClick={() => setBuilderOpen(true)} className="group text-left">
-          <h1 className="text-3xl font-light text-slate-800 tracking-tighter group-hover:text-slate-900 transition-colors">Aether</h1>
+        <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button */}
+        <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Open menu">
+          <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        {/* Title */}
+        <div>
+          <h1 className="text-3xl font-light text-slate-800 tracking-tighter  transition-colors">Aether</h1>
           <div className="flex items-center gap-2">
-            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 group-hover:text-slate-600 transition-colors">Gallery</p>
+            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
             {displayName && <span className="text-[11px] bg-white/50 px-2 py-0.5 rounded-full border border-slate-200 text-slate-500">{displayName}</span>}
           </div>
-        </button>
+        </div>
+      </div>
         
         <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
             <button
