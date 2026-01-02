@@ -292,7 +292,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <OrbitControls
         enablePan={false}
         enableZoom
-        minDistance={Math.max(2, radius * 0.03)}
+        minDistance={Math.max(2, radius * 0.01)}
         maxDistance={Math.max(90, radius * 2.0)}
         autoRotate
         autoRotateSpeed={0.6}
