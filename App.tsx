@@ -46,8 +46,7 @@ const App: React.FC = () => {
   
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
-  const [mediaScale, setMediaScale] = useState1.51);
-  const [sphereBase, setSphereBase] = useState(62);
+  const [mediaScale, setMediaScale] = useState(1.5);  const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
 
   // --- Data State ---
