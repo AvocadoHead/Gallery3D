@@ -312,8 +312,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                  <span className="text-xs font-bold text-slate-700">Card Scale</span>
                                  <span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
                               </div>
-                <input type="range" min={0.5} max={2.0} step={0.1} value={props.mediaScale} onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} className="w-full accent-slate-900" />                           </div>
-                           
+                <input type="range" min={0.5} max={3.0} step={0.1} value={props.mediaScale} onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} className="w-full accent-slate-900" />                           
                            {props.viewMode === 'sphere' && (
                               <div className="space-y-2">
                                  <div className="flex justify-between">
