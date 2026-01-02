@@ -1,4 +1,9 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
+      {/* ZOOM CONTROLS: You can tweak these settings to adjust zoom behavior:
+       * minDistance (line 290): Lower value = zoom in closer (default: radius * 0.03)
+       * maxDistance (line 291): Higher value = zoom out further (default: radius * 2.0)
+       * zoomSpeed (line 296): Higher value = faster zoom (default: 6.0)
+       */}
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -287,13 +292,13 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <OrbitControls
         enablePan={false}
         enableZoom
-        minDistance={Math.max(2, radius * 0.08)}
-        maxDistance={Math.max(90, radius * 1.35)}
+        minDistance={Math.max(2, radius * 0.03)}
+        maxDistance={Math.max(90, radius * 2.0)}
         autoRotate
         autoRotateSpeed={0.6}
         dampingFactor={0.08}
         rotateSpeed={0.55}
-        zoomSpeed={4.5}
+        zoomSpeed={6.0}
       />
     </>
   );
