@@ -137,6 +137,25 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   }, [hovered, muted, useVideo]);
 
   useEffect(() => {
+    if (!useVideo) return;
+    let raf: number;
+    const fadeVolume = () => {
+      if (!videoRef.current) return;
+      const target = hovered ? 0.9 : 0;
+      const current = videoRef.current.volume;
+      const step = 0.08;
+      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
+      videoRef.current.volume = next;
+      const shouldMute = next < 0.05;
+      if (muted !== shouldMute) setMuted(shouldMute);
+      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
+    };
+
+    raf = requestAnimationFrame(fadeVolume);
+    return () => cancelAnimationFrame(raf);
+  }, [hovered, muted, useVideo]);
+
+  useEffect(() => {
     setComputedSize((prev) => {
       const aspect = prev.width && prev.height ? prev.width / prev.height : item.aspectRatio;
       return normalizeSize(aspect, scale);

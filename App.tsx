@@ -48,7 +48,7 @@ const App: React.FC = () => {
 
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
-  const [mediaScale, setMediaScale] = useState(1.5);  
+  const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
 
@@ -76,21 +76,6 @@ const App: React.FC = () => {
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
   const authProcessing = useRef(false);
-
-  // Load Parameters (Removed the manual resize listener)
-  useEffect(() => {
-    // URL Params
-    const params = new URLSearchParams(window.location.search);
-    const layout = params.get('layout');
-    const scale = params.get('scale');
-    const radius = params.get('radius');
-    const gap = params.get('gap');
-    
-    if (layout) setViewMode(layout as 'sphere' | 'tile');
-    if (scale) setMediaScale(parseInt(scale) / 100);
-    if (radius) setSphereBase(parseInt(radius));
-    if (gap) setTileGap(parseInt(gap));
-  }, []);
 
   // --- AUTH LOGIC ---
   useEffect(() => {
@@ -313,46 +298,19 @@ const App: React.FC = () => {
   };
 
   const generateShareLink = useCallback(() => {
-    let link = '';
     if (savedGalleryId) {
-        link = `${shareBase}/?gallery=${savedGalleryId}`;
-    } else if (galleryItems.length) {
-        link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
+      return `${shareBase}/?gallery=${savedGalleryId}`;
     }
 
-    if (!link) return window.location.href; 
-
-    const url = new URL(link);
-    url.searchParams.delete('layout');
-    url.searchParams.delete('scale');
-    url.searchParams.delete('radius');
-    url.searchParams.delete('gap');
-
-    url.searchParams.set('layout', viewMode);
-    url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
-    
-    if (viewMode === 'sphere') {
-        url.searchParams.set('radius', sphereBase.toString());
-    } else if (viewMode === 'tile') {
-        url.searchParams.set('gap', tileGap.toString());
+    if (galleryItems.length) {
+      return `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
     }
-    
-    return url.toString();
-  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
+
+    return window.location.href;
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail]);
 
   const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
-    let link = specificLink;
-    if (!link) link = generateShareLink();
-    else {
-        const url = new URL(link);
-        if (!url.searchParams.has('layout')) {
-             url.searchParams.set('layout', viewMode);
-             url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
-             if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
-             if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
-             link = url.toString();
-        }
-    }
+    const link = specificLink || generateShareLink();
 
     try {
       await navigator.clipboard.writeText(link);
@@ -394,17 +352,12 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
-            {/* 
-               CRITICAL FIX: 
-               Reverted Camera Position to fixed [0,0,65] and FOV 50.
-               Removing 'isMobile' conditionals here prevents hydration errors and scene jumps.
-            */}
             <Canvas camera={{ position: [0, 0, 65], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
               <GalleryScene
                 onSelect={setSelectedItem}
                 items={galleryItems}
                 clearing={isClearing}
-                cardScale={mediaScale} // Removed dynamic mobile scaling
+                cardScale={mediaScale} 
                 radiusBase={sphereBase}
               />
             </Canvas>
