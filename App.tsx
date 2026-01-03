@@ -408,6 +408,7 @@ const App: React.FC = () => {
                 clearing={isClearing}
                 cardScale={isMobile ? mediaScale * 1.2 : mediaScale} 
                 radiusBase={sphereBase}
+                isMobile={isMobile}
               />
             </Canvas>
           </Suspense>
