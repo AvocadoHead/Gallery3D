@@ -13,6 +13,7 @@ interface ItemProps {
   radius: number;
   clearing: boolean;
   scale: number;
+  isMobile: boolean; // New prop
 }
 
 const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
@@ -35,16 +36,17 @@ const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
   return { width, height };
 };
 
-const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }: ItemProps) => {
+const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale, isMobile }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [muted, setMuted] = useState(true);
+  
   const hasDedicatedPreview = useMemo(
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
     [item.fallbackPreview, item.previewUrl, item.videoUrl],
   );
+  
   const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
   const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() =>
@@ -52,28 +54,21 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   );
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  useEffect(() => {
-    // Staggered entry animation
-    const timeout = setTimeout(() => {
-      setMounted(true);
-    }, index * 20); 
-    return () => clearTimeout(timeout);
-  }, [index]);
-
   useFrame((state) => {
     if (!groupRef.current) return;
-    // Billboard behavior: always face the camera
     groupRef.current.lookAt(state.camera.position);
-
-    const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
-    if (edgeTilt > 0) {
-      groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
+    
+    // Only do the edge tilt calculation on Desktop to save resources on Mobile
+    if (!isMobile) {
+        const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
+        if (edgeTilt > 0) {
+          groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
+        }
     }
   });
 
   useEffect(() => {
     if (!useVideo || !videoRef.current) return;
-
     const play = () => {
       const el = videoRef.current!;
       const promise = el.play();
@@ -81,37 +76,31 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         promise.catch(() => {});
       }
     };
-
     play();
   }, [item.previewUrl, useVideo]);
 
   useEffect(() => {
     if (!useVideo || !videoRef.current) return;
     const el = videoRef.current;
-    const promise = el.play();
-    if (promise && typeof promise.then === 'function') {
-      promise.catch(() => {});
+    if (hovered) {
+        const promise = el.play();
+        if (promise && typeof promise.then === 'function') promise.catch(() => {});
+    } else {
+        // Pause on mobile when not hovered, or if desired on desktop too
+        if (isMobile) el.pause();
     }
-  }, [hovered, useVideo]);
+  }, [hovered, useVideo, isMobile]);
 
   useEffect(() => {
     if (!useVideo) return;
-    let raf: number;
-    const fadeVolume = () => {
-      if (!videoRef.current) return;
-      const target = hovered ? 0.9 : 0;
-      const current = videoRef.current.volume;
-      const step = 0.08;
-      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
-      videoRef.current.volume = next;
-      const shouldMute = next < 0.05;
-      if (muted !== shouldMute) setMuted(shouldMute);
-      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
-    };
-
-    raf = requestAnimationFrame(fadeVolume);
-    return () => cancelAnimationFrame(raf);
-  }, [hovered, muted, useVideo]);
+    if (!videoRef.current) return;
+    if (hovered) {
+        videoRef.current.muted = false;
+        videoRef.current.volume = 1;
+    } else {
+        videoRef.current.muted = true;
+    }
+  }, [hovered, useVideo]);
 
   useEffect(() => {
     setComputedSize((prev) => {
@@ -134,7 +123,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
           alt="embed preview"
           className={`
             w-full h-full object-contain rounded-xl
-            transition-opacity duration-500
             ${loaded ? 'opacity-100' : 'opacity-0'}
           `}
           onLoad={(e) => {
@@ -156,13 +144,11 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
           src={videoSource}
           className={`
             w-full h-full object-contain rounded-xl
-            transition-opacity duration-500
             ${loaded ? 'opacity-100' : 'opacity-0'}
           `}
-          autoPlay
           playsInline
           loop
-          muted={muted}
+          muted={true} 
           preload="metadata"
           onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
           onLoadedData={() => setLoaded(true)}
@@ -182,7 +168,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         alt="art"
         className={`
           w-full h-full object-contain rounded-xl
-          transition-opacity duration-500
           ${loaded ? 'opacity-100' : 'opacity-0'}
         `}
         onLoad={(e) => {
@@ -195,54 +180,72 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     );
   };
 
-  return (
-    <group position={position} ref={groupRef}>
-      <Float
-        speed={1.5} 
-        rotationIntensity={0.05} 
-        floatIntensity={0.5} 
-        floatingRange={[-0.1, 0.1]}
+  // The actual HTML content of the card
+  const CardContent = (
+    <Html 
+        transform 
+        distanceFactor={12} 
+        zIndexRange={[100, 0]}
+        style={{ 
+            pointerEvents: 'none',
+            willChange: 'transform' 
+        }} 
       >
-        <Html transform occlude="blending" distanceFactor={12} zIndexRange={[100, 0]}>
-          <div
+        <div
             className={`
               relative group cursor-pointer select-none
-              transition-all duration-700 ease-out
-              ${mounted && !clearing ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
-              ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
+              ${clearing ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}
+              ${hovered ? 'z-50' : 'z-0'}
             `}
+            style={{
+              width: `${computedSize.width}px`,
+              height: `${computedSize.height}px`,
+              pointerEvents: 'auto',
+              transition: 'transform 0.1s ease-out, opacity 0.3s' 
+            }}
             onClick={(e) => {
               e.stopPropagation();
               onClick(item);
             }}
             onPointerEnter={() => setHover(true)}
             onPointerLeave={() => setHover(false)}
-            style={{
-              width: `${computedSize.width}px`,
-              height: `${computedSize.height}px`,
-            }}
           >
-            {/* Card Container */}
             <div
               className={`
-                w-full h-full bg-white rounded-2xl p-2 shadow-xl
-                transition-all duration-300
-                ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
+                w-full h-full bg-white rounded-2xl p-2
+                ${hovered ? 'shadow-2xl ring-2 ring-white/50 scale-105' : 'shadow-lg'}
               `}
+              style={{ transition: 'transform 0.2s ease-out, box-shadow 0.2s' }}
             >
-              {/* Media Container */}
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
                 {renderMedia()}
                 {!loaded && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/40">
-                    <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-slate-600 rounded-full animate-spin" />
                   </div>
                 )}
               </div>
             </div>
           </div>
-        </Html>
-      </Float>
+      </Html>
+  );
+
+  return (
+    <group position={position} ref={groupRef}>
+      {/* CONDITIONAL FLOAT: Only float on desktop (!isMobile) */}
+      {!isMobile ? (
+        <Float
+            speed={1.5} 
+            rotationIntensity={0.05} 
+            floatIntensity={0.5} 
+            floatingRange={[-0.1, 0.1]}
+        >
+            {CardContent}
+        </Float>
+      ) : (
+        // On mobile, just render the content static to prevent jitter/crashes
+        CardContent
+      )}
     </group>
   );
 };
@@ -254,19 +257,20 @@ interface GallerySceneProps {
   clearing: boolean;
   cardScale: number;
   radiusBase: number;
+  isMobile: boolean; // Added prop
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
-  // Fix Issue 7: Increased max clamp from 95 to 200 to allow larger radius
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase, isMobile }) => {
   const radius = Math.max(
     24,
     Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
+  
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
     <>
-      <ambientLight intensity={1} />
+      <ambientLight intensity={1.2} />
       <Environment preset="city" />
 
       <group>
@@ -280,6 +284,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
             radius={radius}
             clearing={clearing}
             scale={cardScale}
+            isMobile={isMobile} // Pass it down
           />
         ))}
       </group>
