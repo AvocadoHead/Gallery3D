@@ -61,15 +61,24 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   
   if (!props.isOpen) return null;
 
+  // Combined action: Copy link + Show Local Toast on Button + Open Menu
   const handleShareClick = async () => {
+    // 1. Get the authoritative link from App.tsx (contains all slider params)
     const link = props.getShareLink();
+    
+    // 2. Perform copy
     try {
       await navigator.clipboard.writeText(link);
+      
+      // 3. Show local success state on the button
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
+      
+      // 4. Open the dropdown menu
       setShowShareMenu(true);
     } catch (err) {
       console.error('Failed to copy', err);
+      // Even if copy fails (rare), we show the menu so user can click social links
       setShowShareMenu(true);
     }
   };
@@ -90,6 +99,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
+      {/* Overflow visible to allow the drop-up menu to show */}
       <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
         
         {/* --- SIDEBAR --- */}
@@ -233,3 +243,266 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                            {props.myGalleries.map(g => (
                               <div key={g.id} className="group flex items-center justify-between p-4 bg-white border border-slate-100 rounded-xl hover:border-slate-300 hover:shadow-sm transition">
                                  <div className="min-w-0">
+                                    <h4 className="font-bold text-slate-800 text-sm truncate">{g.display_name || 'Untitled Gallery'}</h4>
+                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">{new Date(g.updated_at).toLocaleDateString()} • {g.slug || g.id}</p>
+                                 </div>
+                                 <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                       onClick={() => props.onLoadGallery(g.slug || g.id)}
+                                       className="px-3 py-1.5 bg-slate-50 hover:bg-slate-900 hover:text-white text-slate-600 text-xs font-bold rounded-lg transition"
+                                    >
+                                       Edit / Load
+                                    </button>
+                                    <button 
+                                       onClick={() => props.onCopyLink(`${window.location.origin}/?gallery=${g.slug || g.id}`, false)}
+                                       className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                       title="Copy Link"
+                                    >
+                                       <IconShare />
+                                    </button>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     )}
+                  </div>
+               )}
+
+               {/* === SETTINGS TAB === */}
+               {activeTab === 'settings' && (
+                  <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300">
+                     <h3 className="text-lg font-bold text-slate-800">Visual Settings</h3>
+                     
+                     <div className="space-y-4">
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Layout Mode</span>
+                           <div className="grid grid-cols-2 gap-2 mt-2">
+                              <button 
+                                 onClick={() => props.setViewMode('sphere')}
+                                 className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                              >
+                                 Sphere
+                              </button>
+                              <button 
+                                 onClick={() => props.setViewMode('tile')}
+                                 className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                              >
+                                 Masonry
+                              </button>
+                           </div>
+                        </label>
+
+                        <div className="space-y-6 pt-4 border-t border-slate-100">
+                           <div className="space-y-2">
+                              <div className="flex justify-between">
+                                 <span className="text-xs font-bold text-slate-700">Card Scale</span>
+                                 <span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min={0.5} 
+                                max={3.0} 
+                                step={0.1} 
+                                value={props.mediaScale} 
+                                onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} 
+                                className="w-full accent-slate-900 py-4 sm:py-2" 
+                              />
+                           </div>                         
+                           {props.viewMode === 'sphere' && (
+                              <div className="space-y-2">
+                                 <div className="flex justify-between">
+                                    <span className="text-xs font-bold text-slate-700">Sphere Radius</span>
+                                    <span className="text-xs text-slate-400">{props.sphereBase}</span>
+                                 </div>
+                                 <input 
+                                    type="range" 
+                                    min={20} 
+                                    max={200} 
+                                    step={5} 
+                                    value={props.sphereBase} 
+                                    onChange={(e) => props.setSphereBase(parseFloat(e.target.value))} 
+                                    className="w-full accent-slate-900 py-4 sm:py-2" 
+                                 />
+                              </div>
+                           )}
+
+                           {props.viewMode === 'tile' && (
+                              <div className="space-y-2">
+                                 <div className="flex justify-between">
+                                    <span className="text-xs font-bold text-slate-700">Grid Gap</span>
+                                    <span className="text-xs text-slate-400">{props.tileGap}px</span>
+                                 </div>
+                                 <input 
+                                    type="range" 
+                                    min={0} 
+                                    max={30} 
+                                    step={1} 
+                                    value={props.tileGap} 
+                                    onChange={(e) => props.setTileGap(parseFloat(e.target.value))} 
+                                    className="w-full accent-slate-900 py-4 sm:py-2" 
+                                 />
+                              </div>
+                           )}
+                           
+                           {/* Save Settings Button - Correctly placed */}
+                           {props.session && props.savedGalleryId && (
+                              <button
+                                onClick={() => props.onSave(false)}
+                                disabled={props.isSaving}
+                                className="w-full mt-6 bg-slate-900 text-white text-sm font-bold py-3 rounded-xl hover:bg-slate-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {props.isSaving ? 'Saving Settings...' : 'Save Appearance Settings'}
+                              </button>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+               )}
+
+               {/* === SUPPORT TAB === */}
+               {activeTab === 'support' && (
+                  <div className="space-y-6 animate-in fade-in duration-300 pb-8">
+                     <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+                        <h3 className="text-xl font-bold">Support the Project</h3>
+                        <p className="text-indigo-100 text-sm mt-2 opacity-90">Your contributions help keep Aether free and open for everyone.</p>
+                     </div>
+                     
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
+                             <img 
+                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" 
+                               alt="Bit QR" 
+                               className="w-full h-full object-cover mix-blend-multiply" 
+                             />
+                           </div>
+                           <div className="text-center">
+                              <span className="block font-bold text-slate-800 text-sm">Bit</span>
+                              <a href="https://bitpay.co.il" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
+                           </div>
+                         </div>
+
+                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
+                             <img 
+                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" 
+                               alt="PayBox QR" 
+                               className="w-full h-full object-cover mix-blend-multiply" 
+                             />
+                           </div>
+                           <div className="text-center">
+                              <span className="block font-bold text-slate-800 text-sm">Paybox</span>
+                              <a href="https://links.payboxapp.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
+                           </div>
+                         </div>
+
+                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
+                             <img 
+                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" 
+                               alt="Coffee QR" 
+                               className="w-full h-full object-cover mix-blend-multiply" 
+                             />
+                           </div>
+                           <div className="text-center">
+                              <span className="block font-bold text-slate-800 text-sm">Buy me Coffee</span>
+                              <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
+                           </div>
+                         </div>
+                     </div>
+                     <div className="text-center text-xs text-slate-400">
+                        054-773-1650 (Direct)
+                     </div>
+                  </div>
+               )}
+            </div>
+
+            {/* === FOOTER ACTION BAR (STICKY) === */}
+            {activeTab === 'editor' && (
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 z-10">
+                    <div className="pt-2">
+                        {!props.session ? (
+                           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-center justify-between">
+                              <p className="text-xs text-amber-800 font-medium">Log in to save this gallery.</p>
+                              <button onClick={() => setActiveTab('library')} className="text-xs bg-white border border-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-100 shadow-sm">Login</button>
+                           </div>
+                        ) : (
+                           <div className="flex gap-2 mb-2">
+                                 {props.savedGalleryId ? (
+                                    <>
+                                       <button 
+                                          onClick={() => props.onSave(false)}
+                                          disabled={props.isSaving}
+                                          className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
+                                       >
+                                          {props.isSaving ? 'Updating...' : 'Update'}
+                                       </button>
+                                       <button 
+                                          onClick={() => props.onSave(true)}
+                                          disabled={props.isSaving}
+                                          className="px-4 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-200 transition shadow-sm"
+                                          title="Save as a new copy"
+                                       >
+                                          New
+                                       </button>
+                                    </>
+                                 ) : (
+                                    <button 
+                                       onClick={() => props.onSave(true)}
+                                       disabled={props.isSaving}
+                                       className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition shadow-lg"
+                                    >
+                                       {props.isSaving ? 'Saving...' : 'Save Gallery'}
+                                    </button>
+                                 )}
+                           </div>
+                        )}
+                        
+                        <div className="relative">
+                            <button 
+                                onClick={handleShareClick}
+                                className={`w-full flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-lg border transition duration-200 ${
+                                    isCopied 
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                    : 'bg-slate-900 text-white hover:bg-slate-800 border-transparent shadow-lg'
+                                }`}
+                            >
+                                <IconShare /> 
+                                {isCopied ? 'Link Copied!' : 'Share Gallery'}
+                            </button>
+                            
+                             {showShareMenu && (
+                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
+                                 <button 
+                                   onClick={() => { 
+                                       const link = props.getShareLink();
+                                       window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); 
+                                       setShowShareMenu(false); 
+                                   }}
+                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"
+                                 >
+                                   <span className="text-[#25D366] text-lg">📱</span> WhatsApp
+                                 </button>
+                                 <button 
+                                   onClick={() => { 
+                                       const link = props.getShareLink();
+                                       window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(link)}`; 
+                                       setShowShareMenu(false); 
+                                   }}
+                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"
+                                 >
+                                   <span className="text-blue-600 text-lg">✉️</span> Email
+                                 </button>
+                               </div>
+                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BuilderModal;
