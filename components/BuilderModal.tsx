@@ -61,21 +61,25 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   
   if (!props.isOpen) return null;
 
-  // Combined action: Copy link + Show Toast on Button + Open Menu
+  // Combined action: Copy link + Show Local Toast on Button + Open Menu
   const handleShareClick = async () => {
-    const link = props.getShareLink(); // Get authoritative link from App.tsx
+    // 1. Get the authoritative link from App.tsx (contains all slider params)
+    const link = props.getShareLink();
     
+    // 2. Perform copy
     try {
       await navigator.clipboard.writeText(link);
       
-      // Show local success state on the button
+      // 3. Show local success state on the button
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
       
-      // Open the dropdown menu
+      // 4. Open the dropdown menu
       setShowShareMenu(true);
     } catch (err) {
       console.error('Failed to copy', err);
+      // Even if copy fails (rare), we show the menu so user can click social links
+      setShowShareMenu(true);
     }
   };
 
@@ -95,10 +99,11 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
-      <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
+      {/* Overflow visible to allow the drop-up menu to show */}
+      <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
         
         {/* --- SIDEBAR --- */}
-        <div className="w-full sm:w-64 bg-slate-50 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col p-4 shrink-0">
+        <div className="w-full sm:w-64 bg-slate-50 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col p-4 shrink-0 sm:rounded-l-3xl">
           <div className="px-4 py-2 mb-2 sm:mb-6 flex justify-between items-center sm:block">
             <div>
               <h2 className="text-xl font-bold text-slate-900 tracking-tight">Aether</h2>
@@ -148,7 +153,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
         </div>
 
         {/* --- MAIN CONTENT --- */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white relative h-full overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-white relative h-full overflow-hidden sm:rounded-r-3xl">
             <button 
                onClick={props.onClose} 
                className="hidden sm:flex absolute top-4 right-4 z-10 w-8 h-8 items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
