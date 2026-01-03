@@ -56,6 +56,8 @@ interface BuilderModalProps {
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'editor' | 'library' | 'settings' | 'support'>('editor');
   const [showToast, setShowToast] = useState(false);
+  // Change 4: Added menu state
+  const [showShareMenu, setShowShareMenu] = useState(false);
   
   if (!props.isOpen) return null;
 
@@ -275,21 +277,31 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                             Share current view (Copy Link)
                         </button>
                         
-                        {/* Fix Issue 5: Social Sharing Buttons */}
+                        {/* Change 4: Dropdown Menu instead of buttons */}
                         {props.savedGalleryId && (
-                           <div className="flex gap-2 mt-2">
-                              <button 
-                                 onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(constructShareUrl())}`)}
-                                 className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-[#25D366] hover:bg-[#22c35e] text-white text-xs font-bold rounded-lg transition"
-                              >
-                                 WhatsApp
-                              </button>
-                              <button 
-                                 onClick={() => window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(constructShareUrl())}`}
-                                 className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition"
-                              >
-                                 Email
-                              </button>
+                           <div className="relative mt-2">
+                             <button 
+                               onClick={() => setShowShareMenu(!showShareMenu)}
+                               className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold rounded-lg transition"
+                             >
+                               <IconShare /> Share via...
+                             </button>
+                             {showShareMenu && (
+                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
+                                 <button 
+                                   onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent(constructShareUrl())}`); setShowShareMenu(false); }}
+                                   className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                 >
+                                   <span className="text-[#25D366] text-lg">📱</span> WhatsApp
+                                 </button>
+                                 <button 
+                                   onClick={() => { window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(constructShareUrl())}`; setShowShareMenu(false); }}
+                                   className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                 >
+                                   <span className="text-blue-600 text-lg">✉️</span> Email
+                                 </button>
+                               </div>
+                             )}
                            </div>
                         )}
                      </div>
