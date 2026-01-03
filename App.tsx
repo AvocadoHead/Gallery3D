@@ -44,6 +44,8 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
+  // REMOVED: isMobile state (This was causing the display conflict)
+
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
   const [mediaScale, setMediaScale] = useState(1.5);  
@@ -75,7 +77,7 @@ const App: React.FC = () => {
 
   const authProcessing = useRef(false);
 
-  // Check Mobile & Load Parameters
+  // Load Parameters (Removed the manual resize listener)
   useEffect(() => {
     // URL Params
     const params = new URLSearchParams(window.location.search);
@@ -392,12 +394,17 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
+            {/* 
+               CRITICAL FIX: 
+               Reverted Camera Position to fixed [0,0,65] and FOV 50.
+               Removing 'isMobile' conditionals here prevents hydration errors and scene jumps.
+            */}
             <Canvas camera={{ position: [0, 0, 65], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
               <GalleryScene
                 onSelect={setSelectedItem}
                 items={galleryItems}
                 clearing={isClearing}
-                cardScale={mediaScale} 
+                cardScale={mediaScale} // Removed dynamic mobile scaling
                 radiusBase={sphereBase}
               />
             </Canvas>
