@@ -46,6 +46,7 @@ interface BuilderModalProps {
   onAddMedia: () => void;
   onClear: () => void;
   onSave: (asNew?: boolean) => void;
+  onStartNew: () => void; // New prop for creating fresh gallery
   onCopyLink: (link?: string, suppressToast?: boolean) => void;
   getShareLink: () => string;
   onLoadGallery: (slug: string) => void;
@@ -61,24 +62,15 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   
   if (!props.isOpen) return null;
 
-  // Combined action: Copy link + Show Local Toast on Button + Open Menu
   const handleShareClick = async () => {
-    // 1. Get the authoritative link from App.tsx (contains all slider params)
     const link = props.getShareLink();
-    
-    // 2. Perform copy
     try {
       await navigator.clipboard.writeText(link);
-      
-      // 3. Show local success state on the button
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
-      
-      // 4. Open the dropdown menu
       setShowShareMenu(true);
     } catch (err) {
       console.error('Failed to copy', err);
-      // Even if copy fails (rare), we show the menu so user can click social links
       setShowShareMenu(true);
     }
   };
@@ -99,7 +91,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
-      {/* Overflow visible to allow the drop-up menu to show */}
       <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
         
         {/* --- SIDEBAR --- */}
@@ -223,6 +214,15 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <div className="space-y-6 animate-in fade-in duration-300">
                      <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-800">My Galleries</h3>
+                        {/* New Button to Create Fresh Gallery */}
+                        {props.session && (
+                           <button 
+                              onClick={() => { props.onStartNew(); setActiveTab('editor'); }}
+                              className="text-xs bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg hover:bg-slate-800 shadow-sm"
+                           >
+                              + Create New
+                           </button>
+                        )}
                      </div>
 
                      {!props.session ? (
@@ -344,7 +344,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                               </div>
                            )}
                            
-                           {/* Save Settings Button - Correctly placed */}
+                           {/* Save Settings Button */}
                            {props.session && props.savedGalleryId && (
                               <button
                                 onClick={() => props.onSave(false)}
