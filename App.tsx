@@ -159,12 +159,12 @@ const App: React.FC = () => {
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
       
-      // Apply saved layout settings if they exist
-      if (record.layout_settings) {
-        if (record.layout_settings.viewMode) setViewMode(record.layout_settings.viewMode);
-        if (record.layout_settings.mediaScale) setMediaScale(record.layout_settings.mediaScale);
-        if (record.layout_settings.sphereBase) setSphereBase(record.layout_settings.sphereBase);
-        if (record.layout_settings.tileGap) setTileGap(record.layout_settings.tileGap);
+      // CHANGE 1: Use 'settings' instead of 'layout_settings'
+      if (record.settings) {
+        if (record.settings.viewMode) setViewMode(record.settings.viewMode);
+        if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
+        if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
+        if (record.settings.tileGap) setTileGap(record.settings.tileGap);
       }
 
       const id = record.slug || record.id;
@@ -265,8 +265,8 @@ const App: React.FC = () => {
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
-          // Save layout preferences
-          layout_settings: {
+          // CHANGE 2: Use 'settings' key instead of 'layout_settings'
+          settings: {
             viewMode,
             mediaScale,
             sphereBase,
