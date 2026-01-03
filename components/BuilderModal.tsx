@@ -55,8 +55,35 @@ interface BuilderModalProps {
 
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'editor' | 'library' | 'settings' | 'support'>('editor');
+  const [showToast, setShowToast] = useState(false);
   
   if (!props.isOpen) return null;
+
+  // Fix Issue 3 & 5: Construct share URL with params
+  const constructShareUrl = () => {
+    // Note: If no savedGalleryId, App.tsx handles the heavy encoding. 
+    // This helper is mainly for the social buttons when an ID exists or for current window fallback.
+    const baseUrl = window.location.origin;
+    const params = new URLSearchParams();
+    
+    if (props.savedGalleryId) {
+      params.set('gallery', props.savedGalleryId);
+    }
+    
+    // Add layout params
+    params.set('layout', props.viewMode);
+    params.set('scale', Math.round(props.mediaScale * 100).toString());
+    if (props.viewMode === 'sphere') params.set('radius', props.sphereBase.toString());
+    if (props.viewMode === 'tile') params.set('gap', props.tileGap.toString());
+
+    return `${baseUrl}/?${params.toString()}`;
+  };
+
+  const handleCopyLink = () => {
+    props.onCopyLink(); // App.tsx handles the clipboard logic
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2000);
+  };
 
   const NavItem = ({ id, label, icon: Icon }: any) => (
     <button
@@ -74,23 +101,34 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
-      <div className="w-[850px] max-w-full h-[600px] flex bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5">
+      {/* Fix Issue 8: Mobile Responsive Width */}
+      <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
         
         {/* --- SIDEBAR --- */}
-        <div className="w-64 bg-slate-50 border-r border-slate-100 flex flex-col p-4">
-          <div className="px-4 py-2 mb-6">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Aether</h2>
-            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Builder Tool</p>
+        {/* Fix Issue 9: Mobile Sidebar Navigation */}
+        <div className="w-full sm:w-64 bg-slate-50 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col p-4 shrink-0">
+          <div className="px-4 py-2 mb-2 sm:mb-6 flex justify-between items-center sm:block">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Aether</h2>
+              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Builder Tool</p>
+            </div>
+            {/* Mobile close button shown in header */}
+            <button 
+               onClick={props.onClose} 
+               className="sm:hidden w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600"
+            >
+               ×
+            </button>
           </div>
 
-          <nav className="flex-1 space-y-2">
+          <nav className="flex sm:flex-col space-x-2 sm:space-x-0 sm:space-y-2 overflow-x-auto pb-2 sm:pb-0">
             <NavItem id="editor" label="Editor" icon={IconEdit} />
             <NavItem id="library" label="My Galleries" icon={IconLibrary} />
             <NavItem id="settings" label="Appearance" icon={IconSettings} />
             <NavItem id="support" label="Support" icon={IconHeart} />
           </nav>
 
-          <div className="mt-auto pt-4 border-t border-slate-200 space-y-3">
+          <div className="mt-auto pt-4 border-t border-slate-200 space-y-3 hidden sm:block">
             {!props.session ? (
               <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                 <p className="text-xs text-slate-500 mb-3 font-medium">Save your work</p>
@@ -119,15 +157,22 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
         </div>
 
         {/* --- MAIN CONTENT --- */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white relative">
+        <div className="flex-1 flex flex-col min-w-0 bg-white relative h-full overflow-hidden">
             <button 
                onClick={props.onClose} 
-               className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+               className="hidden sm:flex absolute top-4 right-4 z-10 w-8 h-8 items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
             >
                ×
             </button>
 
-            <div className="flex-1 overflow-y-auto p-8">
+            {/* Fix Issue 4: Toast Inside Modal */}
+            {showToast && (
+               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-in fade-in zoom-in slide-in-from-top-2 duration-300">
+                  Link Copied!
+               </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
                {props.loadError && (
                   <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm flex items-center gap-2">
                      <span className="font-bold">Error:</span> {props.loadError}
@@ -136,7 +181,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                {/* === EDITOR TAB === */}
                {activeTab === 'editor' && (
-                  <div className="space-y-6 max-w-lg mx-auto animate-in fade-in duration-300">
+                  <div className="space-y-6 max-w-lg mx-auto animate-in fade-in duration-300 pb-8">
                      <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-800">Gallery Content</h3>
                         <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">{props.galleryItemsCount} items</span>
@@ -226,16 +271,34 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                               </div>
                            </div>
                         )}
-                        <button onClick={() => props.onCopyLink()} className="w-full mt-2 py-2 text-slate-400 hover:text-slate-600 text-xs font-medium transition">
+                        <button onClick={handleCopyLink} className="w-full mt-2 py-2 text-slate-400 hover:text-slate-600 text-xs font-medium transition">
                             Share current view (Copy Link)
                         </button>
+                        
+                        {/* Fix Issue 5: Social Sharing Buttons */}
+                        {props.savedGalleryId && (
+                           <div className="flex gap-2 mt-2">
+                              <button 
+                                 onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(constructShareUrl())}`)}
+                                 className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-[#25D366] hover:bg-[#22c35e] text-white text-xs font-bold rounded-lg transition"
+                              >
+                                 WhatsApp
+                              </button>
+                              <button 
+                                 onClick={() => window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(constructShareUrl())}`}
+                                 className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition"
+                              >
+                                 Email
+                              </button>
+                           </div>
+                        )}
                      </div>
                   </div>
                )}
 
                {/* === LIBRARY TAB === */}
                {activeTab === 'library' && (
-                  <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="space-y-6 animate-in fade-in duration-300 pb-8">
                      <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-800">My Galleries</h3>
                      </div>
@@ -247,6 +310,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                            </div>
                            <p className="text-sm font-bold text-slate-700">Authentication Required</p>
                            <p className="text-xs text-slate-500 mt-1 mb-4 max-w-xs">Log in with Google via the sidebar to access your saved collections.</p>
+                           <button onClick={() => props.onGoogleLogin()} className="sm:hidden px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg">Login with Google</button>
                         </div>
                      ) : (
                         <div className="space-y-2">
@@ -284,7 +348,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                {/* === SETTINGS TAB === */}
                {activeTab === 'settings' && (
-                  <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300">
+                  <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300 pb-8">
                      <h3 className="text-lg font-bold text-slate-800">Visual Settings</h3>
                      
                      <div className="space-y-4">
@@ -312,6 +376,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                  <span className="text-xs font-bold text-slate-700">Card Scale</span>
                                  <span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
                               </div>
+                              {/* Fix Issue 10: Larger padding for touch targets */}
                               <input 
                                 type="range" 
                                 min={0.5} 
@@ -319,7 +384,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                 step={0.1} 
                                 value={props.mediaScale} 
                                 onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} 
-                                className="w-full accent-slate-900" 
+                                className="w-full accent-slate-900 py-4 sm:py-2" 
                               />
                            </div>                         
                            {props.viewMode === 'sphere' && (
@@ -328,7 +393,16 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                     <span className="text-xs font-bold text-slate-700">Sphere Radius</span>
                                     <span className="text-xs text-slate-400">{props.sphereBase}</span>
                                  </div>
-                                 <input type="range" min={40} max={120} step={2} value={props.sphereBase} onChange={(e) => props.setSphereBase(parseFloat(e.target.value))} className="w-full accent-slate-900" />
+                                 {/* Fix Issue 1: Extended range 20-200, larger step */}
+                                 <input 
+                                    type="range" 
+                                    min={20} 
+                                    max={200} 
+                                    step={5} 
+                                    value={props.sphereBase} 
+                                    onChange={(e) => props.setSphereBase(parseFloat(e.target.value))} 
+                                    className="w-full accent-slate-900 py-4 sm:py-2" 
+                                 />
                               </div>
                            )}
 
@@ -338,7 +412,15 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                     <span className="text-xs font-bold text-slate-700">Grid Gap</span>
                                     <span className="text-xs text-slate-400">{props.tileGap}px</span>
                                  </div>
-                                 <input type="range" min={0} max={30} step={1} value={props.tileGap} onChange={(e) => props.setTileGap(parseFloat(e.target.value))} className="w-full accent-slate-900" />
+                                 <input 
+                                    type="range" 
+                                    min={0} 
+                                    max={30} 
+                                    step={1} 
+                                    value={props.tileGap} 
+                                    onChange={(e) => props.setTileGap(parseFloat(e.target.value))} 
+                                    className="w-full accent-slate-900 py-4 sm:py-2" 
+                                 />
                               </div>
                            )}
                         </div>
@@ -348,7 +430,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                {/* === SUPPORT TAB === */}
                {activeTab === 'support' && (
-                  <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="space-y-6 animate-in fade-in duration-300 pb-8">
                      <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
                         <h3 className="text-xl font-bold">Support the Project</h3>
                         <p className="text-indigo-100 text-sm mt-2 opacity-90">Your contributions help keep Aether free and open for everyone.</p>
