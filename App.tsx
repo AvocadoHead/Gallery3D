@@ -44,6 +44,8 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
+  // REMOVED: isMobile state (This was causing the display conflict)
+
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
   const [mediaScale, setMediaScale] = useState(1);

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { getSphereCoordinates, MediaItem } from '../constants';
 
 // --- Single Gallery Item ---
+// Removed 'isMobile' from interface to match the working logic
 interface ItemProps {
   item: MediaItem;
   position: [number, number, number];
@@ -47,6 +48,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   );
   const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
   const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
+  
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() =>
     normalizeSize(item.aspectRatio, scale),
   );
@@ -94,6 +96,45 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
       promise.catch(() => {});
     }
   }, [hovered, useVideo]);
+
+  // Restored: Smooth audio fading (The "Failing" version removed this for "optimization" but broke the UX)
+  useEffect(() => {
+    if (!useVideo) return;
+    let raf: number;
+    const fadeVolume = () => {
+      if (!videoRef.current) return;
+      const target = hovered ? 0.9 : 0;
+      const current = videoRef.current.volume;
+      const step = 0.08;
+      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
+      videoRef.current.volume = next;
+      const shouldMute = next < 0.05;
+      if (muted !== shouldMute) setMuted(shouldMute);
+      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
+    };
+
+    raf = requestAnimationFrame(fadeVolume);
+    return () => cancelAnimationFrame(raf);
+  }, [hovered, muted, useVideo]);
+
+  useEffect(() => {
+    if (!useVideo) return;
+    let raf: number;
+    const fadeVolume = () => {
+      if (!videoRef.current) return;
+      const target = hovered ? 0.9 : 0;
+      const current = videoRef.current.volume;
+      const step = 0.08;
+      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
+      videoRef.current.volume = next;
+      const shouldMute = next < 0.05;
+      if (muted !== shouldMute) setMuted(shouldMute);
+      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
+    };
+
+    raf = requestAnimationFrame(fadeVolume);
+    return () => cancelAnimationFrame(raf);
+  }, [hovered, muted, useVideo]);
 
   useEffect(() => {
     if (!useVideo) return;
