@@ -43,6 +43,7 @@ const App: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
@@ -57,9 +58,9 @@ const App: React.FC = () => {
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   
-  // Separate DB ID (UUID) from Slug (Display ID)
-  const [savedGalleryId, setSavedGalleryId] = useState(''); 
-  const [galleryDbId, setGalleryDbId] = useState<string | null>(null);
+  // Separate DB ID (UUID) from Slug (Display ID) to fix save errors
+  const [savedGalleryId, setSavedGalleryId] = useState(''); // Slug/Public ID
+  const [galleryDbId, setGalleryDbId] = useState<string | null>(null); // Real UUID
   
   const [isClearing, setIsClearing] = useState(false);
 
@@ -75,8 +76,14 @@ const App: React.FC = () => {
 
   const authProcessing = useRef(false);
 
-  // Load Parameters from Share URL on startup
+  // Check Mobile & Load Parameters
   useEffect(() => {
+    // Mobile Check
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    // URL Params
     const params = new URLSearchParams(window.location.search);
     const layout = params.get('layout');
     const scale = params.get('scale');
@@ -87,6 +94,8 @@ const App: React.FC = () => {
     if (scale) setMediaScale(parseInt(scale) / 100);
     if (radius) setSphereBase(parseInt(radius));
     if (gap) setTileGap(parseInt(gap));
+
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // --- AUTH LOGIC ---
@@ -164,8 +173,8 @@ const App: React.FC = () => {
       setContactEmail(record.contact_email || '');
       
       // Store IDs
-      setGalleryDbId(record.id); 
-      setSavedGalleryId(record.slug || record.id); 
+      setGalleryDbId(record.id); // UUID
+      setSavedGalleryId(record.slug || record.id); // Display ID
       
       // Apply saved settings
       if (record.settings) {
@@ -257,7 +266,6 @@ const App: React.FC = () => {
     }, 650);
   };
 
-  // Reset everything to start a fresh gallery
   const handleStartNew = () => {
     setGalleryItems([]);
     setInputValue('');
@@ -270,7 +278,6 @@ const App: React.FC = () => {
     window.history.replaceState(null, '', window.location.pathname);
   };
 
-  // Changed to accept boolean directly to fix mismatch with Modal
   const handleSaveGallery = async (asNew: boolean = false) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
@@ -279,7 +286,6 @@ const App: React.FC = () => {
 
     setIsSaving(true);
     try {
-      // If asNew is true, we force ID to undefined to create a new record
       const idToUse = asNew ? undefined : galleryDbId || undefined;
       const slugToUse = asNew ? undefined : savedGalleryId || undefined;
       
@@ -344,7 +350,6 @@ const App: React.FC = () => {
     let link = specificLink;
     if (!link) link = generateShareLink();
     else {
-        // Ensure params are on list links too
         const url = new URL(link);
         if (!url.searchParams.has('layout')) {
              url.searchParams.set('layout', viewMode);
@@ -395,12 +400,13 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
-            <Canvas camera={{ position: [0, 0, 65], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
+            {/* Fix Mobile Scale: Move camera back on mobile */}
+            <Canvas camera={{ position: [0, 0, isMobile ? 85 : 65], fov: isMobile ? 60 : 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
               <GalleryScene
                 onSelect={setSelectedItem}
                 items={galleryItems}
                 clearing={isClearing}
-                cardScale={mediaScale}
+                cardScale={isMobile ? mediaScale * 1.2 : mediaScale} 
                 radiusBase={sphereBase}
               />
             </Canvas>
@@ -529,7 +535,7 @@ const App: React.FC = () => {
         onAddMedia={handleAddMedia}
         onClear={handleClear}
         onSave={handleSaveGallery}
-        onStartNew={handleStartNew} // New Prop
+        onStartNew={handleStartNew}
         onCopyLink={() => handleCopyLink()} 
         getShareLink={generateShareLink}
         onLoadGallery={async (slug) => { 
