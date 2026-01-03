@@ -45,7 +45,7 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
   // --- Gallery Configuration (Defaults) ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); 
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
   const [mediaScale, setMediaScale] = useState(1.5);  
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
@@ -71,7 +71,7 @@ const App: React.FC = () => {
 
   const authProcessing = useRef(false);
 
-  // Load Parameters from Share URL
+  // Fix Issue 6: Load Parameters from Share URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const layout = params.get('layout');
@@ -308,14 +308,16 @@ const App: React.FC = () => {
     return url.toString();
   }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
 
-  const handleCopyLink = async (specificLink?: string) => {
+  const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
     const link = specificLink || generateShareLink();
     if (!link) return;
 
     try {
       await navigator.clipboard.writeText(link);
-      setToastVisible(true);
-      setTimeout(() => setToastVisible(false), 2000);
+      if (!suppressToast) {
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 2000);
+      }
     } catch (err) {
       console.warn('Clipboard error', err);
     }
