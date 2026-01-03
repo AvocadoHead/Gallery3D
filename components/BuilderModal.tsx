@@ -47,8 +47,8 @@ interface BuilderModalProps {
   onAddMedia: () => void;
   onClear: () => void;
   onSave: (asNew?: boolean) => void;
-  onCopyLink: (link?: string, suppressToast?: boolean) => void;
-  getShareLink?: () => string;
+  onCopyLink: () => void; // Kept for generic usage, but unused locally now
+  getShareLink: () => string; // Required for local copying
   onLoadGallery: (slug: string) => void;
   onGoogleLogin: () => void;
   onEmailLogin: () => void;
@@ -62,10 +62,24 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   
   if (!props.isOpen) return null;
 
-  const handleCopyLink = () => {
-    props.onCopyLink(undefined, true); 
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+  // New handler: Combined action for the "Share" button
+  const handleShareClick = async () => {
+    // 1. Get the authoritative link from App.tsx (includes all params)
+    const link = props.getShareLink();
+    
+    // 2. Perform copy locally (prevents background toast from firing in App.tsx)
+    try {
+      await navigator.clipboard.writeText(link);
+      
+      // 3. Show local success state on the button
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+      
+      // 4. Open the dropdown menu
+      setShowShareMenu(true);
+    } catch (err) {
+      console.error('Failed to copy', err);
+    }
   };
 
   const NavItem = ({ id, label, icon: Icon }: any) => (
@@ -243,240 +257,37 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                               </div>
                            </div>
                         )}
-                        <button 
-                            onClick={handleCopyLink} 
-                            className={`w-full mt-2 py-2 text-xs font-medium transition duration-200 ${
-                                isCopied ? 'text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600'
-                            }`}
-                        >
-                            {isCopied ? 'Link Copied!' : 'Share current view (Copy Link)'}
-                        </button>
                         
+                        {/* COMBINED SHARE BUTTON & DROPDOWN */}
                         <div className="relative mt-2">
-                             <button 
-                               onClick={() => setShowShareMenu(!showShareMenu)}
-                               className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold rounded-lg transition"
-                             >
-                               <IconShare /> Share via...
-                             </button>
+                            <button 
+                                onClick={handleShareClick}
+                                className={`w-full flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-lg border transition duration-200 ${
+                                    isCopied 
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                    : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                                }`}
+                            >
+                                <IconShare /> 
+                                {isCopied ? 'Link Copied!' : 'Share Gallery'}
+                            </button>
+                            
                              {showShareMenu && (
-                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
+                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
                                  <button 
                                    onClick={() => { 
-                                       const link = props.getShareLink ? props.getShareLink() : window.location.href;
+                                       const link = props.getShareLink();
                                        window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); 
                                        setShowShareMenu(false); 
                                    }}
-                                   className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"
                                  >
                                    <span className="text-[#25D366] text-lg">📱</span> WhatsApp
                                  </button>
                                  <button 
                                    onClick={() => { 
-                                       const link = props.getShareLink ? props.getShareLink() : window.location.href;
+                                       const link = props.getShareLink();
                                        window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(link)}`; 
                                        setShowShareMenu(false); 
                                    }}
-                                   className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
-                                 >
-                                   <span className="text-blue-600 text-lg">✉️</span> Email
-                                 </button>
-                               </div>
-                             )}
-                        </div>
-                     </div>
-                  </div>
-               )}
-
-               {activeTab === 'library' && (
-                  <div className="space-y-6 animate-in fade-in duration-300 pb-8">
-                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-slate-800">My Galleries</h3>
-                     </div>
-
-                     {!props.session ? (
-                        <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center p-6">
-                           <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center mb-3 text-slate-400">
-                              <IconLibrary />
-                           </div>
-                           <p className="text-sm font-bold text-slate-700">Authentication Required</p>
-                           <p className="text-xs text-slate-500 mt-1 mb-4 max-w-xs">Log in with Google via the sidebar to access your saved collections.</p>
-                           <button onClick={() => props.onGoogleLogin()} className="sm:hidden px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg">Login with Google</button>
-                        </div>
-                     ) : (
-                        <div className="space-y-2">
-                           {props.myGalleries.length === 0 && !props.isLoadingMyGalleries && (
-                              <p className="text-center py-10 text-slate-400 text-sm">No galleries yet. Go to Editor to create one.</p>
-                           )}
-                           
-                           {props.myGalleries.map(g => (
-                              <div key={g.id} className="group flex items-center justify-between p-4 bg-white border border-slate-100 rounded-xl hover:border-slate-300 hover:shadow-sm transition">
-                                 <div className="min-w-0">
-                                    <h4 className="font-bold text-slate-800 text-sm truncate">{g.display_name || 'Untitled Gallery'}</h4>
-                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">{new Date(g.updated_at).toLocaleDateString()} • {g.slug || g.id}</p>
-                                 </div>
-                                 <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                    <button 
-                                       onClick={() => props.onLoadGallery(g.slug || g.id)}
-                                       className="px-3 py-1.5 bg-slate-50 hover:bg-slate-900 hover:text-white text-slate-600 text-xs font-bold rounded-lg transition"
-                                    >
-                                       Edit / Load
-                                    </button>
-                                    <button 
-                                       onClick={() => props.onCopyLink(`${window.location.origin}/?gallery=${g.slug || g.id}`)}
-                                       className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                       title="Copy Link"
-                                    >
-                                       <IconShare />
-                                    </button>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     )}
-                  </div>
-               )}
-
-               {activeTab === 'settings' && (
-                  <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300 pb-8">
-                     <h3 className="text-lg font-bold text-slate-800">Visual Settings</h3>
-                     
-                     <div className="space-y-4">
-                        <label className="block">
-                           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Layout Mode</span>
-                           <div className="grid grid-cols-2 gap-2 mt-2">
-                              <button 
-                                 onClick={() => props.setViewMode('sphere')}
-                                 className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-                              >
-                                 Sphere
-                              </button>
-                              <button 
-                                 onClick={() => props.setViewMode('tile')}
-                                 className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-                              >
-                                 Masonry
-                              </button>
-                           </div>
-                        </label>
-
-                        <div className="space-y-6 pt-4 border-t border-slate-100">
-                           <div className="space-y-2">
-                              <div className="flex justify-between">
-                                 <span className="text-xs font-bold text-slate-700">Card Scale</span>
-                                 <span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
-                              </div>
-                              <input 
-                                type="range" 
-                                min={0.5} 
-                                max={3.0} 
-                                step={0.1} 
-                                value={props.mediaScale} 
-                                onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} 
-                                className="w-full accent-slate-900 py-4 sm:py-2" 
-                              />
-                           </div>                         
-                           {props.viewMode === 'sphere' && (
-                              <div className="space-y-2">
-                                 <div className="flex justify-between">
-                                    <span className="text-xs font-bold text-slate-700">Sphere Radius</span>
-                                    <span className="text-xs text-slate-400">{props.sphereBase}</span>
-                                 </div>
-                                 <input 
-                                    type="range" 
-                                    min={20} 
-                                    max={200} 
-                                    step={5} 
-                                    value={props.sphereBase} 
-                                    onChange={(e) => props.setSphereBase(parseFloat(e.target.value))} 
-                                    className="w-full accent-slate-900 py-4 sm:py-2" 
-                                 />
-                              </div>
-                           )}
-
-                           {props.viewMode === 'tile' && (
-                              <div className="space-y-2">
-                                 <div className="flex justify-between">
-                                    <span className="text-xs font-bold text-slate-700">Grid Gap</span>
-                                    <span className="text-xs text-slate-400">{props.tileGap}px</span>
-                                 </div>
-                                 <input 
-                                    type="range" 
-                                    min={0} 
-                                    max={30} 
-                                    step={1} 
-                                    value={props.tileGap} 
-                                    onChange={(e) => props.setTileGap(parseFloat(e.target.value))} 
-                                    className="w-full accent-slate-900 py-4 sm:py-2" 
-                                 />
-                              </div>
-                           )}
-                        </div>
-                     </div>
-                  </div>
-               )}
-
-               {activeTab === 'support' && (
-                  <div className="space-y-6 animate-in fade-in duration-300 pb-8">
-                     <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-                        <h3 className="text-xl font-bold">Support the Project</h3>
-                        <p className="text-indigo-100 text-sm mt-2 opacity-90">Your contributions help keep Aether free and open for everyone.</p>
-                     </div>
-                     
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
-                             <img 
-                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" 
-                               alt="Bit QR" 
-                               className="w-full h-full object-cover mix-blend-multiply" 
-                             />
-                           </div>
-                           <div className="text-center">
-                              <span className="block font-bold text-slate-800 text-sm">Bit</span>
-                              <a href="https://bitpay.co.il" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
-                           </div>
-                         </div>
-
-                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
-                             <img 
-                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" 
-                               alt="PayBox QR" 
-                               className="w-full h-full object-cover mix-blend-multiply" 
-                             />
-                           </div>
-                           <div className="text-center">
-                              <span className="block font-bold text-slate-800 text-sm">Paybox</span>
-                              <a href="https://links.payboxapp.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
-                           </div>
-                         </div>
-
-                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
-                             <img 
-                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" 
-                               alt="Coffee QR" 
-                               className="w-full h-full object-cover mix-blend-multiply" 
-                             />
-                           </div>
-                           <div className="text-center">
-                              <span className="block font-bold text-slate-800 text-sm">Buy me Coffee</span>
-                              <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
-                           </div>
-                         </div>
-                     </div>
-                     <div className="text-center text-xs text-slate-400">
-                        054-773-1650 (Direct)
-                     </div>
-                  </div>
-               )}
-
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default BuilderModal;
+                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"
