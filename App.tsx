@@ -285,17 +285,16 @@ const App: React.FC = () => {
     }
   };
 
-  // CHANGE: Added suppressToast argument to prevent background toast when modal is open
-  const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
-    let link = specificLink;
-    if (!link) {
-        if (savedGalleryId) {
-            link = `${shareBase}/?gallery=${savedGalleryId}`;
-        } else if (galleryItems.length) {
-            link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
-        }
+  // Helper to generate share link with all params
+  const generateShareLink = () => {
+    let link = '';
+    if (savedGalleryId) {
+        link = `${shareBase}/?gallery=${savedGalleryId}`;
+    } else if (galleryItems.length) {
+        link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
     }
-    if (!link) return;
+
+    if (!link) return '';
 
     if (!link.includes('&layout=')) {
       const url = new URL(link);
@@ -305,6 +304,12 @@ const App: React.FC = () => {
       if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
       link = url.toString();
     }
+    return link;
+  };
+
+  const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
+    const link = specificLink || generateShareLink();
+    if (!link) return;
 
     try {
       await navigator.clipboard.writeText(link);
@@ -374,7 +379,6 @@ const App: React.FC = () => {
         {/* Title */}
         <div>
           <h1 className="text-3xl font-light text-slate-800 tracking-tighter  transition-colors">Aether</h1>
-          {/* Change 1: Removed pill from here */}
           <div className="flex items-center gap-2">
             <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
           </div>
@@ -400,7 +404,6 @@ const App: React.FC = () => {
             </button>
         </div>
 
-        {/* Change 1: Added pill here under buttons, bold, heebo font */}
         {displayName && (
            <div 
              className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
@@ -476,7 +479,6 @@ const App: React.FC = () => {
         onAddMedia={handleAddMedia}
         onClear={handleClear}
         onSave={handleSaveGallery}
-        // Change 2: Update prop signature to accept suppressToast
         onCopyLink={handleCopyLink}
         onLoadGallery={async (slug) => { 
           try {
@@ -491,7 +493,9 @@ const App: React.FC = () => {
             console.error('Load error:', err);
             setLoadError('Failed to load gallery');
           }
-        }}        
+        }}
+        // Change 2: Pass the link generator
+        getShareLink={generateShareLink}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
