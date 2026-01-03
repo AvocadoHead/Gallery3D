@@ -8,3 +8,16 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Fix Issue 12: Viewport and Touch Handling */
+@media (max-width: 640px) {
+  .modal-container {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  /* Prevent zoom on input focus for inputs, but mainly slider ease of use */
+  input[type="range"] {
+    touch-action: manipulation;
+  }
+}
