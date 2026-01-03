@@ -8,16 +8,11 @@ interface TileGalleryProps {
   gap: number;
 }
 
-const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, gap }) => {
-  const gutter = gap ? gap : 12;
+const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, gap }) => {
+  const gutter = gap !== undefined ? gap : 12;
 
   // Function to determine if we should nudge this item to create uneven stagger
-  // We use a simple hash of ID to be deterministic but look random
   const getStaggerClass = (index: number) => {
-    // Only apply to first few items to offset columns? 
-    // Actually, pure CSS columns don't allow easy individual nudging.
-    // Instead, we will rely on natural height variance.
-    // If you REALLY want to break the grid of 1:1 squares, we can add small random margins.
     const randomShift = (index % 3 === 0) ? 'mt-4' : (index % 7 === 0) ? 'mt-8' : '';
     return randomShift;
   };
@@ -39,7 +34,8 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, gap }) => {
               {item.kind === 'video' ? (
                 <video
                   src={item.videoUrl || item.fullUrl}
-                  className="block w-full h-auto align-middle"
+                  className="block w-full h-auto align-middle transition-transform duration-300 origin-center"
+                  style={{ transform: `scale(${Math.max(1, mediaScale)})` }}
                   autoPlay
                   muted
                   loop
@@ -49,7 +45,8 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, gap }) => {
                 <img
                   src={item.fallbackPreview || item.previewUrl}
                   alt={item.title || 'Gallery artwork'}
-                  className="block w-full h-auto align-middle"
+                  className="block w-full h-auto align-middle transition-transform duration-300 origin-center"
+                  style={{ transform: `scale(${Math.max(1, mediaScale)})` }}
                   loading="lazy"
                 />
               )}
