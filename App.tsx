@@ -159,7 +159,7 @@ const App: React.FC = () => {
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
       
-      // CHANGE 1: Use 'settings' instead of 'layout_settings'
+      // Apply saved settings
       if (record.settings) {
         if (record.settings.viewMode) setViewMode(record.settings.viewMode);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
@@ -265,7 +265,6 @@ const App: React.FC = () => {
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
-          // CHANGE 2: Use 'settings' key instead of 'layout_settings'
           settings: {
             viewMode,
             mediaScale,
@@ -286,7 +285,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCopyLink = async (specificLink?: string) => {
+  // CHANGE: Added suppressToast argument to prevent background toast when modal is open
+  const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
     let link = specificLink;
     if (!link) {
         if (savedGalleryId) {
@@ -297,9 +297,6 @@ const App: React.FC = () => {
     }
     if (!link) return;
 
-    // Fix Issue 3: Share URL - Missing Layout Parameters
-    // We check if it already has parameters (to avoid duplicating if specificLink was passed with them)
-    // If it's a generated link (no specific params found), we append our current view state.
     if (!link.includes('&layout=')) {
       const url = new URL(link);
       url.searchParams.set('layout', viewMode);
@@ -311,8 +308,10 @@ const App: React.FC = () => {
 
     try {
       await navigator.clipboard.writeText(link);
-      setToastVisible(true);
-      setTimeout(() => setToastVisible(false), 2000);
+      if (!suppressToast) {
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 2000);
+      }
     } catch (err) {
       console.warn('Clipboard error', err);
     }
@@ -346,7 +345,6 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
-            {/* Tweaked Camera Position (Z: 65) for closer start */}
             <Canvas camera={{ position: [0, 0, 65], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
               <GalleryScene
                 onSelect={setSelectedItem}
@@ -368,7 +366,6 @@ const App: React.FC = () => {
       {/* Header */}
       <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
-        {/* Fix Issue 11: Hamburger Menu Button Size */}
         <button onClick={() => setBuilderOpen(true)} className="p-4 -ml-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Open menu">
           <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -377,9 +374,9 @@ const App: React.FC = () => {
         {/* Title */}
         <div>
           <h1 className="text-3xl font-light text-slate-800 tracking-tighter  transition-colors">Aether</h1>
+          {/* Change 1: Removed pill from here */}
           <div className="flex items-center gap-2">
             <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
-            {displayName && <span className="text-[11px] bg-white/50 px-2 py-0.5 rounded-full border border-slate-200 text-slate-500">{displayName}</span>}
           </div>
         </div>
       </div>
@@ -402,6 +399,16 @@ const App: React.FC = () => {
               Masonry
             </button>
         </div>
+
+        {/* Change 1: Added pill here under buttons, bold, heebo font */}
+        {displayName && (
+           <div 
+             className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
+             style={{ fontFamily: 'Heebo, sans-serif' }}
+           >
+             {displayName}
+           </div>
+        )}
         
         {toastVisible && (
           <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce">
@@ -469,6 +476,7 @@ const App: React.FC = () => {
         onAddMedia={handleAddMedia}
         onClear={handleClear}
         onSave={handleSaveGallery}
+        // Change 2: Update prop signature to accept suppressToast
         onCopyLink={handleCopyLink}
         onLoadGallery={async (slug) => { 
           try {
