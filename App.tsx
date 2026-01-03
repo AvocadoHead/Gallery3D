@@ -46,7 +46,8 @@ const App: React.FC = () => {
   
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
-  const [mediaScale, setMediaScale] = useState(1.5);  const [sphereBase, setSphereBase] = useState(62);
+  const [mediaScale, setMediaScale] = useState(1.5);  
+  const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
 
   // --- Data State ---
@@ -69,6 +70,20 @@ const App: React.FC = () => {
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
   const authProcessing = useRef(false);
+
+  // Fix Issue 6: Load Parameters from Share URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const layout = params.get('layout');
+    const scale = params.get('scale');
+    const radius = params.get('radius');
+    const gap = params.get('gap');
+    
+    if (layout) setViewMode(layout as 'sphere' | 'tile');
+    if (scale) setMediaScale(parseInt(scale) / 100);
+    if (radius) setSphereBase(parseInt(radius));
+    if (gap) setTileGap(parseInt(gap));
+  }, []);
 
   // --- AUTH LOGIC ---
   useEffect(() => {
@@ -282,6 +297,18 @@ const App: React.FC = () => {
     }
     if (!link) return;
 
+    // Fix Issue 3: Share URL - Missing Layout Parameters
+    // We check if it already has parameters (to avoid duplicating if specificLink was passed with them)
+    // If it's a generated link (no specific params found), we append our current view state.
+    if (!link.includes('&layout=')) {
+      const url = new URL(link);
+      url.searchParams.set('layout', viewMode);
+      url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
+      if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
+      if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
+      link = url.toString();
+    }
+
     try {
       await navigator.clipboard.writeText(link);
       setToastVisible(true);
@@ -341,8 +368,8 @@ const App: React.FC = () => {
       {/* Header */}
       <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
-        {/* Hamburger Menu Button */}
-        <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Open menu">
+        {/* Fix Issue 11: Hamburger Menu Button Size */}
+        <button onClick={() => setBuilderOpen(true)} className="p-4 -ml-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Open menu">
           <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
@@ -456,7 +483,8 @@ const App: React.FC = () => {
             console.error('Load error:', err);
             setLoadError('Failed to load gallery');
           }
-        }}        onGoogleLogin={handleGoogleLogin}
+        }}        
+        onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
       />
