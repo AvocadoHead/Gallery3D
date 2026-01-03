@@ -45,7 +45,7 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
   // --- Gallery Configuration (Defaults) ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); 
   const [mediaScale, setMediaScale] = useState(1.5);  
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
@@ -71,7 +71,7 @@ const App: React.FC = () => {
 
   const authProcessing = useRef(false);
 
-  // Fix Issue 6: Load Parameters from Share URL
+  // Load Parameters from Share URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const layout = params.get('layout');
@@ -285,38 +285,37 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper to generate share link with all params
-  const generateShareLink = () => {
+  // Helper to generate share link with all params - Passed to Modal
+  const generateShareLink = useCallback(() => {
     let link = '';
+    // Base link (saved ID or encoded items)
     if (savedGalleryId) {
         link = `${shareBase}/?gallery=${savedGalleryId}`;
     } else if (galleryItems.length) {
         link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
     }
 
-    if (!link) return '';
+    if (!link) return window.location.href; // Fallback
 
-    if (!link.includes('&layout=')) {
-      const url = new URL(link);
-      url.searchParams.set('layout', viewMode);
-      url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
-      if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
-      if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
-      link = url.toString();
-    }
-    return link;
-  };
+    // Append appearance settings if not already present
+    // We force a check on the current state to ensure sliders are respected
+    const url = new URL(link);
+    if (!url.searchParams.has('layout')) url.searchParams.set('layout', viewMode);
+    if (!url.searchParams.has('scale')) url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
+    if (viewMode === 'sphere' && !url.searchParams.has('radius')) url.searchParams.set('radius', sphereBase.toString());
+    if (viewMode === 'tile' && !url.searchParams.has('gap')) url.searchParams.set('gap', tileGap.toString());
+    
+    return url.toString();
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
 
-  const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
+  const handleCopyLink = async (specificLink?: string) => {
     const link = specificLink || generateShareLink();
     if (!link) return;
 
     try {
       await navigator.clipboard.writeText(link);
-      if (!suppressToast) {
-        setToastVisible(true);
-        setTimeout(() => setToastVisible(false), 2000);
-      }
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 2000);
     } catch (err) {
       console.warn('Clipboard error', err);
     }
@@ -483,7 +482,9 @@ const App: React.FC = () => {
         onAddMedia={handleAddMedia}
         onClear={handleClear}
         onSave={handleSaveGallery}
-        onCopyLink={handleCopyLink}
+        // BuilderModal handles copy internally now to avoid background toast
+        onCopyLink={() => handleCopyLink()} 
+        getShareLink={generateShareLink}
         onLoadGallery={async (slug) => { 
           try {
             const record = await loadGalleryRecord(slug); 
@@ -498,7 +499,6 @@ const App: React.FC = () => {
             setLoadError('Failed to load gallery');
           }
         }}
-        getShareLink={generateShareLink}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
