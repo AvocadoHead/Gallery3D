@@ -427,6 +427,17 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                     value={props.tileGap} 
                                     onChange={(e) => props.setTileGap(parseFloat(e.target.value))} 
                                     className="w-full accent-slate-900 py-4 sm:py-2" 
+
+                                                  {/* Save Settings Button */}
+              {props.session && props.savedGalleryId && (
+                <button
+                  onClick={() => props.onSave(false)}
+                  disabled={props.isSaving}
+                  className="w-full mt-6 bg-slate-900 text-white text-sm font-bold py-3 rounded-xl hover:bg-slate-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {props.isSaving ? 'Saving Settings...' : 'Save Appearance Settings'}
+                </button>
+              )}
                                  />
                               </div>
                            )}
