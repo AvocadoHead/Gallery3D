@@ -56,7 +56,11 @@ const App: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [savedGalleryId, setSavedGalleryId] = useState('');
+  
+  // Separate DB ID (UUID) from Slug (Display ID) to fix save errors
+  const [savedGalleryId, setSavedGalleryId] = useState(''); // Slug/Public ID
+  const [galleryDbId, setGalleryDbId] = useState<string | null>(null); // Real UUID
+  
   const [isClearing, setIsClearing] = useState(false);
 
   // --- Remote/Auth State ---
@@ -159,6 +163,10 @@ const App: React.FC = () => {
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
       
+      // Store IDs
+      setGalleryDbId(record.id); // UUID
+      setSavedGalleryId(record.slug || record.id); // Display ID
+      
       // Apply saved settings
       if (record.settings) {
         if (record.settings.viewMode) setViewMode(record.settings.viewMode);
@@ -168,7 +176,6 @@ const App: React.FC = () => {
       }
 
       const id = record.slug || record.id;
-      setSavedGalleryId(id);
       return `${shareBase}/?gallery=${id}`;
     },
     [shareBase],
@@ -199,6 +206,7 @@ const App: React.FC = () => {
         setContactWhatsapp(incoming.contactWhatsapp || '');
         setContactEmail(incoming.contactEmail || '');
         setSavedGalleryId('');
+        setGalleryDbId(null);
         setInputValue(incoming.urls.join('\n')); 
         return;
       }
@@ -257,9 +265,12 @@ const App: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // Fix: Use galleryDbId (UUID) for updates to prevent syntax error
+      const idToUse = options?.asNew ? undefined : galleryDbId || undefined;
+      
       const record = await saveGalleryRecord(
         {
-          id: options?.asNew ? undefined : savedGalleryId || undefined,
+          id: idToUse,
           slug: options?.asNew ? undefined : savedGalleryId || undefined,
           items: itemsToSave,
           display_name: displayName || null,
@@ -279,6 +290,7 @@ const App: React.FC = () => {
       window.history.replaceState(null, '', link);
       refreshMyGalleries();
     } catch (err: any) {
+      console.error(err);
       setLoadError(err?.message || 'Save failed.');
     } finally {
       setIsSaving(false);
@@ -299,7 +311,6 @@ const App: React.FC = () => {
 
     // Force overwrite appearance settings based on current state
     const url = new URL(link);
-    // Explicitly delete old params first to prevent duplication or staleness
     url.searchParams.delete('layout');
     url.searchParams.delete('scale');
     url.searchParams.delete('radius');
@@ -318,8 +329,23 @@ const App: React.FC = () => {
   }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
 
   const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
-    const link = specificLink || generateShareLink();
-    if (!link) return;
+    // If specific link provided (from list), assume it needs params appended manually if missing
+    // Otherwise generate fresh link from current state
+    let link = specificLink;
+    
+    if (!link) {
+        link = generateShareLink();
+    } else {
+        // Ensure params are on the specific link too
+        const url = new URL(link);
+        if (!url.searchParams.has('layout')) {
+             url.searchParams.set('layout', viewMode);
+             url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
+             if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
+             if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
+             link = url.toString();
+        }
+    }
 
     try {
       await navigator.clipboard.writeText(link);
@@ -351,6 +377,7 @@ const App: React.FC = () => {
     await signOut();
     setSession(null);
     setMyGalleries([]);
+    setGalleryDbId(null);
   };
 
   return (
@@ -426,13 +453,15 @@ const App: React.FC = () => {
              {displayName}
            </div>
         )}
-        
-        {toastVisible && (
-          <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce">
-            Link Copied!
-          </div>
-        )}
       </div>
+
+      {/* Fix: Moved Toast outside header to root, increased z-index */}
+      {toastVisible && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-full shadow-2xl animate-bounce flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
+          Link Copied!
+        </div>
+      )}
 
       {/* Footer Contact */}
       <div className={`fixed bottom-8 right-8 z-20 transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
