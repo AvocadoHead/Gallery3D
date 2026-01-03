@@ -45,7 +45,7 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
   // --- Gallery Configuration (Defaults) ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
   const [mediaScale, setMediaScale] = useState(1.5);  
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
@@ -71,7 +71,7 @@ const App: React.FC = () => {
 
   const authProcessing = useRef(false);
 
-  // Fix Issue 6: Load Parameters from Share URL
+  // Load Parameters from Share URL on startup
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const layout = params.get('layout');
@@ -299,16 +299,19 @@ const App: React.FC = () => {
 
     // Force overwrite appearance settings based on current state
     const url = new URL(link);
+    // Explicitly delete old params first to prevent duplication or staleness
+    url.searchParams.delete('layout');
+    url.searchParams.delete('scale');
+    url.searchParams.delete('radius');
+    url.searchParams.delete('gap');
+
     url.searchParams.set('layout', viewMode);
     url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
     
     if (viewMode === 'sphere') {
         url.searchParams.set('radius', sphereBase.toString());
-        // Clean up tile param if switching views to avoid URL clutter
-        url.searchParams.delete('gap'); 
     } else if (viewMode === 'tile') {
         url.searchParams.set('gap', tileGap.toString());
-        url.searchParams.delete('radius');
     }
     
     return url.toString();
