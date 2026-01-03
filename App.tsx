@@ -58,9 +58,9 @@ const App: React.FC = () => {
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   
-  // Separate DB ID (UUID) from Slug (Display ID) to fix save errors
-  const [savedGalleryId, setSavedGalleryId] = useState(''); // Slug/Public ID
-  const [galleryDbId, setGalleryDbId] = useState<string | null>(null); // Real UUID
+  // Separate DB ID (UUID) from Slug (Display ID)
+  const [savedGalleryId, setSavedGalleryId] = useState(''); 
+  const [galleryDbId, setGalleryDbId] = useState<string | null>(null);
   
   const [isClearing, setIsClearing] = useState(false);
 
@@ -78,12 +78,10 @@ const App: React.FC = () => {
 
   // Check Mobile & Load Parameters
   useEffect(() => {
-    // Mobile Check
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
 
-    // URL Params
     const params = new URLSearchParams(window.location.search);
     const layout = params.get('layout');
     const scale = params.get('scale');
@@ -172,11 +170,9 @@ const App: React.FC = () => {
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
       
-      // Store IDs
-      setGalleryDbId(record.id); // UUID
-      setSavedGalleryId(record.slug || record.id); // Display ID
+      setGalleryDbId(record.id); 
+      setSavedGalleryId(record.slug || record.id); 
       
-      // Apply saved settings
       if (record.settings) {
         if (record.settings.viewMode) setViewMode(record.settings.viewMode);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
@@ -400,14 +396,15 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
-            {/* Fix Mobile Scale: Move camera back on mobile */}
             <Canvas camera={{ position: [0, 0, isMobile ? 85 : 65], fov: isMobile ? 60 : 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
+              {/* Passed isMobile to GalleryScene */}
               <GalleryScene
                 onSelect={setSelectedItem}
                 items={galleryItems}
                 clearing={isClearing}
                 cardScale={isMobile ? mediaScale * 1.2 : mediaScale} 
                 radiusBase={sphereBase}
+                isMobile={isMobile}
               />
             </Canvas>
           </Suspense>
