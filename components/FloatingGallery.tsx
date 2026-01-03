@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { getSphereCoordinates, MediaItem } from '../constants';
 
 // --- Single Gallery Item ---
+// Removed 'isMobile' from interface to match the working logic
 interface ItemProps {
   item: MediaItem;
   position: [number, number, number];
@@ -35,50 +36,91 @@ const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
   return { width, height };
 };
 
-const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale, isMobile }: ItemProps) => {
+const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [muted, setMuted] = useState(true);
   
   const hasDedicatedPreview = useMemo(
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
     [item.fallbackPreview, item.previewUrl, item.videoUrl],
   );
   
-  // Disable video autoplay on mobile to save massive resources
-  const shouldShowVideoInCard = !isMobile && item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
+  // Reverted to standard logic: check kind, not device type
+  const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
   const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
+  
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() =>
     normalizeSize(item.aspectRatio, scale),
   );
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Simple, lightweight frame loop
+  useEffect(() => {
+    // Staggered entry animation
+    const timeout = setTimeout(() => {
+      setMounted(true);
+    }, index * 20); 
+    return () => clearTimeout(timeout);
+  }, [index]);
+
   useFrame((state) => {
     if (!groupRef.current) return;
+    // Billboard behavior: always face the camera
     groupRef.current.lookAt(state.camera.position);
-    
-    // Only do the edge tilt on Desktop
-    if (!isMobile) {
-        const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
-        if (edgeTilt > 0) {
-          groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
-        }
+
+    // Restored the subtle edge tilt for depth perception
+    const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
+    if (edgeTilt > 0) {
+      groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
     }
   });
 
-  // Video playback logic (Desktop only)
+  // Restored: Robust video playback handling
   useEffect(() => {
     if (!useVideo || !videoRef.current) return;
-    
-    if (hovered) {
-        videoRef.current.play().catch(() => {});
-        videoRef.current.muted = false;
-    } else {
-        videoRef.current.pause();
-        videoRef.current.muted = true;
+
+    const play = () => {
+      const el = videoRef.current!;
+      const promise = el.play();
+      if (promise && typeof promise.then === 'function') {
+        promise.catch(() => {});
+      }
+    };
+
+    play();
+  }, [item.previewUrl, useVideo]);
+
+  // Restored: Handle hover play state
+  useEffect(() => {
+    if (!useVideo || !videoRef.current) return;
+    const el = videoRef.current;
+    const promise = el.play();
+    if (promise && typeof promise.then === 'function') {
+      promise.catch(() => {});
     }
   }, [hovered, useVideo]);
+
+  // Restored: Smooth audio fading (The "Failing" version removed this for "optimization" but broke the UX)
+  useEffect(() => {
+    if (!useVideo) return;
+    let raf: number;
+    const fadeVolume = () => {
+      if (!videoRef.current) return;
+      const target = hovered ? 0.9 : 0;
+      const current = videoRef.current.volume;
+      const step = 0.08;
+      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
+      videoRef.current.volume = next;
+      const shouldMute = next < 0.05;
+      if (muted !== shouldMute) setMuted(shouldMute);
+      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
+    };
+
+    raf = requestAnimationFrame(fadeVolume);
+    return () => cancelAnimationFrame(raf);
+  }, [hovered, muted, useVideo]);
 
   useEffect(() => {
     setComputedSize((prev) => {
@@ -93,13 +135,17 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale, 
   };
 
   const renderMedia = () => {
-    if (item.kind === 'embed' || !useVideo) {
+    if (item.kind === 'embed') {
       const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
       return (
         <img
           src={thumb}
-          alt="art"
-          className={`w-full h-full object-contain rounded-xl transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          alt="embed preview"
+          className={`
+            w-full h-full object-contain rounded-xl
+            transition-opacity duration-500
+            ${loaded ? 'opacity-100' : 'opacity-0'}
+          `}
           onLoad={(e) => {
             const el = e.target as HTMLImageElement;
             handleSize(el.naturalWidth, el.naturalHeight);
@@ -107,84 +153,110 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale, 
           }}
           onError={() => setLoaded(true)}
           draggable={false}
-          loading="lazy"
+        />
+      );
+    }
+
+    if (useVideo) {
+      const videoSource = item.videoUrl || item.previewUrl;
+      return (
+        <video
+          ref={videoRef}
+          src={videoSource}
+          className={`
+            w-full h-full object-contain rounded-xl
+            transition-opacity duration-500
+            ${loaded ? 'opacity-100' : 'opacity-0'}
+          `}
+          autoPlay
+          playsInline
+          loop
+          muted={muted}
+          preload="metadata"
+          onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
+          onLoadedData={() => setLoaded(true)}
+          onError={() => {
+            if (item.fallbackPreview) {
+              setUseVideo(false);
+              setLoaded(false);
+            }
+          }}
         />
       );
     }
 
     return (
-      <video
-        ref={videoRef}
-        src={item.videoUrl || item.previewUrl}
-        className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-        playsInline
-        loop
-        muted
-        onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
-        onLoadedData={() => setLoaded(true)}
-        onError={() => setUseVideo(false)}
+      <img
+        src={item.fallbackPreview || item.previewUrl}
+        alt="art"
+        className={`
+          w-full h-full object-contain rounded-xl
+          transition-opacity duration-500
+          ${loaded ? 'opacity-100' : 'opacity-0'}
+        `}
+        onLoad={(e) => {
+          const el = e.target as HTMLImageElement;
+          handleSize(el.naturalWidth, el.naturalHeight);
+          setLoaded(true);
+        }}
+        draggable={false}
       />
     );
   };
 
-  const CardContent = (
-    <Html 
-      transform 
-      distanceFactor={12} 
-      zIndexRange={[100, 0]}
-      style={{ pointerEvents: 'none' }}
-    >
-      <div
-        className={`
-          relative group cursor-pointer select-none
-          ${clearing ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}
-          ${hovered ? 'z-50' : 'z-0'}
-        `}
-        style={{
-          width: `${computedSize.width}px`,
-          height: `${computedSize.height}px`,
-          pointerEvents: 'auto',
-          // FIX: Only transition opacity and transform scale. NEVER transition 'all'.
-          // This prevents the CSS from fighting the 3D engine's updates.
-          transition: 'transform 0.1s ease-out, opacity 0.3s'
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick(item);
-        }}
-        // Disable hover effects on mobile to prevent scrolling glitches
-        onPointerEnter={() => !isMobile && setHover(true)}
-        onPointerLeave={() => !isMobile && setHover(false)}
-      >
-        <div
-          className={`
-            w-full h-full bg-white rounded-2xl p-2
-            ${hovered ? 'shadow-2xl ring-2 ring-white/50 scale-105' : 'shadow-lg'}
-          `}
-          style={{ transition: 'transform 0.2s ease-out, box-shadow 0.2s' }}
-        >
-          <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
-            {renderMedia()}
-            {!loaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/40">
-                <div className="w-5 h-5 border-2 border-gray-300 border-t-slate-600 rounded-full animate-spin" />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </Html>
-  );
-
   return (
     <group position={position} ref={groupRef}>
-      {!isMobile ? (
-        <Float speed={1.5} rotationIntensity={0.05} floatIntensity={0.5} floatingRange={[-0.1, 0.1]}>
-            {CardContent}
-        </Float>
-      ) : (
-        CardContent
-      )}
+      {/* 
+         CRITICAL FIX: Always use Float. 
+         Conditionally removing this based on "isMobile" breaks the scene graph hierarchy
+         and HTML positioning synchronization.
+      */}
+      <Float
+        speed={1.5} 
+        rotationIntensity={0.05} 
+        floatIntensity={0.5} 
+        floatingRange={[-0.1, 0.1]}
+      >
+        <Html transform occlude="blending" distanceFactor={12} zIndexRange={[100, 0]}>
+          <div
+            className={`
+              relative group cursor-pointer select-none
+              transition-all duration-700 ease-out
+              ${mounted && !clearing ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
+              ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
+            `}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick(item);
+            }}
+            onPointerEnter={() => setHover(true)}
+            onPointerLeave={() => setHover(false)}
+            style={{
+              width: `${computedSize.width}px`,
+              height: `${computedSize.height}px`,
+            }}
+          >
+            {/* Card Container */}
+            <div
+              className={`
+                w-full h-full bg-white rounded-2xl p-2 shadow-xl
+                transition-all duration-300
+                ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
+              `}
+            >
+              {/* Media Container */}
+              <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
+                {renderMedia()}
+                {!loaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/40">
+                    <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Html>
+      </Float>
     </group>
   );
 };
@@ -196,20 +268,21 @@ interface GallerySceneProps {
   clearing: boolean;
   cardScale: number;
   radiusBase: number;
-  isMobile: boolean;
+  // removed isMobile from interface as it is not used in the working version
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase, isMobile }) => {
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
+  // Restored: The working version capped radius at 95. The failing version pushed it to 200 which makes items tiny.
   const radius = Math.max(
     24,
-    Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
+    Math.min(95, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
   
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
     <>
-      <ambientLight intensity={1.2} />
+      <ambientLight intensity={1} />
       <Environment preset="city" />
 
       <group>
@@ -223,7 +296,6 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
             radius={radius}
             clearing={clearing}
             scale={cardScale}
-            isMobile={isMobile}
           />
         ))}
       </group>
@@ -231,13 +303,13 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <OrbitControls
         enablePan={false}
         enableZoom
-        minDistance={radius * 0.01}
-        maxDistance={Math.max(90, radius * 2.0)}
+        minDistance={Math.max(2, radius * 0.08)}
+        maxDistance={Math.max(90, radius * 1.35)}
         autoRotate
         autoRotateSpeed={0.6}
         dampingFactor={0.08}
         rotateSpeed={0.55}
-        zoomSpeed={6.0}
+        zoomSpeed={4.5}
       />
     </>
   );
