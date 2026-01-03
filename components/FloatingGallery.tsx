@@ -13,7 +13,6 @@ interface ItemProps {
   radius: number;
   clearing: boolean;
   scale: number;
-  isMobile: boolean;
 }
 
 const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
@@ -108,7 +107,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale, 
           }}
           onError={() => setLoaded(true)}
           draggable={false}
-          loading={isMobile ? 'eager' : 'lazy'}
+          loading="lazy"
         />
       );
     }
