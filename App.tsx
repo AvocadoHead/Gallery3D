@@ -297,13 +297,19 @@ const App: React.FC = () => {
 
     if (!link) return window.location.href; // Fallback
 
-    // Append appearance settings if not already present
-    // We force a check on the current state to ensure sliders are respected
+    // Force overwrite appearance settings based on current state
     const url = new URL(link);
-    if (!url.searchParams.has('layout')) url.searchParams.set('layout', viewMode);
-    if (!url.searchParams.has('scale')) url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
-    if (viewMode === 'sphere' && !url.searchParams.has('radius')) url.searchParams.set('radius', sphereBase.toString());
-    if (viewMode === 'tile' && !url.searchParams.has('gap')) url.searchParams.set('gap', tileGap.toString());
+    url.searchParams.set('layout', viewMode);
+    url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
+    
+    if (viewMode === 'sphere') {
+        url.searchParams.set('radius', sphereBase.toString());
+        // Clean up tile param if switching views to avoid URL clutter
+        url.searchParams.delete('gap'); 
+    } else if (viewMode === 'tile') {
+        url.searchParams.set('gap', tileGap.toString());
+        url.searchParams.delete('radius');
+    }
     
     return url.toString();
   }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
