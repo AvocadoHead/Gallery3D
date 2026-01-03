@@ -57,9 +57,9 @@ const App: React.FC = () => {
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   
-  // Separate DB ID (UUID) from Slug (Display ID) to fix save errors
-  const [savedGalleryId, setSavedGalleryId] = useState(''); // Slug/Public ID
-  const [galleryDbId, setGalleryDbId] = useState<string | null>(null); // Real UUID
+  // Separate DB ID (UUID) from Slug (Display ID)
+  const [savedGalleryId, setSavedGalleryId] = useState(''); 
+  const [galleryDbId, setGalleryDbId] = useState<string | null>(null);
   
   const [isClearing, setIsClearing] = useState(false);
 
@@ -164,8 +164,8 @@ const App: React.FC = () => {
       setContactEmail(record.contact_email || '');
       
       // Store IDs
-      setGalleryDbId(record.id); // UUID
-      setSavedGalleryId(record.slug || record.id); // Display ID
+      setGalleryDbId(record.id); 
+      setSavedGalleryId(record.slug || record.id); 
       
       // Apply saved settings
       if (record.settings) {
@@ -257,7 +257,21 @@ const App: React.FC = () => {
     }, 650);
   };
 
-  const handleSaveGallery = async (options?: { asNew?: boolean }) => {
+  // Reset everything to start a fresh gallery
+  const handleStartNew = () => {
+    setGalleryItems([]);
+    setInputValue('');
+    setDisplayName('');
+    setContactWhatsapp('');
+    setContactEmail('');
+    setSavedGalleryId('');
+    setGalleryDbId(null);
+    setViewMode('sphere');
+    window.history.replaceState(null, '', window.location.pathname);
+  };
+
+  // Changed to accept boolean directly to fix mismatch with Modal
+  const handleSaveGallery = async (asNew: boolean = false) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
 
@@ -265,13 +279,14 @@ const App: React.FC = () => {
 
     setIsSaving(true);
     try {
-      // Fix: Use galleryDbId (UUID) for updates to prevent syntax error
-      const idToUse = options?.asNew ? undefined : galleryDbId || undefined;
+      // If asNew is true, we force ID to undefined to create a new record
+      const idToUse = asNew ? undefined : galleryDbId || undefined;
+      const slugToUse = asNew ? undefined : savedGalleryId || undefined;
       
       const record = await saveGalleryRecord(
         {
           id: idToUse,
-          slug: options?.asNew ? undefined : savedGalleryId || undefined,
+          slug: slugToUse,
           items: itemsToSave,
           display_name: displayName || null,
           contact_email: contactEmail || null,
@@ -284,7 +299,7 @@ const App: React.FC = () => {
           }
         },
         session,
-        { asNew: options?.asNew },
+        { asNew },
       );
       const link = applyLoadedRecord(record);
       window.history.replaceState(null, '', link);
@@ -297,19 +312,16 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper to generate share link with all params - Passed to Modal
   const generateShareLink = useCallback(() => {
     let link = '';
-    // Base link (saved ID or encoded items)
     if (savedGalleryId) {
         link = `${shareBase}/?gallery=${savedGalleryId}`;
     } else if (galleryItems.length) {
         link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
     }
 
-    if (!link) return window.location.href; // Fallback
+    if (!link) return window.location.href; 
 
-    // Force overwrite appearance settings based on current state
     const url = new URL(link);
     url.searchParams.delete('layout');
     url.searchParams.delete('scale');
@@ -329,14 +341,10 @@ const App: React.FC = () => {
   }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
 
   const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
-    // If specific link provided (from list), assume it needs params appended manually if missing
-    // Otherwise generate fresh link from current state
     let link = specificLink;
-    
-    if (!link) {
-        link = generateShareLink();
-    } else {
-        // Ensure params are on the specific link too
+    if (!link) link = generateShareLink();
+    else {
+        // Ensure params are on list links too
         const url = new URL(link);
         if (!url.searchParams.has('layout')) {
              url.searchParams.set('layout', viewMode);
@@ -455,7 +463,6 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Fix: Moved Toast outside header to root, increased z-index */}
       {toastVisible && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-full shadow-2xl animate-bounce flex items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
@@ -522,7 +529,7 @@ const App: React.FC = () => {
         onAddMedia={handleAddMedia}
         onClear={handleClear}
         onSave={handleSaveGallery}
-        // BuilderModal handles copy internally now to avoid background toast
+        onStartNew={handleStartNew} // New Prop
         onCopyLink={() => handleCopyLink()} 
         getShareLink={generateShareLink}
         onLoadGallery={async (slug) => { 
