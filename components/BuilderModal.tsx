@@ -46,7 +46,8 @@ interface BuilderModalProps {
   onAddMedia: () => void;
   onClear: () => void;
   onSave: (asNew?: boolean) => void;
-  onCopyLink: (link?: string) => void;
+  // Change 2: Update prop type to match App.tsx changes
+  onCopyLink: (link?: string, suppressToast?: boolean) => void;
   onLoadGallery: (slug: string) => void;
   onGoogleLogin: () => void;
   onEmailLogin: () => void;
@@ -56,15 +57,11 @@ interface BuilderModalProps {
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'editor' | 'library' | 'settings' | 'support'>('editor');
   const [showToast, setShowToast] = useState(false);
-  // Change 4: Added menu state
   const [showShareMenu, setShowShareMenu] = useState(false);
   
   if (!props.isOpen) return null;
 
-  // Fix Issue 3 & 5: Construct share URL with params
   const constructShareUrl = () => {
-    // Note: If no savedGalleryId, App.tsx handles the heavy encoding. 
-    // This helper is mainly for the social buttons when an ID exists or for current window fallback.
     const baseUrl = window.location.origin;
     const params = new URLSearchParams();
     
@@ -72,7 +69,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
       params.set('gallery', props.savedGalleryId);
     }
     
-    // Add layout params
     params.set('layout', props.viewMode);
     params.set('scale', Math.round(props.mediaScale * 100).toString());
     if (props.viewMode === 'sphere') params.set('radius', props.sphereBase.toString());
@@ -81,8 +77,9 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     return `${baseUrl}/?${params.toString()}`;
   };
 
+  // Change 2: Suppress global toast, show local toast high z-index
   const handleCopyLink = () => {
-    props.onCopyLink(); // App.tsx handles the clipboard logic
+    props.onCopyLink(undefined, true); 
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2000);
   };
@@ -103,18 +100,15 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
-      {/* Fix Issue 8: Mobile Responsive Width */}
       <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
         
         {/* --- SIDEBAR --- */}
-        {/* Fix Issue 9: Mobile Sidebar Navigation */}
         <div className="w-full sm:w-64 bg-slate-50 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col p-4 shrink-0">
           <div className="px-4 py-2 mb-2 sm:mb-6 flex justify-between items-center sm:block">
             <div>
               <h2 className="text-xl font-bold text-slate-900 tracking-tight">Aether</h2>
               <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Builder Tool</p>
             </div>
-            {/* Mobile close button shown in header */}
             <button 
                onClick={props.onClose} 
                className="sm:hidden w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600"
@@ -167,9 +161,9 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                ×
             </button>
 
-            {/* Fix Issue 4: Toast Inside Modal */}
+            {/* Change 2: Ensure toast is high z-index and absolute to this container */}
             {showToast && (
-               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-in fade-in zoom-in slide-in-from-top-2 duration-300">
+               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[60] px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-in fade-in zoom-in slide-in-from-top-2 duration-300">
                   Link Copied!
                </div>
             )}
@@ -242,7 +236,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                  {props.savedGalleryId && <span className="text-[10px] font-mono text-emerald-600">ID: {props.savedGalleryId}</span>}
                               </div>
                               <div className="flex gap-2">
-                                 {/* SMART SAVE BUTTONS: Only show what's relevant */}
                                  {props.savedGalleryId ? (
                                     <>
                                        <button 
@@ -277,7 +270,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                             Share current view (Copy Link)
                         </button>
                         
-                        {/* Change 4: Dropdown Menu instead of buttons */}
                         {props.savedGalleryId && (
                            <div className="relative mt-2">
                              <button 
@@ -308,7 +300,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   </div>
                )}
 
-               {/* === LIBRARY TAB === */}
+               {/* ... (Library, Settings, Support tabs remain unchanged) ... */}
                {activeTab === 'library' && (
                   <div className="space-y-6 animate-in fade-in duration-300 pb-8">
                      <div className="flex items-center justify-between">
@@ -358,7 +350,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   </div>
                )}
 
-               {/* === SETTINGS TAB === */}
                {activeTab === 'settings' && (
                   <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300 pb-8">
                      <h3 className="text-lg font-bold text-slate-800">Visual Settings</h3>
@@ -388,7 +379,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                  <span className="text-xs font-bold text-slate-700">Card Scale</span>
                                  <span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
                               </div>
-                              {/* Fix Issue 10: Larger padding for touch targets */}
                               <input 
                                 type="range" 
                                 min={0.5} 
@@ -405,7 +395,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                     <span className="text-xs font-bold text-slate-700">Sphere Radius</span>
                                     <span className="text-xs text-slate-400">{props.sphereBase}</span>
                                  </div>
-                                 {/* Fix Issue 1: Extended range 20-200, larger step */}
                                  <input 
                                     type="range" 
                                     min={20} 
@@ -440,7 +429,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   </div>
                )}
 
-               {/* === SUPPORT TAB === */}
                {activeTab === 'support' && (
                   <div className="space-y-6 animate-in fade-in duration-300 pb-8">
                      <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
