@@ -1,293 +1,512 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, Suspense, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { GallerySummary } from '../supabaseClient';
+import { Canvas } from '@react-three/fiber';
+import GalleryScene from './components/FloatingGallery';
+import Overlay from './components/Overlay';
+import TileGallery from './components/TileGallery';
+import BuilderModal from './components/BuilderModal';
+import {
+  GalleryRecord,
+  GallerySummary,
+  isSupabaseConfigured,
+  loadGalleryRecord,
+  listUserGalleries,
+  saveGalleryRecord,
+  signInWithEmail,
+  signInWithGoogle,
+  signOut,
+  supabase,
+} from './supabaseClient';
+import {
+  buildDefaultMediaItems,
+  buildMediaItemsFromUrls,
+  decodeGalleryParam,
+  encodeGalleryParam,
+  sanitizeWhatsapp,
+  MediaItem,
+} from './constants';
 
-// Icons defined locally to avoid external dependencies causing build issues
-const IconGoogle = () => (
-  <svg className="w-5 h-5" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.64 2 12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c5.19 0 9.49-3.73 9.49-10c0-1.3-.15-2.29-.14-2.9z" />
-  </svg>
+const Loader = () => (
+  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+    <div className="w-10 h-10 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+  </div>
 );
-const IconEdit = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>;
-const IconLibrary = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>;
-const IconSettings = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>;
-const IconHeart = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>;
-const IconShare = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>;
 
-interface BuilderModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  session: Session | null;
-  galleryItemsCount: number;
-  inputValue: string;
-  setInputValue: (val: string) => void;
-  displayName: string;
-  setDisplayName: (val: string) => void;
-  contactWhatsapp: string;
-  setContactWhatsapp: (val: string) => void;
-  contactEmail: string;
-  setContactEmail: (val: string) => void;
-  viewMode: 'sphere' | 'tile';
-  setViewMode: (mode: 'sphere' | 'tile') => void;
-  mediaScale: number;
-  setMediaScale: (val: number) => void;
-  sphereBase: number;
-  setSphereBase: (val: number) => void;
-  tileGap: number;
-  setTileGap: (val: number) => void;
-  myGalleries: GallerySummary[];
-  isLoadingMyGalleries: boolean;
-  savedGalleryId: string;
-  isSupabaseConfigured: boolean;
-  isSaving: boolean;
-  loadError: string;
-  authMessage: string;
-  authEmail: string;
-  setAuthEmail: (val: string) => void;
-  onAddMedia: () => void;
-  onClear: () => void;
-  onSave: (asNew?: boolean) => void;
-  onCopyLink: () => void; // Kept for generic usage, but unused locally now
-  getShareLink: () => string; // Required for local copying
-  onLoadGallery: (slug: string) => void;
-  onGoogleLogin: () => void;
-  onEmailLogin: () => void;
-  onSignOut: () => void;
-}
+const App: React.FC = () => {
+  const shareBase = useMemo(
+    () => (typeof window !== 'undefined' ? window.location.origin : 'https://gallery3-d.vercel.app'),
+    [],
+  );
 
-const BuilderModal: React.FC<BuilderModalProps> = (props) => {
-  const [activeTab, setActiveTab] = useState<'editor' | 'library' | 'settings' | 'support'>('editor');
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
+  // --- UI State ---
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [contactMenuOpen, setContactMenuOpen] = useState(false);
   
-  if (!props.isOpen) return null;
+  // --- Gallery Configuration (Defaults) ---
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere'); // Default to Sphere
+  const [mediaScale, setMediaScale] = useState(1.5);  
+  const [sphereBase, setSphereBase] = useState(62);
+  const [tileGap, setTileGap] = useState(12);
 
-  // New handler: Combined action for the "Share" button
-  const handleShareClick = async () => {
-    // 1. Get the authoritative link from App.tsx (includes all params)
-    const link = props.getShareLink();
+  // --- Data State ---
+  const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [contactWhatsapp, setContactWhatsapp] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [savedGalleryId, setSavedGalleryId] = useState('');
+  const [isClearing, setIsClearing] = useState(false);
+
+  // --- Remote/Auth State ---
+  const [loadingRemote, setLoadingRemote] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [myGalleries, setMyGalleries] = useState<GallerySummary[]>([]);
+  const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
+
+  const authProcessing = useRef(false);
+
+  // Fix Issue 6: Load Parameters from Share URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const layout = params.get('layout');
+    const scale = params.get('scale');
+    const radius = params.get('radius');
+    const gap = params.get('gap');
     
-    // 2. Perform copy locally (prevents background toast from firing in App.tsx)
+    if (layout) setViewMode(layout as 'sphere' | 'tile');
+    if (scale) setMediaScale(parseInt(scale) / 100);
+    if (radius) setSphereBase(parseInt(radius));
+    if (gap) setTileGap(parseInt(gap));
+  }, []);
+
+  // --- AUTH LOGIC ---
+  useEffect(() => {
+    if (!supabase) return;
+
+    const handleAuth = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      if (code) {
+        if (authProcessing.current) return;
+        authProcessing.current = true;
+
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data.session) {
+            setSession(data.session);
+            refreshMyGalleries(data.session.user.id);
+            setBuilderOpen(true);
+            window.history.replaceState(null, '', window.location.pathname);
+          } else {
+             setLoadError('Login failed. Please try again.');
+          }
+        } catch (err) {
+          console.error('Auth exception:', err);
+        } finally {
+          authProcessing.current = false;
+        }
+      } else {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          setSession(data.session);
+          refreshMyGalleries(data.session.user.id);
+        }
+      }
+    };
+
+    handleAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setSession(newSession);
+        if (newSession) refreshMyGalleries(newSession.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setMyGalleries([]);
+        setBuilderOpen(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const refreshMyGalleries = useCallback(async (userId?: string) => {
+    const uid = userId || session?.user?.id;
+    if (!uid || !isSupabaseConfigured) return;
+    setIsLoadingMyGalleries(true);
     try {
-      await navigator.clipboard.writeText(link);
-      
-      // 3. Show local success state on the button
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-      
-      // 4. Open the dropdown menu
-      setShowShareMenu(true);
+      const data = await listUserGalleries(uid);
+      setMyGalleries(data);
     } catch (err) {
-      console.error('Failed to copy', err);
+      console.warn('Unable to list user galleries', err);
+    } finally {
+      setIsLoadingMyGalleries(false);
+    }
+  }, [session, isSupabaseConfigured]);
+
+  // --- URL PARSING & LOADING ---
+  const applyLoadedRecord = useCallback(
+    (record: GalleryRecord) => {
+      setGalleryItems(record.items || []);
+      setDisplayName(record.display_name || '');
+      setContactWhatsapp(record.contact_whatsapp || '');
+      setContactEmail(record.contact_email || '');
+      
+      // Apply saved settings
+      if (record.settings) {
+        if (record.settings.viewMode) setViewMode(record.settings.viewMode);
+        if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
+        if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
+        if (record.settings.tileGap) setTileGap(record.settings.tileGap);
+      }
+
+      const id = record.slug || record.id;
+      setSavedGalleryId(id);
+      return `${shareBase}/?gallery=${id}`;
+    },
+    [shareBase],
+  );
+
+  useEffect(() => {
+    const extractGallery = () => {
+      const params = new URLSearchParams(window.location.search);
+      const encoded = params.get('gallery');
+      if (encoded) return encoded;
+      
+      const hash = window.location.hash;
+      if (hash.includes('access_token') || hash.includes('type=recovery')) return null;
+      if (window.location.search.includes('code=')) return null;
+
+      const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
+      return hashParams.get('gallery');
+    };
+
+    const syncFromQuery = async () => {
+      setLoadError('');
+      const encoded = extractGallery();
+      const incoming = decodeGalleryParam(encoded);
+
+      if (incoming.urls.length) {
+        setGalleryItems(buildMediaItemsFromUrls(incoming.urls));
+        setDisplayName(incoming.displayName || '');
+        setContactWhatsapp(incoming.contactWhatsapp || '');
+        setContactEmail(incoming.contactEmail || '');
+        setSavedGalleryId('');
+        setInputValue(incoming.urls.join('\n')); 
+        return;
+      }
+
+      if (encoded && isSupabaseConfigured) {
+        setLoadingRemote(true);
+        try {
+          const record = await loadGalleryRecord(encoded);
+          if (record?.items?.length) {
+            applyLoadedRecord(record);
+            const urls = record.items.map(i => i.originalUrl).join('\n');
+            setInputValue(urls);
+            return;
+          }
+          setLoadError('Gallery not found.');
+        } catch (err) {
+          console.warn(err);
+          setLoadError('Unable to load gallery.');
+        } finally {
+          setLoadingRemote(false);
+        }
+      }
+
+      setGalleryItems(buildDefaultMediaItems());
+    };
+
+    syncFromQuery();
+    window.addEventListener('popstate', syncFromQuery);
+    return () => window.removeEventListener('popstate', syncFromQuery);
+  }, [applyLoadedRecord]);
+
+  // --- HANDLERS ---
+  const handleAddMedia = () => {
+    const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+    if (!entries.length) return;
+    const nextItems = buildMediaItemsFromUrls(entries);
+    setGalleryItems(nextItems);
+    setSelectedItem(null);
+  };
+
+  const handleClear = () => {
+    setIsClearing(true);
+    setSelectedItem(null);
+    setInputValue('');
+    setTimeout(() => {
+      setGalleryItems([]);
+      setIsClearing(false);
+    }, 650);
+  };
+
+  const handleSaveGallery = async (options?: { asNew?: boolean }) => {
+    const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+    const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
+
+    if (!itemsToSave.length || !isSupabaseConfigured) return;
+
+    setIsSaving(true);
+    try {
+      const record = await saveGalleryRecord(
+        {
+          id: options?.asNew ? undefined : savedGalleryId || undefined,
+          slug: options?.asNew ? undefined : savedGalleryId || undefined,
+          items: itemsToSave,
+          display_name: displayName || null,
+          contact_email: contactEmail || null,
+          contact_whatsapp: contactWhatsapp || null,
+          settings: {
+            viewMode,
+            mediaScale,
+            sphereBase,
+            tileGap
+          }
+        },
+        session,
+        { asNew: options?.asNew },
+      );
+      const link = applyLoadedRecord(record);
+      window.history.replaceState(null, '', link);
+      refreshMyGalleries();
+    } catch (err: any) {
+      setLoadError(err?.message || 'Save failed.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const NavItem = ({ id, label, icon: Icon }: any) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-xl ${
-        activeTab === id
-          ? 'bg-slate-900 text-white shadow-md'
-          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-      }`}
-    >
-      <Icon />
-      {label}
-    </button>
-  );
+  // Helper to generate share link with all params - Passed to Modal
+  const generateShareLink = useCallback(() => {
+    let link = '';
+    // Base link (saved ID or encoded items)
+    if (savedGalleryId) {
+        link = `${shareBase}/?gallery=${savedGalleryId}`;
+    } else if (galleryItems.length) {
+        link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
+    }
+
+    if (!link) return window.location.href; // Fallback
+
+    // Append appearance settings if not already present
+    // We force a check on the current state to ensure sliders are respected
+    const url = new URL(link);
+    if (!url.searchParams.has('layout')) url.searchParams.set('layout', viewMode);
+    if (!url.searchParams.has('scale')) url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
+    if (viewMode === 'sphere' && !url.searchParams.has('radius')) url.searchParams.set('radius', sphereBase.toString());
+    if (viewMode === 'tile' && !url.searchParams.has('gap')) url.searchParams.set('gap', tileGap.toString());
+    
+    return url.toString();
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
+
+  const handleCopyLink = async (specificLink?: string, suppressToast?: boolean) => {
+    const link = specificLink || generateShareLink();
+    if (!link) return;
+
+    try {
+      await navigator.clipboard.writeText(link);
+      if (!suppressToast) {
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 2000);
+      }
+    } catch (err) {
+      console.warn('Clipboard error', err);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setAuthMessage('Redirecting...');
+      await signInWithGoogle(window.location.origin);
+    } catch (err: any) { setLoadError(err.message); }
+  };
+
+  const handleEmailLogin = async () => {
+    if (!authEmail) return;
+    try {
+      setAuthMessage('Check email!');
+      await signInWithEmail(authEmail, window.location.origin);
+    } catch (err: any) { setLoadError(err.message); }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setSession(null);
+    setMyGalleries([]);
+  };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
-      <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
-        
-        {/* --- SIDEBAR --- */}
-        <div className="w-full sm:w-64 bg-slate-50 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col p-4 shrink-0">
-          <div className="px-4 py-2 mb-2 sm:mb-6 flex justify-between items-center sm:block">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Aether</h2>
-              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Builder Tool</p>
-            </div>
-            <button 
-               onClick={props.onClose} 
-               className="sm:hidden w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600"
-            >
-               ×
-            </button>
-          </div>
+    <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
+      
+      {/* 3D Scene */}
+      <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
+        {viewMode === 'sphere' ? (
+          <Suspense fallback={<Loader />}>
+            <Canvas camera={{ position: [0, 0, 65], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
+              <GalleryScene
+                onSelect={setSelectedItem}
+                items={galleryItems}
+                clearing={isClearing}
+                cardScale={mediaScale}
+                radiusBase={sphereBase}
+              />
+            </Canvas>
+          </Suspense>
+        ) : (
+          <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
+        )}
+        {loadingRemote && <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10"><Loader /></div>}
+      </div>
 
-          <nav className="flex sm:flex-col space-x-2 sm:space-x-0 sm:space-y-2 overflow-x-auto pb-2 sm:pb-0">
-            <NavItem id="editor" label="Editor" icon={IconEdit} />
-            <NavItem id="library" label="My Galleries" icon={IconLibrary} />
-            <NavItem id="settings" label="Appearance" icon={IconSettings} />
-            <NavItem id="support" label="Support" icon={IconHeart} />
-          </nav>
+      <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
-          <div className="mt-auto pt-4 border-t border-slate-200 space-y-3 hidden sm:block">
-            {!props.session ? (
-              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <p className="text-xs text-slate-500 mb-3 font-medium">Save your work</p>
-                <button
-                  onClick={props.onGoogleLogin}
-                  disabled={!props.isSupabaseConfigured}
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition shadow-sm"
-                >
-                  <IconGoogle /> Log in with Google
-                </button>
-              </div>
-            ) : (
-              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs">
-                    {(props.session.user.email?.[0] || 'U').toUpperCase()}
-                 </div>
-                 <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-700 truncate">{props.session.user.email}</p>
-                    <button onClick={props.onSignOut} className="text-[10px] text-red-500 hover:text-red-600 font-medium hover:underline">
-                       Sign out
-                    </button>
-                 </div>
-              </div>
-            )}
+      {/* Header */}
+      <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <div className="flex items-center gap-3">
+        <button onClick={() => setBuilderOpen(true)} className="p-4 -ml-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Open menu">
+          <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        {/* Title */}
+        <div 
+          className="cursor-pointer group" 
+          onClick={() => window.location.href = window.location.origin}
+          title="Reset Gallery"
+        >
+          <h1 className="text-3xl font-light text-slate-800 tracking-tighter transition-colors group-hover:text-slate-600">Aether</h1>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors group-hover:text-slate-500">Gallery</p>
           </div>
         </div>
-
-        {/* --- MAIN CONTENT --- */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white relative h-full overflow-hidden">
-            <button 
-               onClick={props.onClose} 
-               className="hidden sm:flex absolute top-4 right-4 z-10 w-8 h-8 items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+      </div>
+        
+        <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
+            <button
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              onClick={() => setViewMode('sphere')}
             >
-               ×
+              Sphere
             </button>
+            <button
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              onClick={() => setViewMode('tile')}
+            >
+              Masonry
+            </button>
+        </div>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-               {props.loadError && (
-                  <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm flex items-center gap-2">
-                     <span className="font-bold">Error:</span> {props.loadError}
-                  </div>
-               )}
+        {displayName && (
+           <div 
+             className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
+             style={{ fontFamily: 'Heebo, sans-serif' }}
+           >
+             {displayName}
+           </div>
+        )}
+        
+        {toastVisible && (
+          <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce">
+            Link Copied!
+          </div>
+        )}
+      </div>
 
-               {/* === EDITOR TAB === */}
-               {activeTab === 'editor' && (
-                  <div className="space-y-6 max-w-lg mx-auto animate-in fade-in duration-300 pb-8">
-                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-slate-800">Gallery Content</h3>
-                        <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">{props.galleryItemsCount} items</span>
-                     </div>
-                     
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Paste Links</label>
-                        <textarea
-                           value={props.inputValue}
-                           onChange={(e) => props.setInputValue(e.target.value)}
-                           className="w-full h-32 p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none font-mono"
-                           placeholder="https://youtu.be/..."
-                        />
-                        <div className="flex justify-end gap-2">
-                           <button onClick={props.onClear} className="text-xs font-bold text-slate-400 hover:text-rose-500 px-3 py-2 transition">Clear</button>
-                           <button onClick={props.onAddMedia} className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg hover:translate-y-[-1px] transition">Apply Changes</button>
-                        </div>
-                     </div>
+      {/* Footer Contact */}
+      <div className={`fixed bottom-8 right-8 z-20 transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <div className="relative">
+          <button
+            onClick={() => setContactMenuOpen(!contactMenuOpen)}
+            className="flex items-center gap-3 px-5 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition text-slate-600 text-sm font-medium border border-white"
+          >
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+            Contact
+          </button>
+          
+          {contactMenuOpen && (
+            <div className="absolute bottom-14 right-0 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden min-w-[200px] animate-in slide-in-from-bottom-2">
+              <div className="p-3 border-b border-slate-50 text-xs text-slate-400 font-semibold uppercase">Contact Artist</div>
+              {contactWhatsapp ? (
+                 <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">WhatsApp</a>
+              ) : null}
+              {contactEmail ? (
+                 <a href={`mailto:${contactEmail}`} className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">Email</a>
+              ) : null}
+              {!contactWhatsapp && !contactEmail && <div className="px-4 py-3 text-xs text-slate-400 italic">No contact info provided</div>}
+            </div>
+          )}
+        </div>
+      </div>
 
-                     <div className="space-y-4 pt-4 border-t border-slate-100">
-                        <h3 className="text-sm font-bold text-slate-800">Details</h3>
-                        <div className="space-y-3">
-                           <input 
-                              value={props.displayName} 
-                              onChange={(e) => props.setDisplayName(e.target.value)}
-                              placeholder="Gallery Title"
-                              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                           />
-                           <div className="grid grid-cols-2 gap-4">
-                              <input 
-                                 value={props.contactEmail} 
-                                 onChange={(e) => props.setContactEmail(e.target.value)}
-                                 placeholder="Email Address"
-                                 className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                              />
-                              <input 
-                                 value={props.contactWhatsapp} 
-                                 onChange={(e) => props.setContactWhatsapp(e.target.value)}
-                                 placeholder="WhatsApp (Number)"
-                                 className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                              />
-                           </div>
-                        </div>
-                     </div>
+      <BuilderModal
+        isOpen={builderOpen}
+        onClose={() => setBuilderOpen(false)}
+        session={session}
+        galleryItemsCount={galleryItems.length}
+        inputValue={inputValue}
+        setInputValue={setInputValue}
+        displayName={displayName}
+        setDisplayName={setDisplayName}
+        contactWhatsapp={contactWhatsapp}
+        setContactWhatsapp={setContactWhatsapp}
+        contactEmail={contactEmail}
+        setContactEmail={setContactEmail}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        mediaScale={mediaScale}
+        setMediaScale={setMediaScale}
+        sphereBase={sphereBase}
+        setSphereBase={setSphereBase}
+        tileGap={tileGap}
+        setTileGap={setTileGap}
+        myGalleries={myGalleries}
+        isLoadingMyGalleries={isLoadingMyGalleries}
+        savedGalleryId={savedGalleryId}
+        isSupabaseConfigured={isSupabaseConfigured}
+        isSaving={isSaving}
+        loadError={loadError}
+        authMessage={authMessage}
+        authEmail={authEmail}
+        setAuthEmail={setAuthEmail}
+        onAddMedia={handleAddMedia}
+        onClear={handleClear}
+        onSave={handleSaveGallery}
+        // BuilderModal handles copy internally now to avoid background toast
+        onCopyLink={() => handleCopyLink()} 
+        getShareLink={generateShareLink}
+        onLoadGallery={async (slug) => { 
+          try {
+            const record = await loadGalleryRecord(slug); 
+            if (record) {
+              const link = applyLoadedRecord(record);
+              window.history.replaceState(null, '', link);
+              const urls = record.items.map(i => i.originalUrl).join('\n');
+              setInputValue(urls);
+            }
+          } catch (err) {
+            console.error('Load error:', err);
+            setLoadError('Failed to load gallery');
+          }
+        }}
+        onGoogleLogin={handleGoogleLogin}
+        onEmailLogin={handleEmailLogin}
+        onSignOut={handleSignOut}
+      />
+    </div>
+  );
+};
 
-                     <div className="pt-6 mt-4">
-                        {!props.session ? (
-                           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-center justify-between">
-                              <p className="text-xs text-amber-800 font-medium">Log in to save this gallery permanently.</p>
-                              <button onClick={() => setActiveTab('library')} className="text-xs bg-white border border-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-100 shadow-sm">Go to Login</button>
-                           </div>
-                        ) : (
-                           <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-3">
-                              <div className="flex justify-between items-center">
-                                 <p className="text-xs font-bold text-emerald-800 uppercase">Publishing</p>
-                                 {props.savedGalleryId && <span className="text-[10px] font-mono text-emerald-600">ID: {props.savedGalleryId}</span>}
-                              </div>
-                              <div className="flex gap-2">
-                                 {props.savedGalleryId ? (
-                                    <>
-                                       <button 
-                                          onClick={() => props.onSave(false)}
-                                          disabled={props.isSaving}
-                                          className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
-                                       >
-                                          {props.isSaving ? 'Updating...' : 'Update Gallery'}
-                                       </button>
-                                       <button 
-                                          onClick={() => props.onSave(true)}
-                                          disabled={props.isSaving}
-                                          className="px-4 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-200 transition shadow-sm"
-                                          title="Save as a new copy"
-                                       >
-                                          Save New
-                                       </button>
-                                    </>
-                                 ) : (
-                                    <button 
-                                       onClick={() => props.onSave(true)}
-                                       disabled={props.isSaving}
-                                       className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition shadow-lg"
-                                    >
-                                       {props.isSaving ? 'Saving...' : 'Save Gallery'}
-                                    </button>
-                                 )}
-                              </div>
-                           </div>
-                        )}
-                        
-                        {/* COMBINED SHARE BUTTON & DROPDOWN */}
-                        <div className="relative mt-2">
-                            <button 
-                                onClick={handleShareClick}
-                                className={`w-full flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-lg border transition duration-200 ${
-                                    isCopied 
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                                    : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                                }`}
-                            >
-                                <IconShare /> 
-                                {isCopied ? 'Link Copied!' : 'Share Gallery'}
-                            </button>
-                            
-                             {showShareMenu && (
-                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
-                                 <button 
-                                   onClick={() => { 
-                                       const link = props.getShareLink();
-                                       window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); 
-                                       setShowShareMenu(false); 
-                                   }}
-                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"
-                                 >
-                                   <span className="text-[#25D366] text-lg">📱</span> WhatsApp
-                                 </button>
-                                 <button 
-                                   onClick={() => { 
-                                       const link = props.getShareLink();
-                                       window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(link)}`; 
-                                       setShowShareMenu(false); 
-                                   }}
-                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"
+export default App;
