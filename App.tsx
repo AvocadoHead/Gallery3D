@@ -377,10 +377,14 @@ const App: React.FC = () => {
           </svg>
         </button>
         {/* Title */}
-        <div>
-          <h1 className="text-3xl font-light text-slate-800 tracking-tighter  transition-colors">Aether</h1>
+        <div 
+          className="cursor-pointer group" 
+          onClick={() => window.location.href = window.location.origin}
+          title="Reset Gallery"
+        >
+          <h1 className="text-3xl font-light text-slate-800 tracking-tighter transition-colors group-hover:text-slate-600">Aether</h1>
           <div className="flex items-center gap-2">
-            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
+            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors group-hover:text-slate-500">Gallery</p>
           </div>
         </div>
       </div>
@@ -494,7 +498,6 @@ const App: React.FC = () => {
             setLoadError('Failed to load gallery');
           }
         }}
-        // Change 2: Pass the link generator
         getShareLink={generateShareLink}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
