@@ -43,8 +43,9 @@ const App: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   
+  // REMOVED: isMobile state (This was causing the display conflict)
+
   // --- Gallery Configuration (Defaults) ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
   const [mediaScale, setMediaScale] = useState(1.5);  
@@ -76,13 +77,8 @@ const App: React.FC = () => {
 
   const authProcessing = useRef(false);
 
-  // Check Mobile & Load Parameters
+  // Load Parameters (Removed the manual resize listener)
   useEffect(() => {
-    // Mobile Check
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
     // URL Params
     const params = new URLSearchParams(window.location.search);
     const layout = params.get('layout');
@@ -94,8 +90,6 @@ const App: React.FC = () => {
     if (scale) setMediaScale(parseInt(scale) / 100);
     if (radius) setSphereBase(parseInt(radius));
     if (gap) setTileGap(parseInt(gap));
-
-    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // --- AUTH LOGIC ---
@@ -400,13 +394,17 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
-            {/* Fix Mobile Scale: Move camera back on mobile */}
-            <Canvas camera={{ position: [0, 0, isMobile ? 85 : 65], fov: isMobile ? 60 : 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
+            {/* 
+               CRITICAL FIX: 
+               Reverted Camera Position to fixed [0,0,65] and FOV 50.
+               Removing 'isMobile' conditionals here prevents hydration errors and scene jumps.
+            */}
+            <Canvas camera={{ position: [0, 0, 65], fov: 50 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true }} className="bg-transparent">
               <GalleryScene
                 onSelect={setSelectedItem}
                 items={galleryItems}
                 clearing={isClearing}
-                cardScale={isMobile ? mediaScale * 1.2 : mediaScale} 
+                cardScale={mediaScale} // Removed dynamic mobile scaling
                 radiusBase={sphereBase}
               />
             </Canvas>
