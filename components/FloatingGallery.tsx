@@ -42,13 +42,10 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [muted, setMuted] = useState(true);
-  
   const hasDedicatedPreview = useMemo(
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
     [item.fallbackPreview, item.previewUrl, item.videoUrl],
   );
-  
-  // Reverted to standard logic: check kind, not device type
   const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
   const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
   
@@ -68,16 +65,15 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   useFrame((state) => {
     if (!groupRef.current) return;
     // Billboard behavior: always face the camera
+    // This works perfectly both outside and INSIDE the sphere
     groupRef.current.lookAt(state.camera.position);
 
-    // Restored the subtle edge tilt for depth perception
     const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
     if (edgeTilt > 0) {
       groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
     }
   });
 
-  // Restored: Robust video playback handling
   useEffect(() => {
     if (!useVideo || !videoRef.current) return;
 
@@ -92,7 +88,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     play();
   }, [item.previewUrl, useVideo]);
 
-  // Restored: Handle hover play state
   useEffect(() => {
     if (!useVideo || !videoRef.current) return;
     const el = videoRef.current;
@@ -103,6 +98,25 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   }, [hovered, useVideo]);
 
   // Restored: Smooth audio fading (The "Failing" version removed this for "optimization" but broke the UX)
+  useEffect(() => {
+    if (!useVideo) return;
+    let raf: number;
+    const fadeVolume = () => {
+      if (!videoRef.current) return;
+      const target = hovered ? 0.9 : 0;
+      const current = videoRef.current.volume;
+      const step = 0.08;
+      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
+      videoRef.current.volume = next;
+      const shouldMute = next < 0.05;
+      if (muted !== shouldMute) setMuted(shouldMute);
+      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
+    };
+
+    raf = requestAnimationFrame(fadeVolume);
+    return () => cancelAnimationFrame(raf);
+  }, [hovered, muted, useVideo]);
+
   useEffect(() => {
     if (!useVideo) return;
     let raf: number;
@@ -206,11 +220,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
 
   return (
     <group position={position} ref={groupRef}>
-      {/* 
-         CRITICAL FIX: Always use Float. 
-         Conditionally removing this based on "isMobile" breaks the scene graph hierarchy
-         and HTML positioning synchronization.
-      */}
       <Float
         speed={1.5} 
         rotationIntensity={0.05} 
@@ -268,16 +277,13 @@ interface GallerySceneProps {
   clearing: boolean;
   cardScale: number;
   radiusBase: number;
-  // removed isMobile from interface as it is not used in the working version
 }
 
 const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
-  // Restored: The working version capped radius at 95. The failing version pushed it to 200 which makes items tiny.
   const radius = Math.max(
     24,
     Math.min(95, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
-  
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
