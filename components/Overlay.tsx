@@ -67,7 +67,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           <video
             src={videoSource}
             className={`
-              max-w-[90vw] max-h-[82vh] object-contain rounded-2xl select-none
+              max-w-[92vw] max-h-[92vh] object-contain select-none
               transition-opacity duration-500
               ${loaded ? 'opacity-100' : 'opacity-0'}
             `}
@@ -94,7 +94,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       const isDrive = media.provider === 'gdrive';
 
       return (
-        <div className="relative w-[88vw] max-w-5xl aspect-video">
+        <div className="relative w-[92vw] max-w-5xl aspect-video">
           {!loaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
               <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
@@ -104,7 +104,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           <iframe
             src={embedUrl}
             allow="autoplay; fullscreen; picture-in-picture"
-            className={`w-full h-full rounded-2xl border-0 ${
+            className={`w-full h-full border-0 ${
               loaded ? 'opacity-100' : 'opacity-0'
             } transition-opacity duration-500`}
             onLoad={() => setLoaded(true)}
@@ -130,7 +130,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         src={hasError ? media.fallbackPreview || previewUrl : fullUrl}
         alt="Artwork"
         className={`
-          max-w-[90vw] max-h-[82vh] object-contain rounded-2xl select-none
+          max-w-[92vw] max-h-[92vh] object-contain select-none
           transition-opacity duration-500
           ${loaded ? 'opacity-100' : 'opacity-0'}
         `}
@@ -176,7 +176,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
 
       <div
         className={`
-          relative p-2 bg-white rounded-2xl shadow-2xl overflow-hidden
+          relative bg-transparent shadow-2xl overflow-hidden
           transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1)
           ${visible ? 'scale-100 opacity-100 translate-y-0' : 'scale-90 opacity-0 translate-y-12'}
         `}
