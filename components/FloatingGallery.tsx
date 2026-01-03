@@ -108,7 +108,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale, 
           }}
           onError={() => setLoaded(true)}
           draggable={false}
-          loading="lazy"
+          loading={isMobile ? 'eager' : 'lazy'}
         />
       );
     }
