@@ -1,8 +1,4 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-      {/* ZOOM CONTROLS: You can tweak these settings to adjust zoom behavior:
-       * minDistance (line 295): Lower value = zoom in closer (default: radius * 0.01, no minimum limit)       * maxDistance (line 291): Higher value = zoom out further (default: radius * 2.0)
-       * zoomSpeed (line 296): Higher value = faster zoom (default: 6.0)
-       */}
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -67,7 +63,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   useFrame((state) => {
     if (!groupRef.current) return;
     // Billboard behavior: always face the camera
-    // This works perfectly both outside and INSIDE the sphere
     groupRef.current.lookAt(state.camera.position);
 
     const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
@@ -262,9 +257,10 @@ interface GallerySceneProps {
 }
 
 const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
+  // Fix Issue 7: Increased max clamp from 95 to 200 to allow larger radius
   const radius = Math.max(
     24,
-    Math.min(95, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
+    Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
@@ -291,7 +287,8 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <OrbitControls
         enablePan={false}
         enableZoom
-        minDistance={radius * 0.01}        maxDistance={Math.max(90, radius * 2.0)}
+        minDistance={radius * 0.01}
+        maxDistance={Math.max(90, radius * 2.0)}
         autoRotate
         autoRotateSpeed={0.6}
         dampingFactor={0.08}
