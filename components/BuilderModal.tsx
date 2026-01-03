@@ -161,7 +161,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                ×
             </button>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32">
                {props.loadError && (
                   <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm flex items-center gap-2">
                      <span className="font-bold">Error:</span> {props.loadError}
@@ -170,7 +170,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                {/* === EDITOR TAB === */}
                {activeTab === 'editor' && (
-                  <div className="space-y-6 max-w-lg mx-auto animate-in fade-in duration-300 pb-8">
+                  <div className="space-y-6 max-w-lg mx-auto animate-in fade-in duration-300">
                      <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-800">Gallery Content</h3>
                         <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">{props.galleryItemsCount} items</span>
@@ -215,97 +215,12 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                            </div>
                         </div>
                      </div>
-
-                     <div className="pt-6 mt-4">
-                        {!props.session ? (
-                           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-center justify-between">
-                              <p className="text-xs text-amber-800 font-medium">Log in to save this gallery permanently.</p>
-                              <button onClick={() => setActiveTab('library')} className="text-xs bg-white border border-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-100 shadow-sm">Go to Login</button>
-                           </div>
-                        ) : (
-                           <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-3">
-                              <div className="flex justify-between items-center">
-                                 <p className="text-xs font-bold text-emerald-800 uppercase">Publishing</p>
-                                 {props.savedGalleryId && <span className="text-[10px] font-mono text-emerald-600">ID: {props.savedGalleryId}</span>}
-                              </div>
-                              <div className="flex gap-2">
-                                 {props.savedGalleryId ? (
-                                    <>
-                                       <button 
-                                          onClick={() => props.onSave(false)}
-                                          disabled={props.isSaving}
-                                          className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
-                                       >
-                                          {props.isSaving ? 'Updating...' : 'Update Gallery'}
-                                       </button>
-                                       <button 
-                                          onClick={() => props.onSave(true)}
-                                          disabled={props.isSaving}
-                                          className="px-4 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-200 transition shadow-sm"
-                                          title="Save as a new copy"
-                                       >
-                                          Save New
-                                       </button>
-                                    </>
-                                 ) : (
-                                    <button 
-                                       onClick={() => props.onSave(true)}
-                                       disabled={props.isSaving}
-                                       className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition shadow-lg"
-                                    >
-                                       {props.isSaving ? 'Saving...' : 'Save Gallery'}
-                                    </button>
-                                 )}
-                              </div>
-                           </div>
-                        )}
-                        
-                        {/* COMBINED SHARE BUTTON & DROPDOWN */}
-                        <div className="relative mt-2">
-                            <button 
-                                onClick={handleShareClick}
-                                className={`w-full flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-lg border transition duration-200 ${
-                                    isCopied 
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                                    : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                                }`}
-                            >
-                                <IconShare /> 
-                                {isCopied ? 'Link Copied!' : 'Share Gallery'}
-                            </button>
-                            
-                             {showShareMenu && (
-                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
-                                 <button 
-                                   onClick={() => { 
-                                       const link = props.getShareLink();
-                                       window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); 
-                                       setShowShareMenu(false); 
-                                   }}
-                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"
-                                 >
-                                   <span className="text-[#25D366] text-lg">📱</span> WhatsApp
-                                 </button>
-                                 <button 
-                                   onClick={() => { 
-                                       const link = props.getShareLink();
-                                       window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(link)}`; 
-                                       setShowShareMenu(false); 
-                                   }}
-                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"
-                                 >
-                                   <span className="text-blue-600 text-lg">✉️</span> Email
-                                 </button>
-                               </div>
-                             )}
-                        </div>
-                     </div>
                   </div>
                )}
 
                {/* === LIBRARY TAB === */}
                {activeTab === 'library' && (
-                  <div className="space-y-6 animate-in fade-in duration-300 pb-8">
+                  <div className="space-y-6 animate-in fade-in duration-300">
                      <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-800">My Galleries</h3>
                      </div>
@@ -339,9 +254,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                        Edit / Load
                                     </button>
                                     <button 
-                                       onClick={() => {
-                                          navigator.clipboard.writeText(`${window.location.origin}/?gallery=${g.slug || g.id}`);
-                                       }}
+                                       onClick={() => props.onCopyLink(`${window.location.origin}/?gallery=${g.slug || g.id}`, false)}
                                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                        title="Copy Link"
                                     >
@@ -357,7 +270,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                {/* === SETTINGS TAB === */}
                {activeTab === 'settings' && (
-                  <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300 pb-8">
+                  <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300">
                      <h3 className="text-lg font-bold text-slate-800">Visual Settings</h3>
                      
                      <div className="space-y-4">
@@ -427,20 +340,19 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                     value={props.tileGap} 
                                     onChange={(e) => props.setTileGap(parseFloat(e.target.value))} 
                                     className="w-full accent-slate-900 py-4 sm:py-2" 
-              
                                  />
                               </div>
-
-                                          {/* Save Settings Button */}
-            {props.session && props.savedGalleryId && (
-              <button
-                onClick={() => props.onSave(false)}
-                disabled={props.isSaving}
-                className="w-full mt-6 bg-slate-900 text-white text-sm font-bold py-3 rounded-xl hover:bg-slate-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {props.isSaving ? 'Saving Settings...' : 'Save Appearance Settings'}
-              </button>
-            )}
+                           )}
+                           
+                           {/* Save Settings Button - Correctly placed */}
+                           {props.session && props.savedGalleryId && (
+                              <button
+                                onClick={() => props.onSave(false)}
+                                disabled={props.isSaving}
+                                className="w-full mt-6 bg-slate-900 text-white text-sm font-bold py-3 rounded-xl hover:bg-slate-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {props.isSaving ? 'Saving Settings...' : 'Save Appearance Settings'}
+                              </button>
                            )}
                         </div>
                      </div>
@@ -503,8 +415,90 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                      </div>
                   </div>
                )}
-
             </div>
+
+            {/* === FOOTER ACTION BAR (STICKY) === */}
+            {activeTab === 'editor' && (
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 z-10">
+                    <div className="pt-2">
+                        {!props.session ? (
+                           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-center justify-between">
+                              <p className="text-xs text-amber-800 font-medium">Log in to save this gallery.</p>
+                              <button onClick={() => setActiveTab('library')} className="text-xs bg-white border border-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-100 shadow-sm">Login</button>
+                           </div>
+                        ) : (
+                           <div className="flex gap-2 mb-2">
+                                 {props.savedGalleryId ? (
+                                    <>
+                                       <button 
+                                          onClick={() => props.onSave(false)}
+                                          disabled={props.isSaving}
+                                          className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
+                                       >
+                                          {props.isSaving ? 'Updating...' : 'Update'}
+                                       </button>
+                                       <button 
+                                          onClick={() => props.onSave(true)}
+                                          disabled={props.isSaving}
+                                          className="px-4 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-200 transition shadow-sm"
+                                          title="Save as a new copy"
+                                       >
+                                          New
+                                       </button>
+                                    </>
+                                 ) : (
+                                    <button 
+                                       onClick={() => props.onSave(true)}
+                                       disabled={props.isSaving}
+                                       className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition shadow-lg"
+                                    >
+                                       {props.isSaving ? 'Saving...' : 'Save Gallery'}
+                                    </button>
+                                 )}
+                           </div>
+                        )}
+                        
+                        <div className="relative">
+                            <button 
+                                onClick={handleShareClick}
+                                className={`w-full flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-lg border transition duration-200 ${
+                                    isCopied 
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                    : 'bg-slate-900 text-white hover:bg-slate-800 border-transparent shadow-lg'
+                                }`}
+                            >
+                                <IconShare /> 
+                                {isCopied ? 'Link Copied!' : 'Share Gallery'}
+                            </button>
+                            
+                             {showShareMenu && (
+                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
+                                 <button 
+                                   onClick={() => { 
+                                       const link = props.getShareLink();
+                                       window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); 
+                                       setShowShareMenu(false); 
+                                   }}
+                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"
+                                 >
+                                   <span className="text-[#25D366] text-lg">📱</span> WhatsApp
+                                 </button>
+                                 <button 
+                                   onClick={() => { 
+                                       const link = props.getShareLink();
+                                       window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(link)}`; 
+                                       setShowShareMenu(false); 
+                                   }}
+                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"
+                                 >
+                                   <span className="text-blue-600 text-lg">✉️</span> Email
+                                 </button>
+                               </div>
+                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
       </div>
     </div>
