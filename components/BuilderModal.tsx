@@ -46,7 +46,7 @@ interface BuilderModalProps {
   onAddMedia: () => void;
   onClear: () => void;
   onSave: (asNew?: boolean) => void;
-  onStartNew: () => void; // New prop for creating fresh gallery
+  onStartNew: () => void;
   onCopyLink: (link?: string, suppressToast?: boolean) => void;
   getShareLink: () => string;
   onLoadGallery: (slug: string) => void;
@@ -63,14 +63,19 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   if (!props.isOpen) return null;
 
   const handleShareClick = async () => {
+    // 1. Get link with params (scale, layout etc)
     const link = props.getShareLink();
     try {
+      // 2. Copy
       await navigator.clipboard.writeText(link);
+      // 3. Feedback
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
+      // 4. Open Menu
       setShowShareMenu(true);
     } catch (err) {
       console.error('Failed to copy', err);
+      // Fail-safe: open menu anyway so they can at least click whatsapp/email
       setShowShareMenu(true);
     }
   };
@@ -90,8 +95,15 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   );
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
-      <div className="w-[850px] max-w-full h-[600px] max-h-[90vh] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
+      {/* 
+         Mobile-first container:
+         - w-full / max-w-[95vw] prevents width overflow
+         - h-[85vh] prevents height overflow/address bar clipping
+         - flex-col ensures sidebar stacks on top on mobile
+         - overflow-visible allows the Share Menu to pop out
+      */}
+      <div className="w-full sm:w-[850px] max-w-[95vw] h-[85vh] sm:h-[600px] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
         
         {/* --- SIDEBAR --- */}
         <div className="w-full sm:w-64 bg-slate-50 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col p-4 shrink-0 sm:rounded-l-3xl">
@@ -100,6 +112,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               <h2 className="text-xl font-bold text-slate-900 tracking-tight">Aether</h2>
               <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Builder Tool</p>
             </div>
+            {/* Mobile close button */}
             <button 
                onClick={props.onClose} 
                className="sm:hidden w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600"
@@ -108,7 +121,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
             </button>
           </div>
 
-          <nav className="flex sm:flex-col space-x-2 sm:space-x-0 sm:space-y-2 overflow-x-auto pb-2 sm:pb-0">
+          <nav className="flex sm:flex-col space-x-2 sm:space-x-0 sm:space-y-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
             <NavItem id="editor" label="Editor" icon={IconEdit} />
             <NavItem id="library" label="My Galleries" icon={IconLibrary} />
             <NavItem id="settings" label="Appearance" icon={IconSettings} />
@@ -145,6 +158,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
         {/* --- MAIN CONTENT --- */}
         <div className="flex-1 flex flex-col min-w-0 bg-white relative h-full overflow-hidden sm:rounded-r-3xl">
+            {/* Desktop close button */}
             <button 
                onClick={props.onClose} 
                className="hidden sm:flex absolute top-4 right-4 z-10 w-8 h-8 items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
@@ -214,7 +228,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <div className="space-y-6 animate-in fade-in duration-300">
                      <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-800">My Galleries</h3>
-                        {/* New Button to Create Fresh Gallery */}
                         {props.session && (
                            <button 
                               onClick={() => { props.onStartNew(); setActiveTab('editor'); }}
