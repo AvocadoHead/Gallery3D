@@ -8,85 +8,72 @@ interface OverlayProps {
 
 const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const [visible, setVisible] = useState(false);
+  // This state tracks if a Google Drive link turned out to be a video
+  const [isDriveVideo, setIsDriveVideo] = useState(false);
 
   useEffect(() => {
     if (artwork) {
+      // Reset video detection state when opening a new item
+      setIsDriveVideo(false);
       requestAnimationFrame(() => setVisible(true));
     } else {
       setVisible(false);
     }
   }, [artwork]);
 
-  // --- SMART URL DETECTION ---
-  const embedConfig = useMemo(() => {
+  const config = useMemo(() => {
     if (!artwork) return null;
-    
-    // 1. User's specific Google Drive fix (Priority from Data)
-    const item = artwork as any;
-    if (item.provider === 'gdrive' && item.embedUrl) {
-      return { type: 'iframe', src: item.embedUrl };
-    }
-
     const url = artwork.fullUrl;
 
-    // 2. YouTube
+    // 1. YouTube (Always Iframe)
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = url.split('v=')[1] || url.split('/').pop();
       const cleanId = videoId?.split('&')[0].split('?')[0];
-      return { 
-        type: 'iframe', 
-        src: `https://www.youtube.com/embed/${cleanId}?autoplay=1&rel=0` 
-      };
+      return { type: 'iframe', src: `https://www.youtube.com/embed/${cleanId}?autoplay=1&rel=0`, ratio: 'aspect-video' };
     }
     
-    // 3. Vimeo
+    // 2. Vimeo (Always Iframe)
     if (url.includes('vimeo.com')) {
       const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
       const videoId = match ? match[1] : null;
       if (videoId) {
-        return { 
-          type: 'iframe', 
-          src: `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0` 
-        };
+        return { type: 'iframe', src: `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0`, ratio: 'aspect-video' };
       }
     }
 
-    // 4. Google Drive (Robust Detection)
+    // 3. Google Drive (The Smart Check)
     if (url.includes('drive.google.com')) {
-      // Regex to catch both /file/d/XYZ and ?id=XYZ formats
-      const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
-      
-      if (match && match[1]) {
-        const idPart = match[1];
-
-        // LOGIC SPLIT:
-        // If it is explicitly an IMAGE, use the direct link (Native Ratio, No Frame).
-        if (artwork.kind === 'image') {
-           return {
-             type: 'image',
-             src: `https://drive.google.com/uc?export=view&id=${idPart}`
+      const parts = url.split('/d/');
+      if (parts.length > 1) {
+        const idPart = parts[1].split('/')[0];
+        
+        // If we previously detected this failed as an image, render the Video Player Iframe
+        if (isDriveVideo) {
+           return { 
+             type: 'iframe', 
+             src: `https://drive.google.com/file/d/${idPart}/preview`,
+             ratio: 'flexible' // Allow player to size itself roughly
            };
         }
 
-        // If it is a VIDEO (or generic/unknown), use the Iframe Player (Has Play Button).
-        // We default to this to ensure videos work even if 'kind' is mistakenly set to 'embed'.
+        // Otherwise, TRY to render as a Direct Image first (Native Ratio)
         return { 
-          type: 'iframe', 
-          src: `https://drive.google.com/file/d/${idPart}/preview` 
+          type: 'drive-image-try', 
+          src: `https://drive.google.com/uc?export=view&id=${idPart}`
         };
       }
     }
 
-    // 5. Direct Video Files (MP4/WebM) - Native Player (No Iframe)
+    // 4. Direct Video (Native Player)
     if (artwork.kind === 'video' || url.match(/\.(mp4|webm|mov|ogg)$/i)) {
       return { type: 'video', src: artwork.videoUrl || url };
     }
 
-    // 6. Default Fallback -> Image
+    // 5. Standard Image
     return { type: 'image', src: url };
-  }, [artwork]);
+  }, [artwork, isDriveVideo]);
 
-  if (!artwork || !embedConfig) return null;
+  if (!artwork || !config) return null;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
@@ -100,7 +87,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         onClick={onClose}
       />
 
-      {/* LAYER 2: CONTENT WRAPPER */}
+      {/* LAYER 2: CONTENT */}
       <div 
         className={`
            relative z-10 w-full h-full flex flex-col items-center justify-center pointer-events-none
@@ -118,57 +105,62 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           </svg>
         </button>
 
-        {/* MEDIA DISPLAY */}
+        {/* MEDIA CONTAINER */}
         <div 
-            className="pointer-events-auto flex items-center justify-center"
-            style={{ maxWidth: '95vw', maxHeight: '85vh' }}
+            className="pointer-events-auto flex items-center justify-center p-4"
+            style={{ width: '100%', height: '100%', maxWidth: '100vw', maxHeight: '90vh' }}
             onClick={(e) => e.stopPropagation()}
         >
-            {embedConfig.type === 'iframe' ? (
+            {config.type === 'iframe' ? (
               /* 
-                 IFRAMES (Drive Video / YT / Vimeo)
-                 Must be wrapped to have dimension and play controls.
+                 IFRAME (Videos)
+                 YouTube/Vimeo get aspect-video (16:9).
+                 Drive Videos get a flexible box to minimize black bars.
               */
               <div 
-                className="bg-black shadow-2xl rounded-lg overflow-hidden"
-                style={{ width: '85vw', height: '48vw', maxWidth: '1200px', maxHeight: '80vh' }}
+                className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'aspect-video' ? 'w-full max-w-5xl aspect-video' : 'w-[90vw] h-[80vh] max-w-6xl'}`}
               >
                 <iframe
-                  src={embedConfig.src}
+                  src={config.src}
                   title={artwork.title || "Content"}
                   className="w-full h-full border-0"
                   allow="autoplay; encrypted-media; fullscreen"
                   allowFullScreen
                 />
               </div>
-            ) : embedConfig.type === 'video' ? (
-              /* 
-                 DIRECT VIDEO (MP4)
-                 Renders "naked". Native ratio.
-              */
+            ) : config.type === 'video' ? (
+              /* DIRECT VIDEO (MP4) */
               <video
-                src={embedConfig.src}
+                src={config.src}
                 controls
                 autoPlay
                 playsInline
-                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               />
             ) : (
               /* 
-                 IMAGE (Standard + Google Drive Images)
-                 Renders "naked". Native ratio.
+                 IMAGE (Standard OR Google Drive Try)
+                 Renders completely naked. 
+                 If it's a Drive link and fails (onError), we flip the state to render Iframe instead.
               */
               <img
-                src={embedConfig.src}
+                src={config.src}
                 alt={artwork.title || "Artwork"}
-                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                onError={() => {
+                    // If this was a "drive-image-try" type, it failed because it's a video.
+                    // Switch to iframe mode.
+                    if (config.type === 'drive-image-try') {
+                        setIsDriveVideo(true);
+                    }
+                }}
               />
             )}
         </div>
 
-        {/* Bottom Title Bar */}
+        {/* Footer Title */}
         {(artwork.title || artwork.description) && (
-          <div className="mt-4 pointer-events-auto px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 border border-white/10">
+          <div className="absolute bottom-8 pointer-events-auto px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 border border-white/10">
              {artwork.title && <h2 className="text-sm font-bold">{artwork.title}</h2>}
              {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
           </div>
