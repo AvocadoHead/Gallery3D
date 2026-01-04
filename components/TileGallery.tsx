@@ -1,57 +1,86 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MediaItem } from '../constants';
 
 interface TileGalleryProps {
   items: MediaItem[];
   onSelect: (item: MediaItem) => void;
-  mediaScale: number;
+  mediaScale: number; // 0.5 to 3.0
   gap: number;
 }
 
 const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, gap }) => {
-  const gutter = gap !== undefined ? gap : 12;
+  
+  // Calculate columns based on Screen Width AND User Slider
+  const getColumnCount = () => {
+    const width = window.innerWidth;
+    let baseCols = 1;
+    
+    // Base breakpoint logic
+    if (width >= 640) baseCols = 2;   // sm
+    if (width >= 1024) baseCols = 3;  // lg
+    if (width >= 1500) baseCols = 4;  // xl
 
-  // Function to determine if we should nudge this item to create uneven stagger
-  const getStaggerClass = (index: number) => {
-    const randomShift = (index % 3 === 0) ? 'mt-4' : (index % 7 === 0) ? 'mt-8' : '';
-    return randomShift;
+    // Adjust columns based on mediaScale slider
+    // Standard is 1.0. 
+    // If user wants smaller items (0.5), we ADD columns.
+    // If user wants larger items (2.0), we REMOVE columns.
+    
+    if (mediaScale <= 0.6) return baseCols + 2; 
+    if (mediaScale <= 0.8) return baseCols + 1;
+    if (mediaScale >= 1.5) return Math.max(1, baseCols - 1);
+    if (mediaScale >= 2.2) return Math.max(1, baseCols - 2);
+    
+    return baseCols;
   };
 
+  const columns = getColumnCount();
+
+  // Distribute items into columns
+  const columnWrapper = useMemo(() => {
+    const cols: MediaItem[][] = Array.from({ length: columns }, () => []);
+    items.forEach((item, i) => {
+      cols[i % columns].push(item);
+    });
+    return cols;
+  }, [items, columns]);
+
   return (
-    <div className="w-full h-full overflow-y-auto px-4 pt-24 pb-12 custom-scrollbar">
+    <div 
+      className="w-full h-full overflow-y-auto px-4 pt-32 pb-24 no-scrollbar"
+      style={{ WebkitOverflowScrolling: 'touch' }}
+    >
       <div 
-        className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6 gap-x-4 space-y-4 mx-auto"
-        style={{ columnGap: `${gutter}px`, maxWidth: '1800px' }}
+        className="flex justify-center items-start" 
+        style={{ gap: `${gap}px` }}
       >
-        {items.map((item, idx) => (
-          <div
-            key={item.id}
-            className={`break-inside-avoid relative group mb-4 ${getStaggerClass(idx)}`}
-            style={{ marginBottom: `${gutter}px` }}
-            onClick={() => onSelect(item)}
+        {columnWrapper.map((col, colIndex) => (
+          <div 
+            key={colIndex} 
+            className="flex flex-col flex-1"
+            style={{ gap: `${gap}px` }}
           >
-            <div className="w-full bg-slate-200 rounded-lg overflow-hidden cursor-pointer shadow-sm transition-all duration-200 hover:shadow-md hover:brightness-110">
-              {item.kind === 'video' ? (
-                <video
-                  src={item.videoUrl || item.fullUrl}
-                  className="block w-full h-auto align-middle transition-transform duration-300 origin-center"
-                  style={{ transform: `scale(${Math.max(1, mediaScale)})` }}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                />
-              ) : (
+            {col.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => onSelect(item)}
+                className="relative group cursor-pointer rounded-lg overflow-hidden bg-slate-100 shadow-sm hover:shadow-md transition-all duration-300"
+              >
                 <img
-                  src={item.fallbackPreview || item.previewUrl}
-                  alt={item.title || 'Gallery artwork'}
-                  className="block w-full h-auto align-middle transition-transform duration-300 origin-center"
-                  style={{ transform: `scale(${Math.max(1, mediaScale)})` }}
+                  src={item.fallbackPreview || item.previewUrl || item.fullUrl}
+                  alt="gallery item"
+                  className="w-full h-auto object-cover block"
                   loading="lazy"
                 />
-              )}
-               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 pointer-events-none" />
-            </div>
+                
+                {item.kind === 'video' && (
+                  <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full backdrop-blur-sm">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  </div>
+                )}
+                
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+              </div>
+            ))}
           </div>
         ))}
       </div>
