@@ -1,22 +1,42 @@
-/* Base styles for the gallery shell. Tailwind utilities come from the CDN in index.html. */
+/* Base styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
 body {
+  width: 100%;
+  height: 100%;
   margin: 0;
+  padding: 0;
+  /* CRITICAL: Prevents the page from bouncing/scrolling behind the canvas */
+  overflow: hidden; 
+  /* CRITICAL: Tells the browser to let the App handle touches (prevents native zoom/pan) */
+  touch-action: none; 
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: radial-gradient(circle at 20% 25%, #fdfefe, #f6fbff 42%, #e7f2ff);
+  /* Prevent blue selection highlight on mobile tap */
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Fix Issue 12: Viewport and Touch Handling */
+/* Modal styles */
 @media (max-width: 640px) {
   .modal-container {
     max-height: 90vh;
     overflow-y: auto;
+    /* Re-enable touch for the modal content only */
+    touch-action: pan-y;
   }
   
-  /* Prevent zoom on input focus for inputs, but mainly slider ease of use */
   input[type="range"] {
     touch-action: manipulation;
   }
