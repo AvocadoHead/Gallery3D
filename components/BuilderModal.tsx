@@ -52,40 +52,47 @@ interface BuilderModalProps {
 }
 
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
-  const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'account'>('content');
+  // Reverted to 4 tabs logic
+  const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'galleries' | 'support'>('content');
 
   if (!props.isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] modal-container">
         
-        {/* Header Tabs */}
-        <div className="flex border-b border-slate-100">
+        {/* Header Tabs - Restored to 4 Tabs */}
+        <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setActiveTab('content')} 
-            className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === 'content' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`flex-1 min-w-[80px] py-4 text-xs font-bold uppercase tracking-wide transition whitespace-nowrap ${activeTab === 'content' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
           >
-            Content
+            Edit
           </button>
           <button 
             onClick={() => setActiveTab('appearance')} 
-            className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === 'appearance' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`flex-1 min-w-[80px] py-4 text-xs font-bold uppercase tracking-wide transition whitespace-nowrap ${activeTab === 'appearance' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
           >
-            Appearance
+            Look
           </button>
           <button 
-            onClick={() => setActiveTab('account')} 
-            className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === 'account' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+            onClick={() => setActiveTab('galleries')} 
+            className={`flex-1 min-w-[100px] py-4 text-xs font-bold uppercase tracking-wide transition whitespace-nowrap ${activeTab === 'galleries' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
           >
-            Save & Share
+            My Galleries
+          </button>
+          <button 
+            onClick={() => setActiveTab('support')} 
+            className={`flex-1 min-w-[80px] py-4 text-xs font-bold uppercase tracking-wide transition whitespace-nowrap ${activeTab === 'support' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Support
           </button>
         </div>
 
         {/* Content Area */}
         <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
           
-          {/* TAB: CONTENT */}
+          {/* TAB 1: CONTENT (EDIT) */}
           {activeTab === 'content' && (
             <div className="space-y-6">
               <div>
@@ -135,7 +142,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
             </div>
           )}
 
-          {/* TAB: APPEARANCE */}
+          {/* TAB 2: APPEARANCE (LOOK) */}
           {activeTab === 'appearance' && (
             <div className="space-y-8">
               <div>
@@ -211,96 +218,121 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   />
                 </div>
               )}
+
+              {/* Added: Specific Save Layout Button */}
+              {props.session && (
+                 <button 
+                   onClick={() => props.onSave({ asNew: false })} 
+                   disabled={props.isSaving}
+                   className="w-full py-3 mt-4 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-xl font-medium text-sm transition shadow-sm"
+                 >
+                   {props.isSaving ? 'Saving...' : 'Save Layout Settings'}
+                 </button>
+              )}
             </div>
           )}
 
-          {/* TAB: ACCOUNT / SAVE */}
-          {activeTab === 'account' && (
+          {/* TAB 3: MY GALLERIES */}
+          {activeTab === 'galleries' && (
             <div className="space-y-6">
               {!props.session ? (
+                // NOT LOGGED IN VIEW
                 <div className="text-center py-4">
-                  <p className="text-sm text-slate-600 mb-4">Sign in to save and manage your galleries.</p>
-                  <button onClick={props.onGoogleLogin} className="w-full py-2.5 px-4 bg-white border border-slate-200 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition flex items-center justify-center gap-2 mb-3">
-                     <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
-                     Sign in with Google
-                  </button>
-                  
-                  <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
-                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-slate-50 px-2 text-slate-400">Or with Email</span></div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input 
-                      type="email" 
-                      placeholder="email@example.com" 
-                      className="flex-1 p-2 text-sm border border-slate-200 rounded-lg"
-                      value={props.authEmail}
-                      onChange={(e) => props.setAuthEmail(e.target.value)}
-                    />
-                    <button onClick={props.onEmailLogin} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm">Send Link</button>
-                  </div>
-                  {props.authMessage && <p className="text-xs text-green-600 mt-2">{props.authMessage}</p>}
+                   <p className="text-sm text-slate-600 mb-4">Sign in to access your saved galleries.</p>
+                   <button onClick={props.onGoogleLogin} className="w-full py-2.5 px-4 bg-white border border-slate-200 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition flex items-center justify-center gap-2 mb-3">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
+                      Sign in with Google
+                   </button>
+                   <div className="flex gap-2">
+                     <input 
+                       type="email" 
+                       placeholder="email@example.com" 
+                       className="flex-1 p-2 text-sm border border-slate-200 rounded-lg"
+                       value={props.authEmail}
+                       onChange={(e) => props.setAuthEmail(e.target.value)}
+                     />
+                     <button onClick={props.onEmailLogin} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm">Send Link</button>
+                   </div>
+                   {props.authMessage && <p className="text-xs text-green-600 mt-2">{props.authMessage}</p>}
                 </div>
               ) : (
+                // LOGGED IN VIEW
                 <div className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                    <div className="flex items-center justify-between mb-2">
-                       <span className="text-xs font-bold text-blue-800 uppercase">Current Session</span>
-                       <button onClick={props.onSignOut} className="text-xs text-blue-600 hover:text-blue-800 underline">Sign Out</button>
-                    </div>
-                    <p className="text-sm text-blue-900 truncate">{props.session.user.email}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                     <button 
-                       onClick={() => props.onSave({ asNew: false })} 
-                       disabled={props.isSaving}
-                       className="py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition shadow-sm disabled:opacity-50"
-                     >
-                       {props.isSaving ? 'Saving...' : 'Save Changes'}
-                     </button>
-                     <button 
-                       onClick={props.onCopyLink} 
-                       className="py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-medium text-sm transition"
-                     >
-                       Share Link
-                     </button>
-                  </div>
-                  
-                  {props.savedGalleryId && (
-                     <button 
-                       onClick={() => props.onSave({ asNew: true })} 
-                       className="w-full py-2 text-slate-500 hover:text-slate-800 text-xs font-medium underline"
-                     >
-                       Save as New Copy
-                     </button>
-                  )}
-
-                  {props.myGalleries.length > 0 && (
-                    <div className="pt-4 border-t border-slate-200 mt-4">
-                      <p className="text-xs font-bold text-slate-500 uppercase mb-3">Your Galleries</p>
-                      <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                        {props.myGalleries.map((g) => (
-                          <div key={g.id} onClick={() => props.onLoadGallery(g.slug)} className="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer group transition">
-                            <span className="text-sm text-slate-700 font-medium group-hover:text-blue-600 truncate max-w-[180px]">{g.display_name || 'Untitled'}</span>
-                            <span className="text-[10px] text-slate-400">{new Date(g.created_at).toLocaleDateString()}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                   <div className="flex items-center justify-between bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
+                      <span className="text-xs text-blue-800 truncate">{props.session.user.email}</span>
+                      <button onClick={props.onSignOut} className="text-xs font-bold text-blue-600 hover:underline">Sign Out</button>
+                   </div>
 
                    <button 
                      onClick={props.onStartNew} 
-                     className="w-full py-3 border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 rounded-xl text-sm font-medium mt-2"
+                     className="w-full py-3 border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 rounded-xl text-sm font-medium"
                    >
-                     + Start Fresh
+                     + Create New Gallery
                    </button>
+
+                   <div className="pt-2">
+                      <p className="text-xs font-bold text-slate-500 uppercase mb-3">Saved Galleries</p>
+                      {props.isLoadingMyGalleries ? (
+                        <div className="text-center text-sm text-slate-400 py-4">Loading...</div>
+                      ) : props.myGalleries.length === 0 ? (
+                        <div className="text-center text-sm text-slate-400 py-4 italic">No galleries found.</div>
+                      ) : (
+                        <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
+                          {props.myGalleries.map((g) => (
+                            <div key={g.id} onClick={() => props.onLoadGallery(g.slug)} className="flex items-center justify-between p-3 bg-white border border-slate-100 hover:border-blue-200 hover:shadow-sm rounded-lg cursor-pointer group transition">
+                              <span className="text-sm text-slate-700 font-medium group-hover:text-blue-600 truncate max-w-[180px]">{g.display_name || 'Untitled'}</span>
+                              <span className="text-[10px] text-slate-400">{new Date(g.created_at).toLocaleDateString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                   </div>
+
+                   {/* Save/Share Actions for Current Gallery */}
+                   <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
+                      <button 
+                        onClick={() => props.onSave({ asNew: false })} 
+                        className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition shadow-sm"
+                      >
+                        {props.isSaving ? 'Saving...' : 'Save Current'}
+                      </button>
+                      <button 
+                        onClick={props.onCopyLink} 
+                        className="py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-medium text-sm transition"
+                      >
+                        Share Link
+                      </button>
+                   </div>
                 </div>
               )}
             </div>
           )}
+
+          {/* TAB 4: SUPPORT */}
+          {activeTab === 'support' && (
+            <div className="space-y-6 text-center">
+               <p className="text-sm text-slate-600 leading-relaxed">
+                 Aether Gallery is a free tool for 3D spatial curation.
+                 If you enjoy using it, consider supporting the development.
+               </p>
+               
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-sm">
+                    <div className="w-full aspect-square bg-slate-100 mb-2 rounded-lg flex items-center justify-center text-xs text-slate-400">QR CODE</div>
+                    <p className="text-xs font-bold text-slate-700">Buy me a Coffee</p>
+                  </div>
+                  <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-sm">
+                    <div className="w-full aspect-square bg-slate-100 mb-2 rounded-lg flex items-center justify-center text-xs text-slate-400">QR CODE</div>
+                    <p className="text-xs font-bold text-slate-700">Crypto (ETH)</p>
+                  </div>
+               </div>
+               
+               <div className="text-xs text-slate-400 pt-4 border-t border-slate-100">
+                 Built with React Three Fiber + Supabase.
+               </div>
+            </div>
+          )}
+
         </div>
 
         {/* Footer Close */}
