@@ -9,7 +9,6 @@ const IconTrash = () => <svg className="w-4 h-4" fill="none" stroke="currentColo
 interface BuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // New Prop
   initialTab?: 'content' | 'appearance' | 'galleries' | 'support'; 
   
   session: Session | null;
@@ -56,7 +55,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [shareMenuOpen, setShareMenuOpen] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Sync tab when prop changes
   useEffect(() => {
     if (props.isOpen && props.initialTab) {
         setActiveTab(props.initialTab);
@@ -310,7 +308,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   {/* Bit */}
                   <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                     <a href="https://bitpay.co.il" target="_blank" rel="noreferrer" className="block">
+                     <a href="https://www.bitpay.co.il/app/me/705695EF-357F-6632-4165-6032ED7F44AE0278" target="_blank" rel="noreferrer" className="block">
                         <div className="w-32 h-32 mx-auto bg-slate-50 rounded-lg mb-2 overflow-hidden">
                             <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Bit QR" />
                         </div>
@@ -320,7 +318,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                   {/* Paybox */}
                   <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                     <a href="https://links.payboxapp.com" target="_blank" rel="noreferrer" className="block">
+                     <a href="https://links.payboxapp.com/hyc1wV1p0Yb" target="_blank" rel="noreferrer" className="block">
                         <div className="w-32 h-32 mx-auto bg-slate-50 rounded-lg mb-2 overflow-hidden">
                             <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Paybox QR" />
                         </div>
@@ -330,7 +328,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
                   {/* Coffee */}
                   <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                     <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" className="block">
+                     <a href="https://buymeacoffee.com/Optopia" target="_blank" rel="noreferrer" className="block">
                         <div className="w-32 h-32 mx-auto bg-slate-50 rounded-lg mb-2 overflow-hidden">
                             <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Coffee QR" />
                         </div>
