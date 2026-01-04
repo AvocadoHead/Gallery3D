@@ -20,16 +20,9 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   // --- SMART URL DETECTION ---
   const embedConfig = useMemo(() => {
     if (!artwork) return null;
-    
-    // 1. User's specific Google Drive fix (Priority)
-    const item = artwork as any;
-    if (item.provider === 'gdrive' && item.embedUrl) {
-      return { type: 'iframe', src: item.embedUrl };
-    }
-
     const url = artwork.fullUrl;
 
-    // 2. YouTube
+    // 1. YouTube (Always iframe)
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = url.split('v=')[1] || url.split('/').pop();
       const cleanId = videoId?.split('&')[0].split('?')[0];
@@ -39,7 +32,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       };
     }
     
-    // 3. Vimeo
+    // 2. Vimeo (Always iframe)
     if (url.includes('vimeo.com')) {
       const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
       const videoId = match ? match[1] : null;
@@ -51,11 +44,23 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 4. Google Drive (Fallback string detection)
+    // 3. Google Drive Handling
     if (url.includes('drive.google.com')) {
       const parts = url.split('/d/');
       if (parts.length > 1) {
         const idPart = parts[1].split('/')[0];
+
+        // CRITICAL FIX: 
+        // If it's an IMAGE, use the direct download link so it renders naturally (no iframe black bars).
+        // We assume 'image' kind if explicit, OR if not 'video'/'embed'.
+        if (artwork.kind === 'image') {
+           return {
+             type: 'image',
+             src: `https://drive.google.com/uc?export=view&id=${idPart}`
+           };
+        }
+
+        // If it's a VIDEO, use the preview iframe player
         return { 
           type: 'iframe', 
           src: `https://drive.google.com/file/d/${idPart}/preview` 
@@ -63,12 +68,12 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 5. Direct Video Files
+    // 4. Direct Video Files
     if (artwork.kind === 'video' || url.match(/\.(mp4|webm|mov|ogg)$/i)) {
       return { type: 'video', src: artwork.videoUrl || url };
     }
 
-    // 6. Default to Image
+    // 5. Default Fallback (Image)
     return { type: 'image', src: url };
   }, [artwork]);
 
@@ -77,7 +82,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
       
-      {/* LAYER 1: BACKDROP (Subtle Dark Blur) */}
+      {/* LAYER 1: BACKDROP */}
       <div 
         className={`
           absolute inset-0 bg-black/30 backdrop-blur-xl transition-opacity duration-300 ease-out
@@ -86,7 +91,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         onClick={onClose}
       />
 
-      {/* LAYER 2: CONTENT WRAPPER */}
+      {/* LAYER 2: CONTENT */}
       <div 
         className={`
            relative z-10 w-full h-full flex flex-col items-center justify-center pointer-events-none
@@ -104,11 +109,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           </svg>
         </button>
 
-        {/* 
-            MEDIA DISPLAY
-            We intentionally do NOT put a wrapper div around Image/Video types.
-            This prevents the "black box" effect.
-        */}
+        {/* MEDIA CONTAINER */}
         <div 
             className="pointer-events-auto flex items-center justify-center"
             style={{ maxWidth: '95vw', maxHeight: '85vh' }}
@@ -116,11 +117,12 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         >
             {embedConfig.type === 'iframe' ? (
               /* 
-                 IFRAMES (YouTube/Vimeo/Drive)
-                 Must be wrapped to have dimension, otherwise they collapse.
+                 IFRAMES (Video Embeds)
+                 These still need a box to live in, but we removed the 'bg-black' 
+                 so it blends better if dimensions mismatch.
               */
               <div 
-                className="bg-black shadow-2xl rounded-lg overflow-hidden"
+                className="shadow-2xl rounded-lg overflow-hidden"
                 style={{ width: '85vw', height: '48vw', maxWidth: '1200px', maxHeight: '80vh' }}
               >
                 <iframe
@@ -132,10 +134,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 />
               </div>
             ) : embedConfig.type === 'video' ? (
-              /* 
-                 DIRECT VIDEO (MP4)
-                 Rendered "naked". It will define its own aspect ratio.
-              */
+              /* DIRECT VIDEO (MP4) */
               <video
                 src={embedConfig.src}
                 controls
@@ -145,8 +144,8 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
               />
             ) : (
               /* 
-                 IMAGE 
-                 Rendered "naked". It will define its own aspect ratio.
+                 IMAGE (Now includes Google Drive Images!)
+                 Renders "naked" with native aspect ratio.
               */
               <img
                 src={embedConfig.src}
