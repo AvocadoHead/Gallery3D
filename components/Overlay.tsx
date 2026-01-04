@@ -110,6 +110,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
            };
         }
 
+        // API said "VIDEO" -> Iframe Player
         return { 
           type: 'iframe', 
           src: `https://drive.google.com/file/d/${id}/preview`,
@@ -132,10 +133,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
       
-      {/* 
-         LAYER 1: BACKDROP 
-         Changed 'backdrop-blur-xl' (Heavy) to 'backdrop-blur-sm' (Subtle) 
-      */}
+      {/* LAYER 1: BACKDROP */}
       <div 
         className={`
           absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity duration-300 ease-out
@@ -173,8 +171,17 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                   <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-2" />
                </div>
             ) : config.type === 'iframe' ? (
+              /* 
+                 IFRAME PLAYER 
+                 - YT/Vimeo: Fixed 16:9 Aspect Ratio but much larger (w-[90vw] max-w-7xl)
+                 - Drive Video: Flexible Container
+              */
               <div 
-                className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-full max-w-5xl aspect-video' : 'w-[90vw] h-[80vh] max-w-6xl'}`}
+                className={`bg-black shadow-2xl rounded-lg overflow-hidden ${
+                  config.ratio === 'fixed' 
+                    ? 'w-[90vw] max-w-7xl aspect-video max-h-[80vh]' // Increased size for YT/Vimeo
+                    : 'w-[90vw] h-[80vh] max-w-7xl' // Consistent max width for Drive
+                }`}
               >
                 <iframe
                   src={config.src}
@@ -185,6 +192,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 />
               </div>
             ) : config.type === 'video' ? (
+              /* NATIVE VIDEO */
               <video
                 src={config.src}
                 controls
@@ -193,6 +201,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
               />
             ) : (
+              /* NATIVE IMAGE */
               <img
                 src={config.src}
                 alt={artwork.title || "Artwork"}
