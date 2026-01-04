@@ -83,7 +83,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     }
   }, [hovered, useVideo]);
 
-  // Volume Fading Logic
+  // Volume Fading
   useEffect(() => {
     if (!useVideo) return;
     let raf: number;
@@ -157,24 +157,19 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         floatIntensity={0.5} 
         floatingRange={[-0.1, 0.1]}
       >
-        {/* FIX: 'occlude="blending"' causes missing items on mobile. 
-            Standard 'occlude' is faster and 100% stable. */}
         <Html 
             transform 
             occlude 
             distanceFactor={12} 
             zIndexRange={[100, 0]}
             style={{ 
-                // Force hardware acceleration to prevent jitter
-                transform: 'translate3d(0,0,0)',
+                transform: 'translate3d(0,0,0)', 
                 willChange: 'opacity, transform' 
             }}
         >
           <div
             className={`
               relative group cursor-pointer select-none
-              /* FIX: Changed transition-all to transition-opacity. 
-                 transition-all fights with the 3D positioning engine. */
               transition-opacity duration-700 ease-out
               ${mounted && !clearing ? 'opacity-100' : 'opacity-0'}
               ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
@@ -188,7 +183,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
             style={{
               width: `${computedSize.width}px`,
               height: `${computedSize.height}px`,
-              // We apply scale via inline style for hover effects to avoid CSS class conflicts
               transform: hovered && !clearing ? 'scale(1.1)' : 'scale(1)',
               transition: 'transform 0.2s ease-out, opacity 0.5s ease-out'
             }}
@@ -225,9 +219,11 @@ interface GallerySceneProps {
 }
 
 const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
+  // FIX: Allow radiusBase to fully control size without clamping it at 95.
+  // We now clamp at 200, which is larger than the slider max of 150.
   const radius = Math.max(
     24,
-    Math.min(95, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
+    Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
   
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
