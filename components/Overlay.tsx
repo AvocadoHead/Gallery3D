@@ -73,11 +73,12 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       
       {/* 
          LAYER 1: BACKDROP 
-         Separated from content to prevent blur from bleeding into the image/video.
+         Changed to bg-black/10 (10% opacity) for a very light touch.
+         The heavy lifting is done by backdrop-blur-xl.
       */}
       <div 
         className={`
-          absolute inset-0 bg-black/40 backdrop-blur-xl transition-opacity duration-300 ease-out
+          absolute inset-0 bg-black/10 backdrop-blur-xl transition-opacity duration-300 ease-out
           ${visible ? 'opacity-100' : 'opacity-0'}
         `}
         onClick={onClose}
@@ -85,7 +86,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
 
       {/* 
          LAYER 2: CONTENT 
-         Pointer events auto ensures clicks pass to iframes/videos.
       */}
       <div 
         className={`
@@ -110,7 +110,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             style={{ 
                 maxWidth: '100%', 
                 maxHeight: '85vh',
-                // This ensures the container shrinks to fit the content aspect ratio
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
@@ -121,13 +120,17 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             {/* === RENDER LOGIC === */}
             
             {embedConfig.type === 'iframe' ? (
-              /* IFRAME (Google Drive, YT, Vimeo) */
+              /* 
+                 IFRAME (Google Drive, YT, Vimeo) 
+                 Added 'sandbox' permissions to allow Google Drive scripts to run the player.
+              */
               <div className="w-[90vw] h-[50vw] max-w-[1200px] max-h-[80vh] md:w-[80vw] md:h-[45vw] bg-black">
                 <iframe
                   src={embedConfig.src}
                   title={artwork.title || "Content"}
                   className="w-full h-full border-0"
                   allow="autoplay; encrypted-media; fullscreen"
+                  sandbox="allow-forms allow-scripts allow-pointer-lock allow-same-origin allow-top-navigation allow-presentation"
                   allowFullScreen
                 />
               </div>
