@@ -44,12 +44,12 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 3. Google Drive
-    // Converts /view or /sharing links to /preview for embedding
+    // 3. Google Drive (Video/File)
     if (url.includes('drive.google.com')) {
       const parts = url.split('/d/');
       if (parts.length > 1) {
         const idPart = parts[1].split('/')[0];
+        // We use /preview for the embeddable player
         return { 
           type: 'iframe', 
           src: `https://drive.google.com/file/d/${idPart}/preview` 
@@ -73,8 +73,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       
       {/* 
          LAYER 1: BACKDROP 
-         Changed to bg-black/10 (10% opacity) for a very light touch.
-         The heavy lifting is done by backdrop-blur-xl.
+         Very subtle background (10% opacity)
       */}
       <div 
         className={`
@@ -94,7 +93,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
            ${visible ? 'scale-100' : 'scale-90'}
         `}
       >
-        {/* Close Button (Clickable) */}
+        {/* Close Button */}
         <button 
           onClick={onClose}
           className="absolute top-4 right-4 pointer-events-auto p-3 rounded-full bg-white text-slate-900 shadow-xl hover:scale-110 transition-transform z-50"
@@ -104,7 +103,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           </svg>
         </button>
 
-        {/* Media Container (Clickable) */}
+        {/* Media Container */}
         <div 
             className="relative pointer-events-auto shadow-2xl rounded-xl overflow-hidden"
             style={{ 
@@ -117,12 +116,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             onClick={(e) => e.stopPropagation()}
         >
             
-            {/* === RENDER LOGIC === */}
-            
             {embedConfig.type === 'iframe' ? (
               /* 
-                 IFRAME (Google Drive, YT, Vimeo) 
-                 Added 'sandbox' permissions to allow Google Drive scripts to run the player.
+                 IFRAME (Google Drive, YT, Vimeo)
+                 Fix: Removed 'sandbox' attribute. Google Drive's player scripts need full access 
+                 to the frame to render the play button and controls correctly.
               */
               <div className="w-[90vw] h-[50vw] max-w-[1200px] max-h-[80vh] md:w-[80vw] md:h-[45vw] bg-black">
                 <iframe
@@ -130,7 +128,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                   title={artwork.title || "Content"}
                   className="w-full h-full border-0"
                   allow="autoplay; encrypted-media; fullscreen"
-                  sandbox="allow-forms allow-scripts allow-pointer-lock allow-same-origin allow-top-navigation allow-presentation"
                   allowFullScreen
                 />
               </div>
