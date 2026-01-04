@@ -46,6 +46,7 @@ interface BuilderModalProps {
   onStartNew: () => void;
   onCopyLink: () => void;
   onLoadGallery: (slug: string) => void;
+  onDeleteGallery: (id: string) => void; // New Prop
   onGoogleLogin: () => void;
   onEmailLogin: () => void;
   onSignOut: () => void;
@@ -53,15 +54,37 @@ interface BuilderModalProps {
 
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'galleries' | 'support'>('content');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   if (!props.isOpen) return null;
 
+  const handleRowCopy = async (slug: string) => {
+    const url = `${window.location.origin}/?gallery=${slug}`;
+    try {
+        await navigator.clipboard.writeText(url);
+        setCopiedId(slug);
+        setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+        console.warn('Copy failed', err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] modal-container">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] modal-container">
         
+        {/* Top Right Close Button (X) */}
+        <button 
+            onClick={props.onClose} 
+            className="absolute top-4 right-4 z-20 p-2 text-slate-400 hover:text-slate-700 bg-white/50 hover:bg-white rounded-full transition"
+        >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
         {/* Header Tabs */}
-        <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar">
+        <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar pt-2 pr-12">
           <button 
             onClick={() => setActiveTab('content')} 
             className={`flex-1 min-w-[80px] py-4 text-xs font-bold uppercase tracking-wide transition whitespace-nowrap ${activeTab === 'content' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
@@ -89,7 +112,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
         </div>
 
         {/* Content Area */}
-        <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+        <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 pb-8">
           
           {/* TAB 1: CONTENT (EDIT) */}
           {activeTab === 'content' && (
@@ -175,8 +198,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                 </div>
                 <input
                   type="range"
-                  min="0.5"
-                  max="2.5"
+                  min="0.3"
+                  max="3.0"
                   step="0.1"
                   value={props.mediaScale}
                   onChange={(e) => props.setMediaScale(parseFloat(e.target.value))}
@@ -193,8 +216,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <input
                     type="range"
                     min="30"
-                    max="120"
-                    step="1"
+                    max="150"
+                    step="5"
                     value={props.sphereBase}
                     onChange={(e) => props.setSphereBase(parseInt(e.target.value))}
                     className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
@@ -209,8 +232,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <input
                     type="range"
                     min="0"
-                    max="50"
-                    step="1"
+                    max="100"
+                    step="2"
                     value={props.tileGap}
                     onChange={(e) => props.setTileGap(parseInt(e.target.value))}
                     className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
@@ -276,31 +299,48 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                       ) : props.myGalleries.length === 0 ? (
                         <div className="text-center text-sm text-slate-400 py-4 italic">No galleries found.</div>
                       ) : (
-                        <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
+                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
                           {props.myGalleries.map((g) => (
-                            <div key={g.id} onClick={() => props.onLoadGallery(g.slug)} className="flex items-center justify-between p-3 bg-white border border-slate-100 hover:border-blue-200 hover:shadow-sm rounded-lg cursor-pointer group transition">
-                              <span className="text-sm text-slate-700 font-medium group-hover:text-blue-600 truncate max-w-[180px]">{g.display_name || 'Untitled'}</span>
-                              <span className="text-[10px] text-slate-400">{new Date(g.created_at).toLocaleDateString()}</span>
+                            <div key={g.id} className="p-3 bg-white border border-slate-100 rounded-lg hover:shadow-sm transition group">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm text-slate-700 font-bold truncate max-w-[180px]">{g.display_name || 'Untitled'}</span>
+                                <span className="text-[10px] text-slate-400">{new Date(g.created_at).toLocaleDateString()}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 mt-2">
+                                {/* Load Button */}
+                                <button 
+                                   onClick={() => props.onLoadGallery(g.slug)}
+                                   className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-medium rounded border border-slate-200"
+                                >
+                                   Edit/Load
+                                </button>
+                                
+                                {/* Share Button */}
+                                <button 
+                                   onClick={() => handleRowCopy(g.slug)}
+                                   className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-blue-600 border border-slate-200 rounded relative"
+                                   title="Copy Link"
+                                >
+                                   {copiedId === g.slug ? (
+                                     <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap">Copied!</span>
+                                   ) : null}
+                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                                </button>
+
+                                {/* Delete Button */}
+                                <button 
+                                   onClick={() => props.onDeleteGallery(g.id)}
+                                   className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 border border-red-100 rounded"
+                                   title="Delete"
+                                >
+                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
                       )}
-                   </div>
-
-                   {/* Save/Share Actions for Current Gallery */}
-                   <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
-                      <button 
-                        onClick={() => props.onSave({ asNew: false })} 
-                        className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition shadow-sm"
-                      >
-                        {props.isSaving ? 'Saving...' : 'Save Current'}
-                      </button>
-                      <button 
-                        onClick={props.onCopyLink} 
-                        className="py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-medium text-sm transition"
-                      >
-                        Share Link
-                      </button>
                    </div>
                 </div>
               )}
@@ -367,13 +407,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
             </div>
           )}
 
-        </div>
-
-        {/* Footer Close */}
-        <div className="p-4 border-t border-slate-100 bg-white">
-          <button onClick={props.onClose} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold transition">
-            Close
-          </button>
         </div>
       </div>
     </div>
