@@ -4,7 +4,6 @@ import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { getSphereCoordinates, MediaItem } from '../constants';
 
-// --- Single Gallery Item ---
 interface ItemProps {
   item: MediaItem;
   position: [number, number, number];
@@ -151,33 +150,15 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
 
   return (
     <group position={position} ref={groupRef}>
-      <Float
-        speed={1.5} 
-        rotationIntensity={0.05} 
-        floatIntensity={0.5} 
-        floatingRange={[-0.1, 0.1]}
-      >
-        <Html 
-            transform 
-            occlude 
-            distanceFactor={12} 
-            zIndexRange={[100, 0]}
-            style={{ 
-                transform: 'translate3d(0,0,0)', 
-                willChange: 'opacity, transform' 
-            }}
-        >
+      <Float speed={1.5} rotationIntensity={0.05} floatIntensity={0.5} floatingRange={[-0.1, 0.1]}>
+        <Html transform occlude distanceFactor={12} zIndexRange={[100, 0]} style={{ transform: 'translate3d(0,0,0)', willChange: 'opacity, transform' }}>
           <div
             className={`
-              relative group cursor-pointer select-none
-              transition-opacity duration-700 ease-out
+              relative group cursor-pointer select-none transition-opacity duration-700 ease-out
               ${mounted && !clearing ? 'opacity-100' : 'opacity-0'}
               ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
             `}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick(item);
-            }}
+            onClick={(e) => { e.stopPropagation(); onClick(item); }}
             onPointerEnter={() => setHover(true)}
             onPointerLeave={() => setHover(false)}
             style={{
@@ -187,20 +168,10 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
               transition: 'transform 0.2s ease-out, opacity 0.5s ease-out'
             }}
           >
-            <div
-              className={`
-                w-full h-full bg-white rounded-2xl p-2 
-                transition-shadow duration-300
-                ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
-              `}
-            >
+            <div className={`w-full h-full bg-white rounded-2xl p-2 transition-shadow duration-300 ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}`}>
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
                 {renderMedia()}
-                {!loaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/40">
-                    <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
-                  </div>
-                )}
+                {!loaded && <div className="absolute inset-0 flex items-center justify-center bg-white/40"><div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" /></div>}
               </div>
             </div>
           </div>
@@ -219,10 +190,9 @@ interface GallerySceneProps {
 }
 
 const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
-  // FIX: Allow radiusBase to fully control size without clamping it at 95.
-  // We now clamp at 200, which is larger than the slider max of 150.
+  // Lower minimum radius to 10 for tighter clusters
   const radius = Math.max(
-    24,
+    10, 
     Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
   
@@ -232,33 +202,12 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
     <>
       <ambientLight intensity={1} />
       <Environment preset="city" />
-
       <group>
         {items.map((item, i) => (
-          <GalleryItem
-            key={item.id}
-            item={item}
-            index={i}
-            position={coords[i].position}
-            onClick={onSelect}
-            radius={radius}
-            clearing={clearing}
-            scale={cardScale}
-          />
+          <GalleryItem key={item.id} item={item} index={i} position={coords[i].position} onClick={onSelect} radius={radius} clearing={clearing} scale={cardScale} />
         ))}
       </group>
-
-      <OrbitControls
-        enablePan={false}
-        enableZoom
-        minDistance={Math.max(2, radius * 0.08)}
-        maxDistance={Math.max(90, radius * 1.35)}
-        autoRotate
-        autoRotateSpeed={0.6}
-        dampingFactor={0.08}
-        rotateSpeed={0.55}
-        zoomSpeed={4.5}
-      />
+      <OrbitControls enablePan={false} enableZoom minDistance={Math.max(2, radius * 0.08)} maxDistance={Math.max(90, radius * 1.35)} autoRotate autoRotateSpeed={0.6} dampingFactor={0.08} rotateSpeed={0.55} zoomSpeed={4.5} />
     </>
   );
 };
