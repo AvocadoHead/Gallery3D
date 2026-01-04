@@ -18,7 +18,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   }, [artwork]);
 
   // --- SMART URL DETECTION ---
-  // Transforms links into embeddable formats (YouTube, Vimeo, Google Drive)
   const embedConfig = useMemo(() => {
     if (!artwork) return null;
     const url = artwork.fullUrl;
@@ -33,19 +32,22 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       };
     }
     
-    // 2. Vimeo
+    // 2. Vimeo (Improved Regex to catch ID in complex URLs)
     if (url.includes('vimeo.com')) {
-      const videoId = url.split('.com/')[1]?.split('/')[0];
-      return { 
-        type: 'iframe', 
-        src: `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0` 
-      };
+      // Matches the numeric ID at the end of various Vimeo URL formats
+      const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
+      const videoId = match ? match[1] : null;
+      if (videoId) {
+        return { 
+          type: 'iframe', 
+          src: `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0` 
+        };
+      }
     }
 
-    // 3. Google Drive (The Fix for your issue)
+    // 3. Google Drive
     // Converts /view or /sharing links to /preview for embedding
     if (url.includes('drive.google.com')) {
-      // Extract ID usually between /d/ and /view
       const parts = url.split('/d/');
       if (parts.length > 1) {
         const idPart = parts[1].split('/')[0];
@@ -56,8 +58,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 4. Direct Video Files (mp4, webm, mov)
-    // Sometimes 'kind' isn't set correctly, so we check extension too
+    // 4. Direct Video Files
     if (artwork.kind === 'video' || url.match(/\.(mp4|webm|mov|ogg)$/i)) {
       return { type: 'video', src: artwork.videoUrl || url };
     }
@@ -72,17 +73,14 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
     <div
       className={`
         fixed inset-0 z-[200] flex items-center justify-center 
-        bg-slate-900/80 backdrop-blur-md
+        /* Tweak: Lighter background, heavy blur */
+        bg-black/20 backdrop-blur-xl
         transition-opacity duration-300 ease-out
         ${visible ? 'opacity-100' : 'opacity-0'}
       `}
       onClick={onClose}
     >
-      {/* 
-         Close Button - Fixed Design 
-         Removed backdrop-blur on the button itself to prevent "smudge" look.
-         Now distinct solid white with high contrast.
-      */}
+      {/* Close Button - Solid White Circle */}
       <button 
         onClick={onClose}
         className="absolute top-4 right-4 z-[210] p-3 rounded-full bg-white text-slate-900 shadow-xl hover:scale-110 transition-transform"
@@ -95,7 +93,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       {/* Content Wrapper */}
       <div 
         className={`
-           w-full h-full p-2 md:p-10 flex flex-col items-center justify-center
+           w-full h-full p-2 md:p-8 flex flex-col items-center justify-center
            transition-transform duration-500 cubic-bezier(0.175, 0.885, 0.32, 1.275)
            ${visible ? 'scale-100' : 'scale-90'}
         `}
@@ -107,10 +105,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         {embedConfig.type === 'iframe' ? (
           /* 
              IFRAME (Google Drive, YT, Vimeo)
-             - Removed 'aspect-video' so it doesn't crush portrait videos.
-             - Uses w-full h-full but constrained by max-w/max-h to keep it floating nicely.
+             - flex-1 ensures it takes available space without forcing aspect ratio
+             - w-full/max-w-6xl limits horizontal stretch
+             - bg-transparent ensures no black bars if the iframe has padding
           */
-          <div className="relative w-full h-full max-w-5xl max-h-[85vh] shadow-2xl rounded-lg overflow-hidden bg-black">
+          <div className="relative w-full h-full max-w-6xl max-h-[85vh] shadow-2xl rounded-xl overflow-hidden bg-transparent">
             <iframe
               src={embedConfig.src}
               title={artwork.title || "Content"}
@@ -126,20 +125,20 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             controls
             autoPlay
             playsInline
-            className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded shadow-2xl bg-black"
+            className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
           />
         ) : (
           /* IMAGE */
           <img
             src={embedConfig.src}
             alt={artwork.title || "Artwork"}
-            className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded shadow-2xl"
+            className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
           />
         )}
 
         {/* Title / Description Bar */}
         {(artwork.title || artwork.description) && (
-          <div className="mt-4 px-6 py-3 bg-black/70 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 border border-white/10">
+          <div className="mt-4 px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700">
              {artwork.title && <h2 className="text-sm font-bold">{artwork.title}</h2>}
              {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
           </div>
