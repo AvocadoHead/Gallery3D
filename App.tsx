@@ -40,9 +40,11 @@ const App: React.FC = () => {
 
   // --- UI State ---
   const [builderOpen, setBuilderOpen] = useState(false);
+  // Controls which tab opens when the modal launches
+  const [initialTab, setInitialTab] = useState<'galleries' | 'support'>('galleries'); 
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
-  const [donationToast, setDonationToast] = useState(false); // New Donation Toast
+  const [donationToast, setDonationToast] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   // --- Gallery Configuration ---
@@ -308,7 +310,7 @@ const App: React.FC = () => {
       
       // Trigger Donation Prompt
       setDonationToast(true);
-      setTimeout(() => setDonationToast(false), 5000);
+      setTimeout(() => setDonationToast(false), 6000);
 
     } catch (err: any) {
       console.error(err);
@@ -378,7 +380,7 @@ const App: React.FC = () => {
   return (
     <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
-      {/* 3D Scene - Z-Index 0 */}
+      {/* 3D Scene */}
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
@@ -405,10 +407,17 @@ const App: React.FC = () => {
 
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
-      {/* Header - Z-Index 100 */}
+      {/* Header */}
       <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" aria-label="Open menu">
+          <button 
+            onClick={() => {
+                setInitialTab('galleries');
+                setBuilderOpen(true);
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" 
+            aria-label="Open menu"
+          >
             <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
@@ -458,7 +467,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Footer Contact - Z-Index 100 */}
+      {/* Footer Contact */}
       <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="relative">
           <button
@@ -484,16 +493,20 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* DONATION TOAST NOTIFICATION */}
+      {/* DONATION TOAST */}
       {donationToast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-500">
            <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-white/10">
               <div className="text-sm">
                  <span className="block font-bold mb-0.5">Enjoying Aether? ⚡</span>
-                 <span className="text-slate-300 text-xs">Consider a small donation on the Support tab to keep the project alive.</span>
+                 <span className="text-slate-300 text-xs">A small donation keeps the project alive.</span>
               </div>
               <button 
-                onClick={() => setBuilderOpen(true)} // Opens modal to see Support tab
+                onClick={() => {
+                    setInitialTab('support'); // Set Support Tab
+                    setBuilderOpen(true);     // Open Modal
+                    setDonationToast(false);  // Close Toast
+                }} 
                 className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-bold transition whitespace-nowrap"
               >
                 Support
@@ -506,6 +519,7 @@ const App: React.FC = () => {
       <BuilderModal
         isOpen={builderOpen}
         onClose={() => setBuilderOpen(false)}
+        initialTab={initialTab} // PASSING THE TAB
         session={session}
         galleryItemsCount={galleryItems.length}
         inputValue={inputValue}
