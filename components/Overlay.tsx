@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { MediaItem } from '../constants';
 
-// FIX: Read from Environment Variable
+// Read from Environment Variable
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 
 interface OverlayProps {
@@ -11,6 +11,7 @@ interface OverlayProps {
 
 // Helper to reliably extract Drive File ID
 const extractDriveId = (url: string): string | null => {
+  if (!url) return null;
   const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (m1) return m1[1];
   const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
@@ -22,6 +23,8 @@ const extractDriveId = (url: string): string | null => {
 
 const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   const [visible, setVisible] = useState(false);
+  
+  // 'loading' | 'image' | 'iframe'
   const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'iframe'>('loading');
 
   useEffect(() => {
@@ -29,18 +32,21 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       requestAnimationFrame(() => setVisible(true));
       setDriveMode('loading');
 
-      // --- GOOGLE DRIVE DETECTION ---
-      if (artwork.provider === 'gdrive' && artwork.embedUrl) {
-        const id = extractDriveId(artwork.embedUrl);
+      // --- GOOGLE DRIVE DETECTION & API CHECK ---
+      // Check if it's a drive link OR explicitly marked as gdrive provider
+      const isDrive = artwork.fullUrl.includes('drive.google.com') || (artwork as any).provider === 'gdrive';
+      
+      if (isDrive) {
+        const id = extractDriveId(artwork.fullUrl) || extractDriveId((artwork as any).embedUrl);
         
         if (id) {
-          // If Key exists, ask API. If not, fallback to player immediately.
           if (!GOOGLE_API_KEY) {
-             console.warn('Google API Key missing. Defaulting Drive links to Video Player.');
+             console.warn('Google API Key missing. Defaulting to Player.');
              setDriveMode('iframe');
              return;
           }
 
+          // Ask Google API
           fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=mimeType&key=${GOOGLE_API_KEY}`)
             .then(async (res) => {
                 if (!res.ok) throw new Error('API Request Failed'); 
@@ -48,9 +54,9 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             })
             .then((data) => {
               if (data.mimeType && data.mimeType.startsWith('image/')) {
-                setDriveMode('image');
+                setDriveMode('image'); // CONFIRMED IMAGE
               } else {
-                setDriveMode('iframe'); 
+                setDriveMode('iframe'); // VIDEO / OTHER
               }
             })
             .catch((err) => {
@@ -61,34 +67,23 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           setDriveMode('iframe');
         }
       } else {
-        setDriveMode('image'); 
+        setDriveMode('image'); // Not drive, assume standard image logic downstream
       }
     } else {
       setVisible(false);
     }
   }, [artwork]);
 
-  // --- SMART URL DETECTION ---
-  const embedConfig = useMemo(() => {
+  // --- CONFIGURATION ---
+  const config = useMemo(() => {
     if (!artwork) return null;
     const url = artwork.fullUrl;
-
-    // Priority: Check provider field first for Google Drive
-    if (artwork.provider === 'gdrive' && artwork.embedUrl) {
-      return {
-        type: 'iframe',
-        src: artwork.embedUrl
-      };
-    }
 
     // 1. YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = url.split('v=')[1] || url.split('/').pop();
       const cleanId = videoId?.split('&')[0].split('?')[0];
-      return { 
-        type: 'iframe', 
-        src: `https://www.youtube.com/embed/${cleanId}?autoplay=1&rel=0` 
-      };
+      return { type: 'iframe', src: `https://www.youtube.com/embed/${cleanId}?autoplay=1&rel=0`, ratio: 'fixed' };
     }
     
     // 2. Vimeo
@@ -96,28 +91,52 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
       const videoId = match ? match[1] : null;
       if (videoId) {
+        return { type: 'iframe', src: `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0`, ratio: 'fixed' };
+      }
+    }
+
+    // 3. Google Drive (Dependent on API Result)
+    const isDrive = url.includes('drive.google.com') || (artwork as any).provider === 'gdrive';
+    
+    if (isDrive) {
+      const id = extractDriveId(url) || extractDriveId((artwork as any).embedUrl);
+      
+      if (id) {
+        // Wait for API...
+        if (driveMode === 'loading') return { type: 'loading' };
+
+        // API said "IMAGE" -> Native Ratio
+        if (driveMode === 'image') {
+           return { 
+             type: 'image', 
+             src: `https://drive.google.com/uc?export=view&id=${id}` 
+           };
+        }
+
+        // API said "VIDEO" -> Iframe Player
         return { 
           type: 'iframe', 
-          src: `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0` 
+          src: `https://drive.google.com/file/d/${id}/preview`,
+          ratio: 'flexible'
         };
       }
     }
 
-    // 3. Direct Video Files
+    // 4. Direct Video Files
     if (artwork.kind === 'video' || url.match(/\.(mp4|webm|mov|ogg)$/i)) {
       return { type: 'video', src: artwork.videoUrl || url };
     }
 
-    // 4. Default to Image
+    // 5. Standard Image
     return { type: 'image', src: url };
-  }, [artwork]);
+  }, [artwork, driveMode]);
 
-  if (!artwork || !embedConfig) return null;
+  if (!artwork || !config) return null;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
       
-      {/* LAYER 1: BACKDROP */}
+      {/* LAYER 1: BACKDROP - Light & Blurred */}
       <div 
         className={`
           absolute inset-0 bg-black/10 backdrop-blur-xl transition-opacity duration-300 ease-out
@@ -129,69 +148,72 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       {/* LAYER 2: CONTENT */}
       <div 
         className={`
-          relative z-10 w-full h-full p-2 md:p-8 flex flex-col items-center justify-center pointer-events-none
-          transition-transform duration-500 cubic-bezier(0.175, 0.885, 0.32, 1.275)
-          ${visible ? 'scale-100' : 'scale-90'}
+           relative z-10 w-full h-full flex flex-col items-center justify-center pointer-events-none
+           transition-transform duration-500 cubic-bezier(0.175, 0.885, 0.32, 1.275)
+           ${visible ? 'scale-100' : 'scale-90'}
         `}
       >
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 pointer-events-auto p-3 rounded-full bg-white text-slate-900 shadow-xl hover:scale-110 transition-transform z-50"
+          className="absolute top-4 right-4 pointer-events-auto p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition z-50 backdrop-blur-md shadow-lg"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
-        {/* Media Container */}
+        {/* CONTAINER */}
         <div 
-          className="relative pointer-events-auto shadow-2xl rounded-xl overflow-hidden"
-          style={{ 
-            maxWidth: '100%', 
-            maxHeight: '85vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          onClick={(e) => e.stopPropagation()}
+            className="pointer-events-auto flex items-center justify-center"
+            style={{ maxWidth: '95vw', maxHeight: '85vh' }}
+            onClick={(e) => e.stopPropagation()}
         >
-          
-          {embedConfig.type === 'iframe' ? (
-            /* IFRAME (Google Drive, YT, Vimeo) */
-            <div className="w-[90vw] h-[50vw] max-w-[1200px] max-h-[80vh] md:w-[80vw] md:h-[45vw] bg-black">
-              <iframe
-                src={embedConfig.src}
-                title={artwork.title || "Content"}
-                className="w-full h-full border-0"
-                allow="autoplay; encrypted-media; fullscreen"
-                allowFullScreen
+            {config.type === 'loading' ? (
+               <div className="flex flex-col items-center justify-center text-white/80">
+                  <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-2" />
+               </div>
+            ) : config.type === 'iframe' ? (
+              /* 
+                 IFRAME PLAYER 
+                 - YT/Vimeo: Fixed 16:9 Aspect Ratio
+                 - Drive Video: Flexible Container (Minimizes black bars)
+              */
+              <div 
+                className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-full max-w-5xl aspect-video' : 'w-[90vw] h-[80vh] max-w-6xl'}`}
+              >
+                <iframe
+                  src={config.src}
+                  title="Content"
+                  className="w-full h-full border-0"
+                  allow="autoplay; encrypted-media; fullscreen"
+                  allowFullScreen
+                />
+              </div>
+            ) : config.type === 'video' ? (
+              /* NATIVE VIDEO (Direct MP4) */
+              <video
+                src={config.src}
+                controls
+                autoPlay
+                playsInline
+                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
               />
-            </div>
-          ) : embedConfig.type === 'video' ? (
-            /* DIRECT VIDEO */
-            <video
-              src={embedConfig.src}
-              controls
-              autoPlay
-              playsInline
-              className="max-w-full max-h-[85vh] w-auto h-auto object-contain bg-black"
-            />
-          ) : (
-            /* IMAGE */
-            <img
-              src={embedConfig.src}
-              alt={artwork.title || "Artwork"}
-              className="max-w-full max-h-[85vh] w-auto h-auto object-contain"
-            />
-          )}
+            ) : (
+              /* NATIVE IMAGE (Native Ratio, No Frame) */
+              <img
+                src={config.src}
+                alt={artwork.title || "Artwork"}
+                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+              />
+            )}
         </div>
 
-        {/* Title / Description Bar */}
+        {/* INFO BAR */}
         {(artwork.title || artwork.description) && (
-          <div className="mt-4 px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 pointer-events-auto">
-            {artwork.title && <h2 className="text-sm font-bold">{artwork.title}</h2>}
-            {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
+          <div className="mt-4 pointer-events-auto px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 border border-white/10 shadow-lg">
+             {artwork.title && <h2 className="text-sm font-bold">{artwork.title}</h2>}
+             {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
           </div>
         )}
       </div>
