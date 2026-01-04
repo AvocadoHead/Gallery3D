@@ -58,8 +58,8 @@ const App: React.FC = () => {
   const [contactEmail, setContactEmail] = useState('');
   
   // Database IDs
-  const [savedGalleryId, setSavedGalleryId] = useState(''); // The Slug
-  const [galleryDbId, setGalleryDbId] = useState<string | null>(null); // The UUID
+  const [savedGalleryId, setSavedGalleryId] = useState(''); 
+  const [galleryDbId, setGalleryDbId] = useState<string | null>(null);
   
   const [isClearing, setIsClearing] = useState(false);
 
@@ -150,7 +150,6 @@ const App: React.FC = () => {
       setContactEmail(record.contact_email || '');
       setGalleryDbId(record.id);
       
-      // Apply Settings (Appearance)
       if (record.settings) {
         if (record.settings.viewMode) setViewMode(record.settings.viewMode);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
@@ -262,7 +261,6 @@ const App: React.FC = () => {
 
     setIsSaving(true);
     try {
-      // Determine ID to use (null if new, existing if update)
       const idToUse = asNew ? undefined : galleryDbId || undefined;
       const slugToUse = asNew ? undefined : savedGalleryId || undefined;
 
@@ -295,7 +293,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Generates link for clipboard
   const generateShareLink = useCallback(() => {
     let link = '';
     if (savedGalleryId) {
@@ -306,7 +303,6 @@ const App: React.FC = () => {
 
     if (!link) return window.location.href; 
     
-    // Append current visual settings to link so they persist even without saving
     const url = new URL(link);
     url.searchParams.set('layout', viewMode);
     url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
@@ -353,8 +349,8 @@ const App: React.FC = () => {
   return (
     <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
-      {/* 3D Scene */}
-      <div className={`absolute inset-0 transition-opacity duration-700 ease-out ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+      {/* 3D Scene - Z-Index 0 */}
+      <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
             <Canvas 
@@ -380,8 +376,8 @@ const App: React.FC = () => {
 
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
-      {/* Header */}
-      <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      {/* Header - Z-Index 100 (FIXED LAYERING ISSUE) */}
+      <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
           <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" aria-label="Open menu">
             <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -425,8 +421,8 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Footer Contact */}
-      <div className={`fixed bottom-8 right-8 z-20 transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      {/* Footer Contact - Z-Index 100 (FIXED LAYERING ISSUE) */}
+      <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="relative">
           <button
             onClick={() => setContactMenuOpen(!contactMenuOpen)}
@@ -483,11 +479,10 @@ const App: React.FC = () => {
         setAuthEmail={setAuthEmail}
         onAddMedia={handleAddMedia}
         onClear={handleClear}
-        onSave={handleSaveGallery} // Connected!
-        onStartNew={handleStartNew} // Connected!
-        onCopyLink={handleCopyLink} // Connected!
+        onSave={handleSaveGallery} 
+        onStartNew={handleStartNew} 
+        onCopyLink={handleCopyLink} 
         onLoadGallery={async (slug) => { 
-          // Connected!
           try {
             setBuilderOpen(false);
             const record = await loadGalleryRecord(slug); 
