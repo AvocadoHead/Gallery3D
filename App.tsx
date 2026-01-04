@@ -376,8 +376,9 @@ const App: React.FC = () => {
 
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
-      {/* Header - Z-Index 100 (FIXED LAYERING ISSUE) */}
-      <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      {/* Header - Z-Index 100 */}
+      <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        {/* Row 1: Menu & Site Title */}
         <div className="flex items-center gap-3">
           <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" aria-label="Open menu">
             <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -389,11 +390,11 @@ const App: React.FC = () => {
             <h1 className="text-3xl font-light text-slate-800 tracking-tighter transition-colors">Aether</h1>
             <div className="flex items-center gap-2">
               <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
-              {displayName && <span className="text-[11px] bg-white/50 px-2 py-0.5 rounded-full border border-slate-200 text-slate-500">{displayName}</span>}
             </div>
           </div>
         </div>
         
+        {/* Row 2: Layout Toggles */}
         <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
             <button
               className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
@@ -412,6 +413,16 @@ const App: React.FC = () => {
               Masonry
             </button>
         </div>
+
+        {/* Row 3: User Gallery Title (Heebo) */}
+        {displayName && (
+           <div 
+             className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
+             style={{ fontFamily: 'Heebo, sans-serif' }}
+           >
+             {displayName}
+           </div>
+        )}
         
         {toastVisible && (
           <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce flex items-center gap-2">
@@ -421,7 +432,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Footer Contact - Z-Index 100 (FIXED LAYERING ISSUE) */}
+      {/* Footer Contact - Z-Index 100 */}
       <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="relative">
           <button
