@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { GallerySummary } from '../supabaseClient';
 
@@ -9,6 +9,9 @@ const IconTrash = () => <svg className="w-4 h-4" fill="none" stroke="currentColo
 interface BuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
+  // New Prop
+  initialTab?: 'content' | 'appearance' | 'galleries' | 'support'; 
+  
   session: Session | null;
   galleryItemsCount: number;
   inputValue: string;
@@ -49,10 +52,16 @@ interface BuilderModalProps {
 }
 
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
-  // FIX: Default tab is now 'galleries'
   const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'galleries' | 'support'>('galleries');
   const [shareMenuOpen, setShareMenuOpen] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Sync tab when prop changes
+  useEffect(() => {
+    if (props.isOpen && props.initialTab) {
+        setActiveTab(props.initialTab);
+    }
+  }, [props.isOpen, props.initialTab]);
 
   if (!props.isOpen) return null;
 
@@ -78,23 +87,26 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     setShareMenuOpen(null);
   };
 
-  // Handles share menu logic for the footer button
   const handleShareFooterClick = async () => {
     try {
-        props.onCopyLink(); // This triggers App.tsx logic
+        props.onCopyLink(); 
         setShareMenuOpen('footer');
     } catch (err) {
         setShareMenuOpen('footer');
     }
   };
 
+  const handleCreateNew = () => {
+    props.onStartNew();
+    setActiveTab('content');
+  };
+
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm">
       <div className="bg-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
         
-        {/* --- Top Bar (Tabs + Close) --- */}
+        {/* Top Bar */}
         <div className="flex items-center justify-between border-b border-slate-100 bg-white z-10 pt-2 px-2 pb-0">
-          {/* Scrollable Tabs - REORDERED */}
           <div className="flex overflow-x-auto no-scrollbar flex-1 gap-4 px-2">
             <button 
               onClick={() => setActiveTab('galleries')} 
@@ -121,23 +133,17 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               Support
             </button>
           </div>
-
-          {/* Close Button Circle */}
-          <button 
-            onClick={props.onClose} 
-            className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 mb-1 ml-2 shrink-0"
-          >
+          <button onClick={props.onClose} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 mb-1 ml-2 shrink-0">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        {/* --- Main Content (Scrollable) --- */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 bg-slate-50/50">
           
-          {/* TAB 1: MY GALLERIES (AND LOGIN) - MOVED TO FIRST POSITION */}
+          {/* TAB 1: MY GALLERIES */}
           {activeTab === 'galleries' && (
             <div className="space-y-6">
-              {/* AUTH SECTION */}
               {!props.session ? (
                 <div className="p-6 bg-slate-100 rounded-2xl text-center border border-slate-200">
                    <p className="text-sm text-slate-600 mb-4 font-medium">Log in to save and manage your galleries.</p>
@@ -151,26 +157,23 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                    {props.authMessage && <p className="text-xs text-green-600 mt-2 font-bold">{props.authMessage}</p>}
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-4 bg-slate-100 rounded-xl border border-slate-200">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold">
-                         {(props.session.user.email?.[0] || 'U').toUpperCase()}
+                <div className="space-y-4">
+                   <div className="flex items-center justify-between p-4 bg-slate-100 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold">
+                            {(props.session.user.email?.[0] || 'U').toUpperCase()}
+                         </div>
+                         <div className="overflow-hidden">
+                            <p className="text-xs text-slate-500 font-bold uppercase">Logged in as</p>
+                            <p className="text-sm font-bold text-slate-800 truncate max-w-[150px]">{props.session.user.email}</p>
+                         </div>
                       </div>
-                      <div className="overflow-hidden">
-                         <p className="text-xs text-slate-500 font-bold uppercase">Logged in as</p>
-                         <p className="text-sm font-bold text-slate-800 truncate max-w-[150px]">{props.session.user.email}</p>
-                      </div>
+                      <button onClick={props.onSignOut} className="text-xs font-bold text-red-500 hover:underline">Sign Out</button>
                    </div>
-                   <button onClick={props.onSignOut} className="text-xs font-bold text-red-500 hover:underline">Sign Out</button>
-                </div>
-              )}
 
-              {/* LIST SECTION */}
-              {props.session && (
-                <>
                    <div className="flex items-center justify-between pt-2">
                       <h3 className="text-sm font-bold text-slate-500 uppercase">Saved Galleries</h3>
-                      <button onClick={() => { props.onStartNew(); setActiveTab('content'); }} className="text-xs bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm">
+                      <button onClick={handleCreateNew} className="text-xs bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm">
                          + Create New
                       </button>
                    </div>
@@ -189,13 +192,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                      <p className="text-[10px] text-slate-400 font-mono">{new Date(g.updated_at).toLocaleDateString()}</p>
                                   </div>
                                </div>
-                               
                                <div className="flex gap-2">
-                                  <button onClick={() => { props.onLoadGallery(g.slug || g.id); setActiveTab('content'); }} className="flex-1 py-2 bg-slate-50 hover:bg-slate-900 hover:text-white text-slate-600 text-xs font-bold rounded-lg transition border border-slate-200 hover:border-slate-900">
-                                     Load
-                                  </button>
-                                  
-                                  {/* Share Menu */}
+                                  <button onClick={() => { props.onLoadGallery(g.slug || g.id); setActiveTab('content'); }} className="flex-1 py-2 bg-slate-50 hover:bg-slate-900 hover:text-white text-slate-600 text-xs font-bold rounded-lg transition border border-slate-200 hover:border-slate-900">Load</button>
                                   <div className="relative">
                                      <button onClick={() => handleShareRowClick(g.id)} className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-slate-200 transition">
                                         <IconShare />
@@ -211,21 +209,18 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                         </div>
                                      )}
                                   </div>
-
-                                  <button onClick={() => props.onDeleteGallery(g.id)} className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg border border-slate-200 transition">
-                                     <IconTrash />
-                                  </button>
+                                  <button onClick={() => props.onDeleteGallery(g.id)} className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg border border-slate-200 transition"><IconTrash /></button>
                                </div>
                             </div>
                          ))}
                       </div>
                    )}
-                </>
+                </div>
               )}
             </div>
           )}
 
-          {/* TAB 2: EDIT (CONTENT) */}
+          {/* TAB 2: EDIT */}
           {activeTab === 'content' && (
             <div className="space-y-6">
               <div>
@@ -237,50 +232,21 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   onChange={(e) => props.setInputValue(e.target.value)}
                 />
                 <div className="flex gap-2 mt-2">
-                  <button onClick={props.onAddMedia} className="flex-1 bg-slate-900 text-white py-2 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm hover:bg-black transition">
-                    Update ({props.galleryItemsCount})
-                  </button>
-                  <button onClick={props.onClear} className="px-4 py-2 border border-slate-200 bg-white text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-50">
-                    Clear
-                  </button>
+                  <button onClick={props.onAddMedia} className="flex-1 bg-slate-900 text-white py-2 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm hover:bg-black transition">Update ({props.galleryItemsCount})</button>
+                  <button onClick={props.onClear} className="px-4 py-2 border border-slate-200 bg-white text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-50">Clear</button>
                 </div>
               </div>
-
               <div className="pt-4 border-t border-slate-200">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Gallery Info</label>
                 <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Gallery Title"
-                    className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={props.displayName}
-                    onChange={(e) => props.setDisplayName(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="WhatsApp (e.g. 15551234567)"
-                    className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={props.contactWhatsapp}
-                    onChange={(e) => props.setContactWhatsapp(e.target.value)}
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email Address"
-                    className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={props.contactEmail}
-                    onChange={(e) => props.setContactEmail(e.target.value)}
-                  />
+                  <input type="text" placeholder="Gallery Title" className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={props.displayName} onChange={(e) => props.setDisplayName(e.target.value)} />
+                  <input type="text" placeholder="WhatsApp (e.g. 15551234567)" className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={props.contactWhatsapp} onChange={(e) => props.setContactWhatsapp(e.target.value)} />
+                  <input type="email" placeholder="Email Address" className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={props.contactEmail} onChange={(e) => props.setContactEmail(e.target.value)} />
                 </div>
               </div>
-
-              {/* Save New Gallery Button (Contextual) */}
               {props.session && (
                  <div className="pt-4 border-t border-slate-100">
-                    <button 
-                        onClick={() => props.onSave({ asNew: true })} 
-                        disabled={props.isSaving}
-                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition disabled:opacity-50"
-                    >
+                    <button onClick={() => props.onSave({ asNew: true })} disabled={props.isSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition disabled:opacity-50">
                         {props.isSaving ? 'Saving...' : 'Save as New Gallery'}
                     </button>
                  </div>
@@ -288,18 +254,15 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
             </div>
           )}
 
-          {/* TAB 3: LOOK (APPEARANCE) */}
+          {/* TAB 3: APPEARANCE */}
           {activeTab === 'appearance' && (
             <div className="space-y-8">
-              
-              {/* Context Indicator */}
               {props.displayName && (
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center justify-between">
                     <span className="text-xs text-blue-500 font-bold uppercase">Editing:</span>
                     <span className="text-xs font-bold text-blue-900 truncate max-w-[150px]">{props.displayName}</span>
                 </div>
               )}
-
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Layout</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -307,20 +270,17 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}>Masonry</button>
                 </div>
               </div>
-
               <div className="space-y-6">
                  <div>
                     <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Size</span><span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span></div>
                     <input type="range" min="0.3" max="3.0" step="0.1" value={props.mediaScale} onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
                  </div>
-
                  {props.viewMode === 'sphere' && (
                     <div>
                         <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Radius</span><span className="text-xs text-slate-400">{props.sphereBase}</span></div>
                         <input type="range" min="10" max="150" step="5" value={props.sphereBase} onChange={(e) => props.setSphereBase(parseInt(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
                     </div>
                  )}
-
                  {props.viewMode === 'tile' && (
                     <div>
                         <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Gap</span><span className="text-xs text-slate-400">{props.tileGap}px</span></div>
@@ -328,14 +288,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     </div>
                  )}
               </div>
-
-              {/* Save Layout Button (Only if editing existing) */}
               {props.session && props.savedGalleryId && (
-                 <button 
-                   onClick={() => props.onSave({ asNew: false })} 
-                   disabled={props.isSaving}
-                   className="w-full py-3 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-xl font-bold text-sm shadow-sm transition"
-                 >
+                 <button onClick={() => props.onSave({ asNew: false })} disabled={props.isSaving} className="w-full py-3 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-xl font-bold text-sm shadow-sm transition">
                    {props.isSaving ? 'Saving...' : 'Save Layout Settings'}
                  </button>
               )}
@@ -346,75 +300,66 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
           {activeTab === 'support' && (
             <div className="space-y-6 text-center pb-6">
                <div className="bg-indigo-600 text-white p-5 rounded-2xl shadow-lg">
-                  <h3 className="font-bold text-lg">Support Aether</h3>
-                  <p className="text-indigo-200 text-xs mt-1">Keep the 3D web free and open.</p>
+                  <h3 className="font-bold text-lg">Support the Aether Gallery Project</h3>
+                  <p className="text-indigo-200 text-xs mt-1">
+                    This is an independent project relying on self-funding. 
+                    Your contribution helps keep it alive.
+                  </p>
                </div>
                
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
-                     <div className="aspect-square bg-slate-50 rounded-lg mb-2 overflow-hidden">
-                        <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Bit" />
-                     </div>
-                     <span className="text-xs font-bold text-slate-700">Bit</span>
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  {/* Bit */}
+                  <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                     <a href="https://bitpay.co.il" target="_blank" rel="noreferrer" className="block">
+                        <div className="w-32 h-32 mx-auto bg-slate-50 rounded-lg mb-2 overflow-hidden">
+                            <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Bit QR" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">Bit</span>
+                     </a>
                   </div>
-                  <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
-                     <div className="aspect-square bg-slate-50 rounded-lg mb-2 overflow-hidden">
-                        <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Paybox" />
-                     </div>
-                     <span className="text-xs font-bold text-slate-700">Paybox</span>
+
+                  {/* Paybox */}
+                  <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                     <a href="https://links.payboxapp.com" target="_blank" rel="noreferrer" className="block">
+                        <div className="w-32 h-32 mx-auto bg-slate-50 rounded-lg mb-2 overflow-hidden">
+                            <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Paybox QR" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">Paybox</span>
+                     </a>
                   </div>
-                  <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm col-span-2">
-                     <div className="w-32 h-32 mx-auto bg-slate-50 rounded-lg mb-2 overflow-hidden">
-                        <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Coffee" />
-                     </div>
-                     <span className="text-xs font-bold text-slate-700">Buy Me Coffee</span>
+
+                  {/* Coffee */}
+                  <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                     <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" className="block">
+                        <div className="w-32 h-32 mx-auto bg-slate-50 rounded-lg mb-2 overflow-hidden">
+                            <img src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" className="w-full h-full object-cover mix-blend-multiply" alt="Coffee QR" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">Buy Me Coffee</span>
+                     </a>
                   </div>
                </div>
             </div>
           )}
         </div>
 
-        {/* === FOOTER ACTION BAR (STICKY) - Only on Editor/Settings === */}
+        {/* Footer Actions (Editor/Look) */}
         {(activeTab === 'content' || activeTab === 'appearance') && (
             <div className="p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 z-10">
-                {/* UPDATE BUTTONS (Only if logged in AND editing existing) */}
                 {props.session && props.savedGalleryId && activeTab === 'content' && (
-                    <button 
-                        onClick={() => props.onSave({ asNew: false })}
-                        disabled={props.isSaving}
-                        className="w-full mb-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
-                    >
+                    <button onClick={() => props.onSave({ asNew: false })} disabled={props.isSaving} className="w-full mb-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm">
                         {props.isSaving ? 'Updating...' : 'Update Current Gallery'}
                     </button>
                 )}
-                
                 <div className="relative">
-                    <button 
-                        onClick={handleShareFooterClick}
-                        className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-lg hover:bg-slate-800 transition"
-                    >
-                        <IconShare /> 
-                        Share Gallery
+                    <button onClick={handleShareFooterClick} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-lg hover:bg-slate-800 transition">
+                        <IconShare /> Share Gallery
                     </button>
-                    
-                        {shareMenuOpen === 'footer' && (
+                    {shareMenuOpen === 'footer' && (
                         <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
-                            <button onClick={() => { 
-                                const link = props.getShareLink();
-                                window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); 
-                                setShareMenuOpen(null); 
-                            }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100">
-                            <span className="text-[#25D366] text-lg">📱</span> WhatsApp
-                            </button>
-                            <button onClick={() => { 
-                                const link = props.getShareLink();
-                                window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(link)}`; 
-                                setShareMenuOpen(null); 
-                            }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3">
-                            <span className="text-blue-600 text-lg">✉️</span> Email
-                            </button>
+                            <button onClick={() => { const link = props.getShareLink(); window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"><span className="text-[#25D366] text-lg">📱</span> WhatsApp</button>
+                            <button onClick={() => { const link = props.getShareLink(); window.location.href = `mailto:?subject=Gallery&body=${encodeURIComponent(link)}`; setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"><span className="text-blue-600 text-lg">✉️</span> Email</button>
                         </div>
-                        )}
+                    )}
                 </div>
             </div>
         )}
