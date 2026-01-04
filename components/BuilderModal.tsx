@@ -1,23 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { GallerySummary } from '../supabaseClient';
-
-const IconGoogle = () => (
-  <svg className="w-5 h-5" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.64 2 12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c5.19 0 9.49-3.73 9.49-10c0-1.3-.15-2.29-.14-2.9z" />
-  </svg>
-);
-const IconEdit = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>;
-const IconLibrary = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>;
-const IconSettings = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>;
-const IconHeart = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>;
-const IconShare = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>;
 
 interface BuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
   session: Session | null;
   galleryItemsCount: number;
+  
+  // Data
   inputValue: string;
   setInputValue: (val: string) => void;
   displayName: string;
@@ -26,14 +17,18 @@ interface BuilderModalProps {
   setContactWhatsapp: (val: string) => void;
   contactEmail: string;
   setContactEmail: (val: string) => void;
+
+  // Visuals
   viewMode: 'sphere' | 'tile';
-  setViewMode: (mode: 'sphere' | 'tile') => void;
+  setViewMode: (val: 'sphere' | 'tile') => void;
   mediaScale: number;
   setMediaScale: (val: number) => void;
   sphereBase: number;
   setSphereBase: (val: number) => void;
   tileGap: number;
   setTileGap: (val: number) => void;
+
+  // Remote
   myGalleries: GallerySummary[];
   isLoadingMyGalleries: boolean;
   savedGalleryId: string;
@@ -43,12 +38,13 @@ interface BuilderModalProps {
   authMessage: string;
   authEmail: string;
   setAuthEmail: (val: string) => void;
+
+  // Actions
   onAddMedia: () => void;
   onClear: () => void;
-  onSave: (asNew?: boolean) => void;
+  onSave: (options?: { asNew?: boolean }) => void;
   onStartNew: () => void;
-  onCopyLink: (link?: string, suppressToast?: boolean) => void;
-  getShareLink: () => string;
+  onCopyLink: () => void;
   onLoadGallery: (slug: string) => void;
   onGoogleLogin: () => void;
   onEmailLogin: () => void;
@@ -56,462 +52,262 @@ interface BuilderModalProps {
 }
 
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
-  const [activeTab, setActiveTab] = useState<'editor' | 'library' | 'settings' | 'support'>('editor');
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
-  
+  const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'account'>('content');
+
   if (!props.isOpen) return null;
 
-  const handleShareClick = async () => {
-    // 1. Get link with params (scale, layout etc)
-    const link = props.getShareLink();
-    try {
-      // 2. Copy
-      await navigator.clipboard.writeText(link);
-      // 3. Feedback
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-      // 4. Open Menu
-      setShowShareMenu(true);
-    } catch (err) {
-      console.error('Failed to copy', err);
-      // Fail-safe: open menu anyway so they can at least click whatsapp/email
-      setShowShareMenu(true);
-    }
-  };
-
-  const NavItem = ({ id, label, icon: Icon }: any) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-xl ${
-        activeTab === id
-          ? 'bg-slate-900 text-white shadow-md'
-          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-      }`}
-    >
-      <Icon />
-      {label}
-    </button>
-  );
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm pointer-events-auto">
-      {/* 
-         Mobile-first container:
-         - w-full / max-w-[95vw] prevents width overflow
-         - h-[85vh] prevents height overflow/address bar clipping
-         - flex-col ensures sidebar stacks on top on mobile
-         - overflow-visible allows the Share Menu to pop out
-      */}
-      <div className="w-full sm:w-[850px] max-w-[95vw] h-[85vh] sm:h-[600px] flex flex-col sm:flex-row bg-white rounded-3xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] modal-container">
         
-        {/* --- SIDEBAR --- */}
-        <div className="w-full sm:w-64 bg-slate-50 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col p-4 shrink-0 sm:rounded-l-3xl">
-          <div className="px-4 py-2 mb-2 sm:mb-6 flex justify-between items-center sm:block">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Aether</h2>
-              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Builder Tool</p>
-            </div>
-            {/* Mobile close button */}
-            <button 
-               onClick={props.onClose} 
-               className="sm:hidden w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600"
-            >
-               ×
-            </button>
-          </div>
-
-          <nav className="flex sm:flex-col space-x-2 sm:space-x-0 sm:space-y-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
-            <NavItem id="editor" label="Editor" icon={IconEdit} />
-            <NavItem id="library" label="My Galleries" icon={IconLibrary} />
-            <NavItem id="settings" label="Appearance" icon={IconSettings} />
-            <NavItem id="support" label="Support" icon={IconHeart} />
-          </nav>
-
-          <div className="mt-auto pt-4 border-t border-slate-200 space-y-3 hidden sm:block">
-            {!props.session ? (
-              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <p className="text-xs text-slate-500 mb-3 font-medium">Save your work</p>
-                <button
-                  onClick={props.onGoogleLogin}
-                  disabled={!props.isSupabaseConfigured}
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition shadow-sm"
-                >
-                  <IconGoogle /> Log in with Google
-                </button>
-              </div>
-            ) : (
-              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs">
-                    {(props.session.user.email?.[0] || 'U').toUpperCase()}
-                 </div>
-                 <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-700 truncate">{props.session.user.email}</p>
-                    <button onClick={props.onSignOut} className="text-[10px] text-red-500 hover:text-red-600 font-medium hover:underline">
-                       Sign out
-                    </button>
-                 </div>
-              </div>
-            )}
-          </div>
+        {/* Header Tabs */}
+        <div className="flex border-b border-slate-100">
+          <button 
+            onClick={() => setActiveTab('content')} 
+            className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === 'content' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Content
+          </button>
+          <button 
+            onClick={() => setActiveTab('appearance')} 
+            className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === 'appearance' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Appearance
+          </button>
+          <button 
+            onClick={() => setActiveTab('account')} 
+            className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === 'account' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Save & Share
+          </button>
         </div>
 
-        {/* --- MAIN CONTENT --- */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white relative h-full overflow-hidden sm:rounded-r-3xl">
-            {/* Desktop close button */}
-            <button 
-               onClick={props.onClose} 
-               className="hidden sm:flex absolute top-4 right-4 z-10 w-8 h-8 items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
-            >
-               ×
-            </button>
-
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32">
-               {props.loadError && (
-                  <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm flex items-center gap-2">
-                     <span className="font-bold">Error:</span> {props.loadError}
-                  </div>
-               )}
-
-               {/* === EDITOR TAB === */}
-               {activeTab === 'editor' && (
-                  <div className="space-y-6 max-w-lg mx-auto animate-in fade-in duration-300">
-                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-slate-800">Gallery Content</h3>
-                        <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">{props.galleryItemsCount} items</span>
-                     </div>
-                     
-                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Paste Links</label>
-                        <textarea
-                           value={props.inputValue}
-                           onChange={(e) => props.setInputValue(e.target.value)}
-                           className="w-full h-32 p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none font-mono"
-                           placeholder="https://youtu.be/..."
-                        />
-                        <div className="flex justify-end gap-2">
-                           <button onClick={props.onClear} className="text-xs font-bold text-slate-400 hover:text-rose-500 px-3 py-2 transition">Clear</button>
-                           <button onClick={props.onAddMedia} className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg hover:translate-y-[-1px] transition">Apply Changes</button>
-                        </div>
-                     </div>
-
-                     <div className="space-y-4 pt-4 border-t border-slate-100">
-                        <h3 className="text-sm font-bold text-slate-800">Details</h3>
-                        <div className="space-y-3">
-                           <input 
-                              value={props.displayName} 
-                              onChange={(e) => props.setDisplayName(e.target.value)}
-                              placeholder="Gallery Title"
-                              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                           />
-                           <div className="grid grid-cols-2 gap-4">
-                              <input 
-                                 value={props.contactEmail} 
-                                 onChange={(e) => props.setContactEmail(e.target.value)}
-                                 placeholder="Email Address"
-                                 className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                              />
-                              <input 
-                                 value={props.contactWhatsapp} 
-                                 onChange={(e) => props.setContactWhatsapp(e.target.value)}
-                                 placeholder="WhatsApp (Number)"
-                                 className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                              />
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-               )}
-
-               {/* === LIBRARY TAB === */}
-               {activeTab === 'library' && (
-                  <div className="space-y-6 animate-in fade-in duration-300">
-                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-slate-800">My Galleries</h3>
-                        {props.session && (
-                           <button 
-                              onClick={() => { props.onStartNew(); setActiveTab('editor'); }}
-                              className="text-xs bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg hover:bg-slate-800 shadow-sm"
-                           >
-                              + Create New
-                           </button>
-                        )}
-                     </div>
-
-                     {!props.session ? (
-                        <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center p-6">
-                           <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center mb-3 text-slate-400">
-                              <IconLibrary />
-                           </div>
-                           <p className="text-sm font-bold text-slate-700">Authentication Required</p>
-                           <p className="text-xs text-slate-500 mt-1 mb-4 max-w-xs">Log in with Google via the sidebar to access your saved collections.</p>
-                           <button onClick={() => props.onGoogleLogin()} className="sm:hidden px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg">Login with Google</button>
-                        </div>
-                     ) : (
-                        <div className="space-y-2">
-                           {props.myGalleries.length === 0 && !props.isLoadingMyGalleries && (
-                              <p className="text-center py-10 text-slate-400 text-sm">No galleries yet. Go to Editor to create one.</p>
-                           )}
-                           
-                           {props.myGalleries.map(g => (
-                              <div key={g.id} className="group flex items-center justify-between p-4 bg-white border border-slate-100 rounded-xl hover:border-slate-300 hover:shadow-sm transition">
-                                 <div className="min-w-0">
-                                    <h4 className="font-bold text-slate-800 text-sm truncate">{g.display_name || 'Untitled Gallery'}</h4>
-                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">{new Date(g.updated_at).toLocaleDateString()} • {g.slug || g.id}</p>
-                                 </div>
-                                 <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                    <button 
-                                       onClick={() => props.onLoadGallery(g.slug || g.id)}
-                                       className="px-3 py-1.5 bg-slate-50 hover:bg-slate-900 hover:text-white text-slate-600 text-xs font-bold rounded-lg transition"
-                                    >
-                                       Edit / Load
-                                    </button>
-                                    <button 
-                                       onClick={() => props.onCopyLink(`${window.location.origin}/?gallery=${g.slug || g.id}`, false)}
-                                       className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                       title="Copy Link"
-                                    >
-                                       <IconShare />
-                                    </button>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     )}
-                  </div>
-               )}
-
-               {/* === SETTINGS TAB === */}
-               {activeTab === 'settings' && (
-                  <div className="space-y-8 max-w-lg mx-auto animate-in fade-in duration-300">
-                     <h3 className="text-lg font-bold text-slate-800">Visual Settings</h3>
-                     
-                     <div className="space-y-4">
-                        <label className="block">
-                           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Layout Mode</span>
-                           <div className="grid grid-cols-2 gap-2 mt-2">
-                              <button 
-                                 onClick={() => props.setViewMode('sphere')}
-                                 className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-                              >
-                                 Sphere
-                              </button>
-                              <button 
-                                 onClick={() => props.setViewMode('tile')}
-                                 className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-                              >
-                                 Masonry
-                              </button>
-                           </div>
-                        </label>
-
-                        <div className="space-y-6 pt-4 border-t border-slate-100">
-                           <div className="space-y-2">
-                              <div className="flex justify-between">
-                                 <span className="text-xs font-bold text-slate-700">Card Scale</span>
-                                 <span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
-                              </div>
-                              <input 
-                                type="range" 
-                                min={0.5} 
-                                max={3.0} 
-                                step={0.1} 
-                                value={props.mediaScale} 
-                                onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} 
-                                className="w-full accent-slate-900 py-4 sm:py-2" 
-                              />
-                           </div>                         
-                           {props.viewMode === 'sphere' && (
-                              <div className="space-y-2">
-                                 <div className="flex justify-between">
-                                    <span className="text-xs font-bold text-slate-700">Sphere Radius</span>
-                                    <span className="text-xs text-slate-400">{props.sphereBase}</span>
-                                 </div>
-                                 <input 
-                                    type="range" 
-                                    min={20} 
-                                    max={200} 
-                                    step={5} 
-                                    value={props.sphereBase} 
-                                    onChange={(e) => props.setSphereBase(parseFloat(e.target.value))} 
-                                    className="w-full accent-slate-900 py-4 sm:py-2" 
-                                 />
-                              </div>
-                           )}
-
-                           {props.viewMode === 'tile' && (
-                              <div className="space-y-2">
-                                 <div className="flex justify-between">
-                                    <span className="text-xs font-bold text-slate-700">Grid Gap</span>
-                                    <span className="text-xs text-slate-400">{props.tileGap}px</span>
-                                 </div>
-                                 <input 
-                                    type="range" 
-                                    min={0} 
-                                    max={30} 
-                                    step={1} 
-                                    value={props.tileGap} 
-                                    onChange={(e) => props.setTileGap(parseFloat(e.target.value))} 
-                                    className="w-full accent-slate-900 py-4 sm:py-2" 
-                                 />
-                              </div>
-                           )}
-                           
-                           {/* Save Settings Button */}
-                           {props.session && props.savedGalleryId && (
-                              <button
-                                onClick={() => props.onSave(false)}
-                                disabled={props.isSaving}
-                                className="w-full mt-6 bg-slate-900 text-white text-sm font-bold py-3 rounded-xl hover:bg-slate-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {props.isSaving ? 'Saving Settings...' : 'Save Appearance Settings'}
-                              </button>
-                           )}
-                        </div>
-                     </div>
-                  </div>
-               )}
-
-               {/* === SUPPORT TAB === */}
-               {activeTab === 'support' && (
-                  <div className="space-y-6 animate-in fade-in duration-300 pb-8">
-                     <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-                        <h3 className="text-xl font-bold">Support the Project</h3>
-                        <p className="text-indigo-100 text-sm mt-2 opacity-90">Your contributions help keep Aether free and open for everyone.</p>
-                     </div>
-                     
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
-                             <img 
-                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/%20Bit%20QR.png" 
-                               alt="Bit QR" 
-                               className="w-full h-full object-cover mix-blend-multiply" 
-                             />
-                           </div>
-                           <div className="text-center">
-                              <span className="block font-bold text-slate-800 text-sm">Bit</span>
-                              <a href="https://bitpay.co.il" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
-                           </div>
-                         </div>
-
-                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
-                             <img 
-                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" 
-                               alt="PayBox QR" 
-                               className="w-full h-full object-cover mix-blend-multiply" 
-                             />
-                           </div>
-                           <div className="text-center">
-                              <span className="block font-bold text-slate-800 text-sm">Paybox</span>
-                              <a href="https://links.payboxapp.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
-                           </div>
-                         </div>
-
-                         <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-                           <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
-                             <img 
-                               src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" 
-                               alt="Coffee QR" 
-                               className="w-full h-full object-cover mix-blend-multiply" 
-                             />
-                           </div>
-                           <div className="text-center">
-                              <span className="block font-bold text-slate-800 text-sm">Buy me Coffee</span>
-                              <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
-                           </div>
-                         </div>
-                     </div>
-                     <div className="text-center text-xs text-slate-400">
-                        054-773-1650 (Direct)
-                     </div>
-                  </div>
-               )}
-            </div>
-
-            {/* === FOOTER ACTION BAR (STICKY) === */}
-            {activeTab === 'editor' && (
-                <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 z-10">
-                    <div className="pt-2">
-                        {!props.session ? (
-                           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-center justify-between">
-                              <p className="text-xs text-amber-800 font-medium">Log in to save this gallery.</p>
-                              <button onClick={() => setActiveTab('library')} className="text-xs bg-white border border-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-100 shadow-sm">Login</button>
-                           </div>
-                        ) : (
-                           <div className="flex gap-2 mb-2">
-                                 {props.savedGalleryId ? (
-                                    <>
-                                       <button 
-                                          onClick={() => props.onSave(false)}
-                                          disabled={props.isSaving}
-                                          className="flex-1 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
-                                       >
-                                          {props.isSaving ? 'Updating...' : 'Update'}
-                                       </button>
-                                       <button 
-                                          onClick={() => props.onSave(true)}
-                                          disabled={props.isSaving}
-                                          className="px-4 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-200 transition shadow-sm"
-                                          title="Save as a new copy"
-                                       >
-                                          New
-                                       </button>
-                                    </>
-                                 ) : (
-                                    <button 
-                                       onClick={() => props.onSave(true)}
-                                       disabled={props.isSaving}
-                                       className="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition shadow-lg"
-                                    >
-                                       {props.isSaving ? 'Saving...' : 'Save Gallery'}
-                                    </button>
-                                 )}
-                           </div>
-                        )}
-                        
-                        <div className="relative">
-                            <button 
-                                onClick={handleShareClick}
-                                className={`w-full flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-lg border transition duration-200 ${
-                                    isCopied 
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                                    : 'bg-slate-900 text-white hover:bg-slate-800 border-transparent shadow-lg'
-                                }`}
-                            >
-                                <IconShare /> 
-                                {isCopied ? 'Link Copied!' : 'Share Gallery'}
-                            </button>
-                            
-                             {showShareMenu && (
-                               <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
-                                 <button 
-                                   onClick={() => { 
-                                       const link = props.getShareLink();
-                                       window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); 
-                                       setShowShareMenu(false); 
-                                   }}
-                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"
-                                 >
-                                   <span className="text-[#25D366] text-lg">📱</span> WhatsApp
-                                 </button>
-                                 <button 
-                                   onClick={() => { 
-                                       const link = props.getShareLink();
-                                       window.location.href = `mailto:?subject=Check out my gallery&body=${encodeURIComponent(link)}`; 
-                                       setShowShareMenu(false); 
-                                   }}
-                                   className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"
-                                 >
-                                   <span className="text-blue-600 text-lg">✉️</span> Email
-                                 </button>
-                               </div>
-                             )}
-                        </div>
-                    </div>
+        {/* Content Area */}
+        <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+          
+          {/* TAB: CONTENT */}
+          {activeTab === 'content' && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Image/Video URLs</label>
+                <textarea
+                  className="w-full h-32 p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none font-mono"
+                  placeholder="Paste URLs here (one per line)..."
+                  value={props.inputValue}
+                  onChange={(e) => props.setInputValue(e.target.value)}
+                />
+                <div className="flex gap-2 mt-3">
+                  <button onClick={props.onAddMedia} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-lg text-sm font-medium transition">
+                    Update Gallery ({props.galleryItemsCount})
+                  </button>
+                  <button onClick={props.onClear} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-white transition">
+                    Clear
+                  </button>
                 </div>
-            )}
+              </div>
+
+              <div className="pt-4 border-t border-slate-200">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Gallery Info</label>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Gallery Title"
+                    className="w-full p-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={props.displayName}
+                    onChange={(e) => props.setDisplayName(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    placeholder="WhatsApp Number (e.g. 15551234567)"
+                    className="w-full p-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={props.contactWhatsapp}
+                    onChange={(e) => props.setContactWhatsapp(e.target.value)}
+                  />
+                  <input
+                    type="email"
+                    placeholder="Contact Email"
+                    className="w-full p-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={props.contactEmail}
+                    onChange={(e) => props.setContactEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: APPEARANCE */}
+          {activeTab === 'appearance' && (
+            <div className="space-y-8">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-4">View Mode</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => props.setViewMode('sphere')}
+                    className={`p-3 rounded-xl border text-sm font-medium transition flex flex-col items-center gap-2 ${
+                      props.viewMode === 'sphere' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-full border-2 border-current opacity-60"></div>
+                    3D Sphere
+                  </button>
+                  <button
+                    onClick={() => props.setViewMode('tile')}
+                    className={`p-3 rounded-xl border text-sm font-medium transition flex flex-col items-center gap-2 ${
+                      props.viewMode === 'tile' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-8 h-8 grid grid-cols-2 gap-0.5 opacity-60"><div className="bg-current"></div><div className="bg-current"></div><div className="bg-current"></div><div className="bg-current"></div></div>
+                    Masonry Grid
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Card Size</label>
+                  <span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.5"
+                  step="0.1"
+                  value={props.mediaScale}
+                  onChange={(e) => props.setMediaScale(parseFloat(e.target.value))}
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+              </div>
+
+              {props.viewMode === 'sphere' ? (
+                <div>
+                   <div className="flex justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Sphere Radius</label>
+                    <span className="text-xs text-slate-400">{props.sphereBase}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="30"
+                    max="120"
+                    step="1"
+                    value={props.sphereBase}
+                    onChange={(e) => props.setSphereBase(parseInt(e.target.value))}
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Grid Gap</label>
+                    <span className="text-xs text-slate-400">{props.tileGap}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    step="1"
+                    value={props.tileGap}
+                    onChange={(e) => props.setTileGap(parseInt(e.target.value))}
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: ACCOUNT / SAVE */}
+          {activeTab === 'account' && (
+            <div className="space-y-6">
+              {!props.session ? (
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-600 mb-4">Sign in to save and manage your galleries.</p>
+                  <button onClick={props.onGoogleLogin} className="w-full py-2.5 px-4 bg-white border border-slate-200 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition flex items-center justify-center gap-2 mb-3">
+                     <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
+                     Sign in with Google
+                  </button>
+                  
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-slate-50 px-2 text-slate-400">Or with Email</span></div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <input 
+                      type="email" 
+                      placeholder="email@example.com" 
+                      className="flex-1 p-2 text-sm border border-slate-200 rounded-lg"
+                      value={props.authEmail}
+                      onChange={(e) => props.setAuthEmail(e.target.value)}
+                    />
+                    <button onClick={props.onEmailLogin} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm">Send Link</button>
+                  </div>
+                  {props.authMessage && <p className="text-xs text-green-600 mt-2">{props.authMessage}</p>}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                    <div className="flex items-center justify-between mb-2">
+                       <span className="text-xs font-bold text-blue-800 uppercase">Current Session</span>
+                       <button onClick={props.onSignOut} className="text-xs text-blue-600 hover:text-blue-800 underline">Sign Out</button>
+                    </div>
+                    <p className="text-sm text-blue-900 truncate">{props.session.user.email}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                     <button 
+                       onClick={() => props.onSave({ asNew: false })} 
+                       disabled={props.isSaving}
+                       className="py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition shadow-sm disabled:opacity-50"
+                     >
+                       {props.isSaving ? 'Saving...' : 'Save Changes'}
+                     </button>
+                     <button 
+                       onClick={props.onCopyLink} 
+                       className="py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-medium text-sm transition"
+                     >
+                       Share Link
+                     </button>
+                  </div>
+                  
+                  {props.savedGalleryId && (
+                     <button 
+                       onClick={() => props.onSave({ asNew: true })} 
+                       className="w-full py-2 text-slate-500 hover:text-slate-800 text-xs font-medium underline"
+                     >
+                       Save as New Copy
+                     </button>
+                  )}
+
+                  {props.myGalleries.length > 0 && (
+                    <div className="pt-4 border-t border-slate-200 mt-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase mb-3">Your Galleries</p>
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                        {props.myGalleries.map((g) => (
+                          <div key={g.id} onClick={() => props.onLoadGallery(g.slug)} className="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer group transition">
+                            <span className="text-sm text-slate-700 font-medium group-hover:text-blue-600 truncate max-w-[180px]">{g.display_name || 'Untitled'}</span>
+                            <span className="text-[10px] text-slate-400">{new Date(g.created_at).toLocaleDateString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                   <button 
+                     onClick={props.onStartNew} 
+                     className="w-full py-3 border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 rounded-xl text-sm font-medium mt-2"
+                   >
+                     + Start Fresh
+                   </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer Close */}
+        <div className="p-4 border-t border-slate-100 bg-white">
+          <button onClick={props.onClose} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold transition">
+            Close
+          </button>
         </div>
       </div>
     </div>
