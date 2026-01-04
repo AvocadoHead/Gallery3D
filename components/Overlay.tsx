@@ -22,6 +22,14 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
     if (!artwork) return null;
     const url = artwork.fullUrl;
 
+        // Priority: Check provider field first for Google Drive
+        if (artwork.provider === 'gdrive' && artwork.embedUrl) {
+                return {
+                          type: 'iframe',
+                          src: artwork.embedUrl
+                                  };
+              }
+
     // 1. YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = url.split('v=')[1] || url.split('/').pop();
