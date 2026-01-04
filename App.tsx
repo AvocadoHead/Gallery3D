@@ -42,6 +42,7 @@ const App: React.FC = () => {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const [donationToast, setDonationToast] = useState(false); // New Donation Toast
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   // --- Gallery Configuration ---
@@ -250,8 +251,6 @@ const App: React.FC = () => {
     setGalleryDbId(null);
     setViewMode('sphere');
     setMediaScale(1);
-    setSphereBase(62);
-    setTileGap(12);
     window.history.replaceState(null, '', window.location.pathname);
   };
 
@@ -272,18 +271,16 @@ const App: React.FC = () => {
     }
   };
 
-  // FIX: Explicitly handle the options object so { asNew: false } works correctly
   const handleSaveGallery = async (options?: { asNew?: boolean }) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
 
     if (!itemsToSave.length || !isSupabaseConfigured) return;
 
-    const asNew = options?.asNew ?? false;
+    const asNew = options?.asNew === true;
 
     setIsSaving(true);
     try {
-      // Logic fix: Only use ID if asNew is false. Otherwise undefined (creates new).
       const idToUse = asNew ? undefined : galleryDbId || undefined;
       const slugToUse = asNew ? undefined : savedGalleryId || undefined;
 
@@ -308,6 +305,11 @@ const App: React.FC = () => {
       const link = applyLoadedRecord(record);
       window.history.replaceState(null, '', link);
       refreshMyGalleries();
+      
+      // Trigger Donation Prompt
+      setDonationToast(true);
+      setTimeout(() => setDonationToast(false), 5000);
+
     } catch (err: any) {
       console.error(err);
       setLoadError(err?.message || 'Save failed.');
@@ -341,6 +343,10 @@ const App: React.FC = () => {
       await navigator.clipboard.writeText(link);
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 2000);
+      
+      // Trigger Donation Prompt on share
+      setTimeout(() => setDonationToast(true), 1000);
+      setTimeout(() => setDonationToast(false), 6000);
     } catch (err) {
       console.warn('Clipboard error', err);
     }
@@ -401,7 +407,6 @@ const App: React.FC = () => {
 
       {/* Header - Z-Index 100 */}
       <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        {/* Row 1: Menu & Site Title */}
         <div className="flex items-center gap-3">
           <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" aria-label="Open menu">
             <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -417,7 +422,6 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        {/* Row 2: Layout Toggles */}
         <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
             <button
               className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
@@ -437,7 +441,6 @@ const App: React.FC = () => {
             </button>
         </div>
 
-        {/* Row 3: User Gallery Title (Heebo) */}
         {displayName && (
            <div 
              className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
@@ -480,6 +483,25 @@ const App: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* DONATION TOAST NOTIFICATION */}
+      {donationToast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-500">
+           <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-white/10">
+              <div className="text-sm">
+                 <span className="block font-bold mb-0.5">Enjoying Aether? ⚡</span>
+                 <span className="text-slate-300 text-xs">Consider a small donation on the Support tab to keep the project alive.</span>
+              </div>
+              <button 
+                onClick={() => setBuilderOpen(true)} // Opens modal to see Support tab
+                className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-bold transition whitespace-nowrap"
+              >
+                Support
+              </button>
+              <button onClick={() => setDonationToast(false)} className="text-slate-400 hover:text-white">✕</button>
+           </div>
+        </div>
+      )}
 
       <BuilderModal
         isOpen={builderOpen}
