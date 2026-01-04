@@ -43,10 +43,10 @@ const App: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
-  
-  // --- Gallery Configuration (Defaults) ---
+
+  // --- Gallery Configuration ---
   const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
-  const [mediaScale, setMediaScale] = useState(1); // Default to 1 as per your working version
+  const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
 
@@ -56,7 +56,11 @@ const App: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [savedGalleryId, setSavedGalleryId] = useState('');
+  
+  // Database IDs
+  const [savedGalleryId, setSavedGalleryId] = useState(''); // The Slug
+  const [galleryDbId, setGalleryDbId] = useState<string | null>(null); // The UUID
+  
   const [isClearing, setIsClearing] = useState(false);
 
   // --- Remote/Auth State ---
@@ -144,12 +148,14 @@ const App: React.FC = () => {
       setDisplayName(record.display_name || '');
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
+      setGalleryDbId(record.id);
       
-      if (record.layout_settings) {
-        if (record.layout_settings.viewMode) setViewMode(record.layout_settings.viewMode);
-        if (record.layout_settings.mediaScale) setMediaScale(record.layout_settings.mediaScale);
-        if (record.layout_settings.sphereBase) setSphereBase(record.layout_settings.sphereBase);
-        if (record.layout_settings.tileGap) setTileGap(record.layout_settings.tileGap);
+      // Apply Settings (Appearance)
+      if (record.settings) {
+        if (record.settings.viewMode) setViewMode(record.settings.viewMode);
+        if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
+        if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
+        if (record.settings.tileGap) setTileGap(record.settings.tileGap);
       }
 
       const id = record.slug || record.id;
@@ -184,6 +190,7 @@ const App: React.FC = () => {
         setContactWhatsapp(incoming.contactWhatsapp || '');
         setContactEmail(incoming.contactEmail || '');
         setSavedGalleryId('');
+        setGalleryDbId(null);
         setInputValue(incoming.urls.join('\n')); 
         return;
       }
@@ -234,7 +241,20 @@ const App: React.FC = () => {
     }, 650);
   };
 
-  const handleSaveGallery = async (options?: { asNew?: boolean }) => {
+  const handleStartNew = () => {
+    setGalleryItems([]);
+    setInputValue('');
+    setDisplayName('');
+    setContactWhatsapp('');
+    setContactEmail('');
+    setSavedGalleryId('');
+    setGalleryDbId(null);
+    setViewMode('sphere');
+    setMediaScale(1);
+    window.history.replaceState(null, '', window.location.pathname);
+  };
+
+  const handleSaveGallery = async (asNew: boolean = false) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
 
@@ -242,15 +262,19 @@ const App: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // Determine ID to use (null if new, existing if update)
+      const idToUse = asNew ? undefined : galleryDbId || undefined;
+      const slugToUse = asNew ? undefined : savedGalleryId || undefined;
+
       const record = await saveGalleryRecord(
         {
-          id: options?.asNew ? undefined : savedGalleryId || undefined,
-          slug: options?.asNew ? undefined : savedGalleryId || undefined,
+          id: idToUse,
+          slug: slugToUse,
           items: itemsToSave,
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
-          layout_settings: {
+          settings: {
             viewMode,
             mediaScale,
             sphereBase,
@@ -258,29 +282,42 @@ const App: React.FC = () => {
           }
         },
         session,
-        { asNew: options?.asNew },
+        { asNew },
       );
       const link = applyLoadedRecord(record);
       window.history.replaceState(null, '', link);
       refreshMyGalleries();
     } catch (err: any) {
+      console.error(err);
       setLoadError(err?.message || 'Save failed.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleCopyLink = async (specificLink?: string) => {
-    let link = specificLink;
-    if (!link) {
-        if (savedGalleryId) {
-            link = `${shareBase}/?gallery=${savedGalleryId}`;
-        } else if (galleryItems.length) {
-            link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
-        }
+  // Generates link for clipboard
+  const generateShareLink = useCallback(() => {
+    let link = '';
+    if (savedGalleryId) {
+        link = `${shareBase}/?gallery=${savedGalleryId}`;
+    } else if (galleryItems.length) {
+        link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
     }
-    if (!link) return;
 
+    if (!link) return window.location.href; 
+    
+    // Append current visual settings to link so they persist even without saving
+    const url = new URL(link);
+    url.searchParams.set('layout', viewMode);
+    url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
+    if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
+    if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
+    
+    return url.toString();
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
+
+  const handleCopyLink = async () => {
+    const link = generateShareLink();
     try {
       await navigator.clipboard.writeText(link);
       setToastVisible(true);
@@ -309,19 +346,20 @@ const App: React.FC = () => {
     await signOut();
     setSession(null);
     setMyGalleries([]);
+    setGalleryDbId(null);
+    handleStartNew();
   };
 
   return (
     <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
       {/* 3D Scene */}
-      <div className={`absolute inset-0 transition-all duration-700 ease-out ${selectedItem ? 'scale-105 blur-sm opacity-50' : 'scale-100 blur-0 opacity-100'}`}>
+      <div className={`absolute inset-0 transition-opacity duration-700 ease-out ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
         {viewMode === 'sphere' ? (
           <Suspense fallback={<Loader />}>
             <Canvas 
                 camera={{ position: [0, 0, 65], fov: 50 }} 
                 dpr={[1, 1.5]} 
-                // Add powerPreference to help mobile GPUs avoid glitches
                 gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }} 
                 className="bg-transparent"
             >
@@ -345,19 +383,20 @@ const App: React.FC = () => {
       {/* Header */}
       <div className={`fixed top-8 left-8 z-20 transition-opacity duration-500 flex flex-col items-start gap-4 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
-        <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Open menu">
-          <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <div>
-          <h1 className="text-3xl font-light text-slate-800 tracking-tighter  transition-colors">Aether</h1>
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
-            {displayName && <span className="text-[11px] bg-white/50 px-2 py-0.5 rounded-full border border-slate-200 text-slate-500">{displayName}</span>}
+          <button onClick={() => setBuilderOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" aria-label="Open menu">
+            <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          
+          <div className="cursor-pointer" onClick={() => window.location.href = window.location.origin}>
+            <h1 className="text-3xl font-light text-slate-800 tracking-tighter transition-colors">Aether</h1>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
+              {displayName && <span className="text-[11px] bg-white/50 px-2 py-0.5 rounded-full border border-slate-200 text-slate-500">{displayName}</span>}
+            </div>
           </div>
         </div>
-      </div>
         
         <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
             <button
@@ -379,8 +418,9 @@ const App: React.FC = () => {
         </div>
         
         {toastVisible && (
-          <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce">
-            Link Copied!
+          <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce flex items-center gap-2">
+             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+             Link Copied!
           </div>
         )}
       </div>
@@ -443,9 +483,25 @@ const App: React.FC = () => {
         setAuthEmail={setAuthEmail}
         onAddMedia={handleAddMedia}
         onClear={handleClear}
-        onSave={handleSaveGallery}
-        onCopyLink={handleCopyLink}
-        onLoadGallery={(slug) => { loadGalleryRecord(slug); }}
+        onSave={handleSaveGallery} // Connected!
+        onStartNew={handleStartNew} // Connected!
+        onCopyLink={handleCopyLink} // Connected!
+        onLoadGallery={async (slug) => { 
+          // Connected!
+          try {
+            setBuilderOpen(false);
+            const record = await loadGalleryRecord(slug); 
+            if (record) {
+              const link = applyLoadedRecord(record);
+              window.history.replaceState(null, '', link);
+              const urls = record.items.map(i => i.originalUrl).join('\n');
+              setInputValue(urls);
+            }
+          } catch (err) {
+            console.error('Load error:', err);
+            setLoadError('Failed to load gallery');
+          }
+        }}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
