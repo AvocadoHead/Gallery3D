@@ -48,8 +48,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
     if (url.includes('drive.google.com')) {
       const parts = url.split('/d/');
       if (parts.length > 1) {
-        const idPart = parts[1].split('/')[0];
-        // We use /preview for the embeddable player
+        const idPart = parts[1].split('/')[0].split('?')[0]; // Remove query params        // We use /preview for the embeddable player
         return { 
           type: 'iframe', 
           src: `https://drive.google.com/file/d/${idPart}/preview` 
