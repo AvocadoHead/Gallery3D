@@ -32,9 +32,8 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       };
     }
     
-    // 2. Vimeo (Improved Regex to catch ID in complex URLs)
+    // 2. Vimeo
     if (url.includes('vimeo.com')) {
-      // Matches the numeric ID at the end of various Vimeo URL formats
       const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
       const videoId = match ? match[1] : null;
       if (videoId) {
@@ -70,75 +69,90 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   if (!artwork || !embedConfig) return null;
 
   return (
-    <div
-      className={`
-        fixed inset-0 z-[200] flex items-center justify-center 
-        /* Tweak: Lighter background, heavy blur */
-        bg-black/20 backdrop-blur-xl
-        transition-opacity duration-300 ease-out
-        ${visible ? 'opacity-100' : 'opacity-0'}
-      `}
-      onClick={onClose}
-    >
-      {/* Close Button - Solid White Circle */}
-      <button 
-        onClick={onClose}
-        className="absolute top-4 right-4 z-[210] p-3 rounded-full bg-white text-slate-900 shadow-xl hover:scale-110 transition-transform"
-      >
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-
-      {/* Content Wrapper */}
+    <div className="fixed inset-0 z-[200] flex items-center justify-center">
+      
+      {/* 
+         LAYER 1: BACKDROP 
+         Separated from content to prevent blur from bleeding into the image/video.
+      */}
       <div 
         className={`
-           w-full h-full p-2 md:p-8 flex flex-col items-center justify-center
+          absolute inset-0 bg-black/40 backdrop-blur-xl transition-opacity duration-300 ease-out
+          ${visible ? 'opacity-100' : 'opacity-0'}
+        `}
+        onClick={onClose}
+      />
+
+      {/* 
+         LAYER 2: CONTENT 
+         Pointer events auto ensures clicks pass to iframes/videos.
+      */}
+      <div 
+        className={`
+           relative z-10 w-full h-full p-2 md:p-8 flex flex-col items-center justify-center pointer-events-none
            transition-transform duration-500 cubic-bezier(0.175, 0.885, 0.32, 1.275)
            ${visible ? 'scale-100' : 'scale-90'}
         `}
-        onClick={(e) => e.stopPropagation()} 
       >
-        
-        {/* === RENDER LOGIC === */}
-        
-        {embedConfig.type === 'iframe' ? (
-          /* 
-             IFRAME (Google Drive, YT, Vimeo)
-             - flex-1 ensures it takes available space without forcing aspect ratio
-             - w-full/max-w-6xl limits horizontal stretch
-             - bg-transparent ensures no black bars if the iframe has padding
-          */
-          <div className="relative w-full h-full max-w-6xl max-h-[85vh] shadow-2xl rounded-xl overflow-hidden bg-transparent">
-            <iframe
-              src={embedConfig.src}
-              title={artwork.title || "Content"}
-              className="w-full h-full border-0"
-              allow="autoplay; encrypted-media; fullscreen"
-              allowFullScreen
-            />
-          </div>
-        ) : embedConfig.type === 'video' ? (
-          /* DIRECT VIDEO */
-          <video
-            src={embedConfig.src}
-            controls
-            autoPlay
-            playsInline
-            className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
-          />
-        ) : (
-          /* IMAGE */
-          <img
-            src={embedConfig.src}
-            alt={artwork.title || "Artwork"}
-            className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
-          />
-        )}
+        {/* Close Button (Clickable) */}
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 pointer-events-auto p-3 rounded-full bg-white text-slate-900 shadow-xl hover:scale-110 transition-transform z-50"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Media Container (Clickable) */}
+        <div 
+            className="relative pointer-events-auto shadow-2xl rounded-xl overflow-hidden"
+            style={{ 
+                maxWidth: '100%', 
+                maxHeight: '85vh',
+                // This ensures the container shrinks to fit the content aspect ratio
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            
+            {/* === RENDER LOGIC === */}
+            
+            {embedConfig.type === 'iframe' ? (
+              /* IFRAME (Google Drive, YT, Vimeo) */
+              <div className="w-[90vw] h-[50vw] max-w-[1200px] max-h-[80vh] md:w-[80vw] md:h-[45vw] bg-black">
+                <iframe
+                  src={embedConfig.src}
+                  title={artwork.title || "Content"}
+                  className="w-full h-full border-0"
+                  allow="autoplay; encrypted-media; fullscreen"
+                  allowFullScreen
+                />
+              </div>
+            ) : embedConfig.type === 'video' ? (
+              /* DIRECT VIDEO */
+              <video
+                src={embedConfig.src}
+                controls
+                autoPlay
+                playsInline
+                className="max-w-full max-h-[85vh] w-auto h-auto object-contain bg-black"
+              />
+            ) : (
+              /* IMAGE */
+              <img
+                src={embedConfig.src}
+                alt={artwork.title || "Artwork"}
+                className="max-w-full max-h-[85vh] w-auto h-auto object-contain"
+              />
+            )}
+        </div>
 
         {/* Title / Description Bar */}
         {(artwork.title || artwork.description) && (
-          <div className="mt-4 px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700">
+          <div className="mt-4 px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 pointer-events-auto">
              {artwork.title && <h2 className="text-sm font-bold">{artwork.title}</h2>}
              {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
           </div>
