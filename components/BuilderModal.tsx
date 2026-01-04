@@ -46,7 +46,7 @@ interface BuilderModalProps {
   onStartNew: () => void;
   onCopyLink: () => void;
   onLoadGallery: (slug: string) => void;
-  onDeleteGallery: (id: string) => void; // New Prop
+  onDeleteGallery: (id: string) => void;
   onGoogleLogin: () => void;
   onEmailLogin: () => void;
   onSignOut: () => void;
@@ -167,6 +167,14 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
           {/* TAB 2: APPEARANCE (LOOK) */}
           {activeTab === 'appearance' && (
             <div className="space-y-8">
+              {/* Display Name Indication */}
+              {props.displayName && (
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center justify-between">
+                    <span className="text-xs text-blue-500 font-bold uppercase tracking-wider">Editing:</span>
+                    <span className="text-sm font-semibold text-blue-900 truncate max-w-[200px]">{props.displayName}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-4">View Mode</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -241,8 +249,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                 </div>
               )}
 
-              {/* Added: Specific Save Layout Button */}
-              {props.session && (
+              {/* Specific Save Layout Button */}
+              {props.session && props.savedGalleryId && (
                  <button 
                    onClick={() => props.onSave({ asNew: false })} 
                    disabled={props.isSaving}
