@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MediaItem } from '../constants';
 
 interface OverlayProps {
@@ -7,189 +7,80 @@ interface OverlayProps {
 }
 
 const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
-  const [loaded, setLoaded] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const [modalMuted, setModalMuted] = useState(true);
 
   useEffect(() => {
     if (artwork) {
-      setLoaded(false);
-      setHasError(false);
-      setModalMuted(true);
-      requestAnimationFrame(() => setVisible(true));
-      document.body.style.overflow = 'hidden';
+      setVisible(true);
     } else {
-      setVisible(false);
-      document.body.style.overflow = '';
+      setTimeout(() => setVisible(false), 300);
     }
   }, [artwork]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  // ✅ Embed URL logic:
-  // - Google Drive: use embedUrl as-is (no autoplay/mute query params)
-  // - YouTube/Vimeo: add autoplay + mute params
-  const embedUrl = useMemo(() => {
-    if (!artwork || artwork.kind !== 'embed') return '';
-
-    if (artwork.provider === 'gdrive' && artwork.embedUrl) {
-      return artwork.embedUrl;
-    }
-
-    const base = artwork.fullUrl || '';
-    if (!base) return '';
-    const separator = base.includes('?') ? '&' : '?';
-    return `${base}${separator}autoplay=1&mute=${modalMuted ? '1' : '0'}&playsinline=1`;
-  }, [artwork, modalMuted]);
-
-  const media = artwork;
-  if (!media) return null;
-
-  const previewUrl = media.previewUrl;
-  const fullUrl = media.fullUrl;
-
-  const renderContent = () => {
-    // ---- VIDEO (HTML5 / Direct) ----
-    // Note: Drive videos should usually be "embed" with embedUrl; but if any video slips through here,
-    // we still try to play it via <video>.
-    if (media.kind === 'video' && !hasError) {
-      const videoSource = media.videoUrl || fullUrl;
-
-      return (
-        <div className="relative">
-          <video
-            src={videoSource}
-            className={`
-              max-w-[92vw] max-h-[92vh] object-contain select-none
-              transition-opacity duration-500
-              ${loaded ? 'opacity-100' : 'opacity-0'}
-            `}
-            autoPlay
-            loop
-            playsInline
-            muted={modalMuted}
-            controls
-            onLoadedData={() => setLoaded(true)}
-            onError={() => setHasError(true)}
-          />
-          <button
-            className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
-            onClick={() => setModalMuted((prev) => !prev)}
-          >
-            {modalMuted ? 'Enable sound' : 'Mute'}
-          </button>
-        </div>
-      );
-    }
-
-    // ---- EMBED (Drive / YouTube / Vimeo) ----
-    if (media.kind === 'embed') {
-      const isDrive = media.provider === 'gdrive';
-
-      return (
-        <div className="relative w-[92vw] max-w-5xl aspect-video">
-          {!loaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
-              <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
-            </div>
-          )}
-
-          <iframe
-            src={embedUrl}
-            allow="autoplay; fullscreen; picture-in-picture"
-            className={`w-full h-full border-0 ${
-              loaded ? 'opacity-100' : 'opacity-0'
-            } transition-opacity duration-500`}
-            onLoad={() => setLoaded(true)}
-            allowFullScreen
-          />
-
-          {/* ✅ Mute toggle makes sense for YT/Vimeo embeds, not Drive preview */}
-          {!isDrive && (
-            <button
-              className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs shadow"
-              onClick={() => setModalMuted((prev) => !prev)}
-            >
-              {modalMuted ? 'Enable sound' : 'Mute'}
-            </button>
-          )}
-        </div>
-      );
-    }
-
-    // ---- IMAGE ----
-    return (
-      <img
-        src={hasError ? media.fallbackPreview || previewUrl : fullUrl}
-        alt="Artwork"
-        className={`
-          max-w-[92vw] max-h-[92vh] object-contain select-none
-          transition-opacity duration-500
-          ${loaded ? 'opacity-100' : 'opacity-0'}
-        `}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          if (!hasError) setHasError(true);
-        }}
-      />
-    );
-  };
+  if (!visible && !artwork) return null;
 
   return (
     <div
       className={`
-        fixed inset-0 z-50 flex items-center justify-center
+        fixed inset-0 z-50 flex items-center justify-center 
         transition-all duration-500 ease-out
-        ${
-          visible
-            ? 'bg-black/70 backdrop-blur-sm'
-            : 'bg-transparent backdrop-blur-none pointer-events-none'
-        }
+        ${artwork ? 'bg-white/95 backdrop-blur-xl opacity-100' : 'bg-transparent opacity-0 pointer-events-none'}
       `}
       onClick={onClose}
     >
-      <button
+      {/* Close Button */}
+      <button 
         onClick={onClose}
-        className={`
-          absolute top-8 right-8 w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-lg text-gray-800 hover:scale-105 transition-all duration-300 z-50 border border-gray-100
-          ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}
-        `}
-        aria-label="Close"
+        className="absolute top-6 right-6 p-4 rounded-full bg-slate-100 hover:bg-slate-200 transition z-50 group"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-6 w-6"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+        <svg className="w-6 h-6 text-slate-500 group-hover:text-slate-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
 
-      <div
+      {/* Content Container */}
+      <div 
         className={`
-          relative bg-transparent shadow-2xl overflow-hidden
-          transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1)
-          ${visible ? 'scale-100 opacity-100 translate-y-0' : 'scale-90 opacity-0 translate-y-12'}
+           relative w-full h-full p-4 md:p-12 flex flex-col md:flex-row items-center justify-center gap-8
+           transition-all duration-700 delay-100
+           ${artwork ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-8'}
         `}
-        style={{ maxWidth: '92vw', maxHeight: '92vh' }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} 
       >
-        {!loaded && !hasError && media.kind !== 'embed' && (
-          <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50/50">
-            <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-800 rounded-full animate-spin"></div>
-          </div>
-        )}
+        {artwork && (
+          <>
+            {/* Media Wrapper - Auto Sizing */}
+            <div className="flex-1 w-full h-full flex items-center justify-center overflow-hidden">
+                {artwork.kind === 'video' || (artwork.kind === 'embed' && !artwork.previewUrl) ? (
+                  <video
+                    src={artwork.videoUrl || artwork.fullUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-w-full max-h-full object-contain rounded shadow-lg"
+                  />
+                ) : (
+                  <img
+                    src={artwork.fullUrl}
+                    alt="Artwork"
+                    className="max-w-full max-h-full object-contain rounded shadow-lg"
+                  />
+                )}
+            </div>
 
-        {renderContent()}
+            {/* 
+              Future Feature: Title/Description 
+              To enable this, simply add 'title' and 'description' fields to your MediaItem objects.
+              The UI is ready to render them if present.
+            */}
+            {(artwork.title || artwork.description) && (
+              <div className="w-full md:w-80 flex-shrink-0 bg-slate-50 p-6 rounded-2xl border border-slate-100 shadow-sm overflow-y-auto max-h-[30vh] md:max-h-full">
+                 {artwork.title && <h2 className="text-xl font-bold text-slate-800 mb-2">{artwork.title}</h2>}
+                 {artwork.description && <p className="text-sm text-slate-600 leading-relaxed">{artwork.description}</p>}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
