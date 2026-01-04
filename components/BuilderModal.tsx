@@ -52,7 +52,6 @@ interface BuilderModalProps {
 }
 
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
-  // Reverted to 4 tabs logic
   const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'galleries' | 'support'>('content');
 
   if (!props.isOpen) return null;
@@ -61,7 +60,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] modal-container">
         
-        {/* Header Tabs - Restored to 4 Tabs */}
+        {/* Header Tabs */}
         <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setActiveTab('content')} 
@@ -317,13 +316,48 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                </p>
                
                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-sm">
-                    <div className="w-full aspect-square bg-slate-100 mb-2 rounded-lg flex items-center justify-center text-xs text-slate-400">QR CODE</div>
-                    <p className="text-xs font-bold text-slate-700">Buy me a Coffee</p>
+                  {/* Bit */}
+                  <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                      <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
+                        <img 
+                          src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Bit%20QR.png" 
+                          alt="Bit QR" 
+                          className="w-full h-full object-cover mix-blend-multiply" 
+                        />
+                      </div>
+                      <div className="text-center">
+                         <span className="block font-bold text-slate-800 text-sm">Bit</span>
+                      </div>
                   </div>
-                  <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-sm">
-                    <div className="w-full aspect-square bg-slate-100 mb-2 rounded-lg flex items-center justify-center text-xs text-slate-400">QR CODE</div>
-                    <p className="text-xs font-bold text-slate-700">Crypto (ETH)</p>
+
+                  {/* Paybox */}
+                  <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                      <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
+                        <img 
+                          src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Pay%20Group%20QR.png" 
+                          alt="PayBox QR" 
+                          className="w-full h-full object-cover mix-blend-multiply" 
+                        />
+                      </div>
+                      <div className="text-center">
+                         <span className="block font-bold text-slate-800 text-sm">Paybox</span>
+                         <a href="https://links.payboxapp.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
+                      </div>
+                  </div>
+
+                  {/* Buy Me A Coffee */}
+                  <div className="flex flex-col gap-3 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+                      <div className="aspect-square rounded-lg overflow-hidden bg-slate-50">
+                        <img 
+                          src="https://raw.githubusercontent.com/AvocadoHead/Gallery3D/main/assets/Buy%20me%20Coffee%20QR.png" 
+                          alt="Coffee QR" 
+                          className="w-full h-full object-cover mix-blend-multiply" 
+                        />
+                      </div>
+                      <div className="text-center">
+                         <span className="block font-bold text-slate-800 text-sm">Buy me Coffee</span>
+                         <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Open Link</a>
+                      </div>
                   </div>
                </div>
                
