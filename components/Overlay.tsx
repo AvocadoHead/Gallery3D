@@ -20,9 +20,16 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   // --- SMART URL DETECTION ---
   const embedConfig = useMemo(() => {
     if (!artwork) return null;
+    
+    // 1. User's specific Google Drive fix (Priority from Data)
+    const item = artwork as any;
+    if (item.provider === 'gdrive' && item.embedUrl) {
+      return { type: 'iframe', src: item.embedUrl };
+    }
+
     const url = artwork.fullUrl;
 
-    // 1. YouTube (Always Iframe)
+    // 2. YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = url.split('v=')[1] || url.split('/').pop();
       const cleanId = videoId?.split('&')[0].split('?')[0];
@@ -32,7 +39,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       };
     }
     
-    // 2. Vimeo (Always Iframe)
+    // 3. Vimeo
     if (url.includes('vimeo.com')) {
       const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
       const videoId = match ? match[1] : null;
@@ -44,14 +51,16 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 3. Google Drive
+    // 4. Google Drive (Robust Detection)
     if (url.includes('drive.google.com')) {
-      const parts = url.split('/d/');
-      if (parts.length > 1) {
-        const idPart = parts[1].split('/')[0];
+      // Regex to catch both /file/d/XYZ and ?id=XYZ formats
+      const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+      
+      if (match && match[1]) {
+        const idPart = match[1];
 
         // LOGIC SPLIT:
-        // If it is explicitly an IMAGE, use the direct link so it renders natively without a frame.
+        // If it is explicitly an IMAGE, use the direct link (Native Ratio, No Frame).
         if (artwork.kind === 'image') {
            return {
              type: 'image',
@@ -59,7 +68,8 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
            };
         }
 
-        // If it is a VIDEO (or unknown), use the Iframe Player so the Play button works.
+        // If it is a VIDEO (or generic/unknown), use the Iframe Player (Has Play Button).
+        // We default to this to ensure videos work even if 'kind' is mistakenly set to 'embed'.
         return { 
           type: 'iframe', 
           src: `https://drive.google.com/file/d/${idPart}/preview` 
@@ -67,12 +77,12 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 4. Direct Video Files (MP4/WebM) - Native Player (No Iframe)
+    // 5. Direct Video Files (MP4/WebM) - Native Player (No Iframe)
     if (artwork.kind === 'video' || url.match(/\.(mp4|webm|mov|ogg)$/i)) {
       return { type: 'video', src: artwork.videoUrl || url };
     }
 
-    // 5. Default Fallback -> Image
+    // 6. Default Fallback -> Image
     return { type: 'image', src: url };
   }, [artwork]);
 
@@ -117,7 +127,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             {embedConfig.type === 'iframe' ? (
               /* 
                  IFRAMES (Drive Video / YT / Vimeo)
-                 These MUST be in a fixed container to render the player controls correctly.
+                 Must be wrapped to have dimension and play controls.
               */
               <div 
                 className="bg-black shadow-2xl rounded-lg overflow-hidden"
