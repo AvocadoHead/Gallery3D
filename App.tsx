@@ -250,6 +250,8 @@ const App: React.FC = () => {
     setGalleryDbId(null);
     setViewMode('sphere');
     setMediaScale(1);
+    setSphereBase(62);
+    setTileGap(12);
     window.history.replaceState(null, '', window.location.pathname);
   };
 
@@ -260,11 +262,7 @@ const App: React.FC = () => {
     try {
       const { error } = await supabase.from('galleries').delete().eq('id', galleryId);
       if (error) throw error;
-      
-      // Refresh list
       refreshMyGalleries(session.user.id);
-      
-      // If we deleted the current gallery, clear state
       if (galleryId === galleryDbId) {
         handleStartNew();
       }
@@ -274,14 +272,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveGallery = async (asNew: boolean = false) => {
+  // FIX: Explicitly handle the options object so { asNew: false } works correctly
+  const handleSaveGallery = async (options?: { asNew?: boolean }) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
 
     if (!itemsToSave.length || !isSupabaseConfigured) return;
 
+    const asNew = options?.asNew ?? false;
+
     setIsSaving(true);
     try {
+      // Logic fix: Only use ID if asNew is false. Otherwise undefined (creates new).
       const idToUse = asNew ? undefined : galleryDbId || undefined;
       const slugToUse = asNew ? undefined : savedGalleryId || undefined;
 
