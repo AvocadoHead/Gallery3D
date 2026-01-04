@@ -20,17 +20,17 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   // --- SMART URL DETECTION ---
   const embedConfig = useMemo(() => {
     if (!artwork) return null;
+    
+    // 1. User's specific Google Drive fix (Priority)
+    // We treat 'any' here just in case 'provider' isn't in your local TS type definition yet
+    const item = artwork as any;
+    if (item.provider === 'gdrive' && item.embedUrl) {
+      return { type: 'iframe', src: item.embedUrl };
+    }
+
     const url = artwork.fullUrl;
 
-        // Priority: Check provider field first for Google Drive
-        if (artwork.provider === 'gdrive' && artwork.embedUrl) {
-                return {
-                          type: 'iframe',
-                          src: artwork.embedUrl
-                                  };
-              }
-
-    // 1. YouTube
+    // 2. YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = url.split('v=')[1] || url.split('/').pop();
       const cleanId = videoId?.split('&')[0].split('?')[0];
@@ -40,7 +40,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       };
     }
     
-    // 2. Vimeo
+    // 3. Vimeo
     if (url.includes('vimeo.com')) {
       const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
       const videoId = match ? match[1] : null;
@@ -52,11 +52,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 3. Google Drive (Video/File)
+    // 4. Google Drive (Fallback string detection if provider not set)
     if (url.includes('drive.google.com')) {
       const parts = url.split('/d/');
       if (parts.length > 1) {
-        const idPart = parts[1].split('/')[0].split('?')[0]; // Remove query params        // We use /preview for the embeddable player
+        const idPart = parts[1].split('/')[0];
         return { 
           type: 'iframe', 
           src: `https://drive.google.com/file/d/${idPart}/preview` 
@@ -64,12 +64,12 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 4. Direct Video Files
+    // 5. Direct Video Files
     if (artwork.kind === 'video' || url.match(/\.(mp4|webm|mov|ogg)$/i)) {
       return { type: 'video', src: artwork.videoUrl || url };
     }
 
-    // 5. Default to Image
+    // 6. Default to Image
     return { type: 'image', src: url };
   }, [artwork]);
 
@@ -80,11 +80,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       
       {/* 
          LAYER 1: BACKDROP 
-         Very subtle background (10% opacity)
+         Subtle dark tint + Blur
       */}
       <div 
         className={`
-          absolute inset-0 bg-black/10 backdrop-blur-xl transition-opacity duration-300 ease-out
+          absolute inset-0 bg-black/30 backdrop-blur-xl transition-opacity duration-300 ease-out
           ${visible ? 'opacity-100' : 'opacity-0'}
         `}
         onClick={onClose}
@@ -92,10 +92,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
 
       {/* 
          LAYER 2: CONTENT 
+         No padding, no background colors on the container.
       */}
       <div 
         className={`
-           relative z-10 w-full h-full p-2 md:p-8 flex flex-col items-center justify-center pointer-events-none
+           relative z-10 w-full h-full flex flex-col items-center justify-center pointer-events-none
            transition-transform duration-500 cubic-bezier(0.175, 0.885, 0.32, 1.275)
            ${visible ? 'scale-100' : 'scale-90'}
         `}
@@ -103,33 +104,33 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 pointer-events-auto p-3 rounded-full bg-white text-slate-900 shadow-xl hover:scale-110 transition-transform z-50"
+          className="absolute top-4 right-4 pointer-events-auto p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition z-50 backdrop-blur-md"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
-        {/* Media Container */}
+        {/* 
+            MEDIA CONTAINER 
+            The crucial part: We do NOT use 'aspect-video' or fixed width/height here.
+            We use max-h-[85vh] to ensure it fits on screen, and w-auto to respect ratio.
+        */}
         <div 
-            className="relative pointer-events-auto shadow-2xl rounded-xl overflow-hidden"
-            style={{ 
-                maxWidth: '100%', 
-                maxHeight: '85vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}
+            className="relative pointer-events-auto flex items-center justify-center"
+            style={{ maxWidth: '95vw', maxHeight: '85vh' }}
             onClick={(e) => e.stopPropagation()}
         >
-            
             {embedConfig.type === 'iframe' ? (
               /* 
-                 IFRAME (Google Drive, YT, Vimeo)
-                 Fix: Removed 'sandbox' attribute. Google Drive's player scripts need full access 
-                 to the frame to render the play button and controls correctly.
+                 IFRAMES (YouTube/Vimeo/Drive)
+                 These need specific sizing to not collapse.
+                 We use a responsive calculation but remove the rigid wrapper.
               */
-              <div className="w-[90vw] h-[50vw] max-w-[1200px] max-h-[80vh] md:w-[80vw] md:h-[45vw] bg-black">
+              <div 
+                className="bg-black shadow-2xl rounded-lg overflow-hidden"
+                style={{ width: '85vw', height: '48vw', maxWidth: '1200px', maxHeight: '80vh' }}
+              >
                 <iframe
                   src={embedConfig.src}
                   title={artwork.title || "Content"}
@@ -139,27 +140,33 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 />
               </div>
             ) : embedConfig.type === 'video' ? (
-              /* DIRECT VIDEO */
+              /* 
+                 DIRECT VIDEO (MP4)
+                 Renders natively. Will respect portrait/landscape automatically.
+              */
               <video
                 src={embedConfig.src}
                 controls
                 autoPlay
                 playsInline
-                className="max-w-full max-h-[85vh] w-auto h-auto object-contain bg-black"
+                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
               />
             ) : (
-              /* IMAGE */
+              /* 
+                 IMAGE 
+                 Renders natively. Will respect portrait/landscape automatically.
+              */
               <img
                 src={embedConfig.src}
                 alt={artwork.title || "Artwork"}
-                className="max-w-full max-h-[85vh] w-auto h-auto object-contain"
+                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
               />
             )}
         </div>
 
-        {/* Title / Description Bar */}
+        {/* Bottom Title Bar */}
         {(artwork.title || artwork.description) && (
-          <div className="mt-4 px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 pointer-events-auto">
+          <div className="mt-4 pointer-events-auto px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 border border-white/10">
              {artwork.title && <h2 className="text-sm font-bold">{artwork.title}</h2>}
              {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
           </div>
