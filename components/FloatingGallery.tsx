@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { getSphereCoordinates, MediaItem } from '../constants';
 
 // --- Single Gallery Item ---
-// Removed 'isMobile' from interface to match the working logic
 interface ItemProps {
   item: MediaItem;
   position: [number, number, number];
@@ -42,10 +41,12 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [muted, setMuted] = useState(true);
+  
   const hasDedicatedPreview = useMemo(
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
     [item.fallbackPreview, item.previewUrl, item.videoUrl],
   );
+  
   const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
   const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
   
@@ -55,7 +56,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // Staggered entry animation
     const timeout = setTimeout(() => {
       setMounted(true);
     }, index * 20); 
@@ -64,8 +64,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
 
   useFrame((state) => {
     if (!groupRef.current) return;
-    // Billboard behavior: always face the camera
-    // This works perfectly both outside and INSIDE the sphere
     groupRef.current.lookAt(state.camera.position);
 
     const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
@@ -76,47 +74,16 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
 
   useEffect(() => {
     if (!useVideo || !videoRef.current) return;
-
-    const play = () => {
-      const el = videoRef.current!;
-      const promise = el.play();
-      if (promise && typeof promise.then === 'function') {
-        promise.catch(() => {});
-      }
-    };
-
-    play();
-  }, [item.previewUrl, useVideo]);
-
-  useEffect(() => {
-    if (!useVideo || !videoRef.current) return;
-    const el = videoRef.current;
-    const promise = el.play();
-    if (promise && typeof promise.then === 'function') {
-      promise.catch(() => {});
+    if (hovered) {
+        videoRef.current.play().catch(() => {});
+        videoRef.current.muted = false;
+    } else {
+        videoRef.current.pause();
+        videoRef.current.muted = true;
     }
   }, [hovered, useVideo]);
 
-  // Restored: Smooth audio fading (The "Failing" version removed this for "optimization" but broke the UX)
-  useEffect(() => {
-    if (!useVideo) return;
-    let raf: number;
-    const fadeVolume = () => {
-      if (!videoRef.current) return;
-      const target = hovered ? 0.9 : 0;
-      const current = videoRef.current.volume;
-      const step = 0.08;
-      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
-      videoRef.current.volume = next;
-      const shouldMute = next < 0.05;
-      if (muted !== shouldMute) setMuted(shouldMute);
-      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
-    };
-
-    raf = requestAnimationFrame(fadeVolume);
-    return () => cancelAnimationFrame(raf);
-  }, [hovered, muted, useVideo]);
-
+  // Volume Fading Logic
   useEffect(() => {
     if (!useVideo) return;
     let raf: number;
@@ -149,17 +116,13 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   };
 
   const renderMedia = () => {
-    if (item.kind === 'embed') {
+    if (item.kind === 'embed' || !useVideo) {
       const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
       return (
         <img
           src={thumb}
-          alt="embed preview"
-          className={`
-            w-full h-full object-contain rounded-xl
-            transition-opacity duration-500
-            ${loaded ? 'opacity-100' : 'opacity-0'}
-          `}
+          alt="art"
+          className={`w-full h-full object-contain rounded-xl transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
           onLoad={(e) => {
             const el = e.target as HTMLImageElement;
             handleSize(el.naturalWidth, el.naturalHeight);
@@ -171,49 +134,17 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
       );
     }
 
-    if (useVideo) {
-      const videoSource = item.videoUrl || item.previewUrl;
-      return (
-        <video
-          ref={videoRef}
-          src={videoSource}
-          className={`
-            w-full h-full object-contain rounded-xl
-            transition-opacity duration-500
-            ${loaded ? 'opacity-100' : 'opacity-0'}
-          `}
-          autoPlay
-          playsInline
-          loop
-          muted={muted}
-          preload="metadata"
-          onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
-          onLoadedData={() => setLoaded(true)}
-          onError={() => {
-            if (item.fallbackPreview) {
-              setUseVideo(false);
-              setLoaded(false);
-            }
-          }}
-        />
-      );
-    }
-
     return (
-      <img
-        src={item.fallbackPreview || item.previewUrl}
-        alt="art"
-        className={`
-          w-full h-full object-contain rounded-xl
-          transition-opacity duration-500
-          ${loaded ? 'opacity-100' : 'opacity-0'}
-        `}
-        onLoad={(e) => {
-          const el = e.target as HTMLImageElement;
-          handleSize(el.naturalWidth, el.naturalHeight);
-          setLoaded(true);
-        }}
-        draggable={false}
+      <video
+        ref={videoRef}
+        src={item.videoUrl || item.previewUrl}
+        className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        playsInline
+        loop
+        muted={muted}
+        onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
+        onLoadedData={() => setLoaded(true)}
+        onError={() => setUseVideo(false)}
       />
     );
   };
@@ -226,12 +157,26 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         floatIntensity={0.5} 
         floatingRange={[-0.1, 0.1]}
       >
-        <Html transform occlude="blending" distanceFactor={12} zIndexRange={[100, 0]}>
+        {/* FIX: 'occlude="blending"' causes missing items on mobile. 
+            Standard 'occlude' is faster and 100% stable. */}
+        <Html 
+            transform 
+            occlude 
+            distanceFactor={12} 
+            zIndexRange={[100, 0]}
+            style={{ 
+                // Force hardware acceleration to prevent jitter
+                transform: 'translate3d(0,0,0)',
+                willChange: 'opacity, transform' 
+            }}
+        >
           <div
             className={`
               relative group cursor-pointer select-none
-              transition-all duration-700 ease-out
-              ${mounted && !clearing ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
+              /* FIX: Changed transition-all to transition-opacity. 
+                 transition-all fights with the 3D positioning engine. */
+              transition-opacity duration-700 ease-out
+              ${mounted && !clearing ? 'opacity-100' : 'opacity-0'}
               ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
             `}
             onClick={(e) => {
@@ -243,17 +188,18 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
             style={{
               width: `${computedSize.width}px`,
               height: `${computedSize.height}px`,
+              // We apply scale via inline style for hover effects to avoid CSS class conflicts
+              transform: hovered && !clearing ? 'scale(1.1)' : 'scale(1)',
+              transition: 'transform 0.2s ease-out, opacity 0.5s ease-out'
             }}
           >
-            {/* Card Container */}
             <div
               className={`
-                w-full h-full bg-white rounded-2xl p-2 shadow-xl
-                transition-all duration-300
+                w-full h-full bg-white rounded-2xl p-2 
+                transition-shadow duration-300
                 ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
               `}
             >
-              {/* Media Container */}
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
                 {renderMedia()}
                 {!loaded && (
@@ -270,7 +216,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   );
 };
 
-// --- Main Scene ---
 interface GallerySceneProps {
   onSelect: (item: MediaItem) => void;
   items: MediaItem[];
@@ -284,6 +229,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
     24,
     Math.min(95, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
+  
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
