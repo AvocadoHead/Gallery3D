@@ -22,7 +22,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
     if (!artwork) return null;
     
     // 1. User's specific Google Drive fix (Priority)
-    // We treat 'any' here just in case 'provider' isn't in your local TS type definition yet
     const item = artwork as any;
     if (item.provider === 'gdrive' && item.embedUrl) {
       return { type: 'iframe', src: item.embedUrl };
@@ -52,7 +51,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 4. Google Drive (Fallback string detection if provider not set)
+    // 4. Google Drive (Fallback string detection)
     if (url.includes('drive.google.com')) {
       const parts = url.split('/d/');
       if (parts.length > 1) {
@@ -78,10 +77,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
       
-      {/* 
-         LAYER 1: BACKDROP 
-         Subtle dark tint + Blur
-      */}
+      {/* LAYER 1: BACKDROP (Subtle Dark Blur) */}
       <div 
         className={`
           absolute inset-0 bg-black/30 backdrop-blur-xl transition-opacity duration-300 ease-out
@@ -90,10 +86,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         onClick={onClose}
       />
 
-      {/* 
-         LAYER 2: CONTENT 
-         No padding, no background colors on the container.
-      */}
+      {/* LAYER 2: CONTENT WRAPPER */}
       <div 
         className={`
            relative z-10 w-full h-full flex flex-col items-center justify-center pointer-events-none
@@ -112,20 +105,19 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         </button>
 
         {/* 
-            MEDIA CONTAINER 
-            The crucial part: We do NOT use 'aspect-video' or fixed width/height here.
-            We use max-h-[85vh] to ensure it fits on screen, and w-auto to respect ratio.
+            MEDIA DISPLAY
+            We intentionally do NOT put a wrapper div around Image/Video types.
+            This prevents the "black box" effect.
         */}
         <div 
-            className="relative pointer-events-auto flex items-center justify-center"
+            className="pointer-events-auto flex items-center justify-center"
             style={{ maxWidth: '95vw', maxHeight: '85vh' }}
             onClick={(e) => e.stopPropagation()}
         >
             {embedConfig.type === 'iframe' ? (
               /* 
                  IFRAMES (YouTube/Vimeo/Drive)
-                 These need specific sizing to not collapse.
-                 We use a responsive calculation but remove the rigid wrapper.
+                 Must be wrapped to have dimension, otherwise they collapse.
               */
               <div 
                 className="bg-black shadow-2xl rounded-lg overflow-hidden"
@@ -142,7 +134,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             ) : embedConfig.type === 'video' ? (
               /* 
                  DIRECT VIDEO (MP4)
-                 Renders natively. Will respect portrait/landscape automatically.
+                 Rendered "naked". It will define its own aspect ratio.
               */
               <video
                 src={embedConfig.src}
@@ -154,7 +146,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             ) : (
               /* 
                  IMAGE 
-                 Renders natively. Will respect portrait/landscape automatically.
+                 Rendered "naked". It will define its own aspect ratio.
               */
               <img
                 src={embedConfig.src}
