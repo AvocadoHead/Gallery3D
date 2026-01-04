@@ -103,16 +103,13 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       if (id) {
         if (driveMode === 'loading') return { type: 'loading' };
 
-        // API said "IMAGE" -> Use API Media Download Link (Native Ratio, Reliable)
         if (driveMode === 'image') {
            return { 
              type: 'image', 
-             // This endpoint serves the raw image data directly
              src: `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${GOOGLE_API_KEY}` 
            };
         }
 
-        // API said "VIDEO" -> Iframe Player
         return { 
           type: 'iframe', 
           src: `https://drive.google.com/file/d/${id}/preview`,
@@ -135,10 +132,13 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
       
-      {/* LAYER 1: BACKDROP */}
+      {/* 
+         LAYER 1: BACKDROP 
+         Changed 'backdrop-blur-xl' (Heavy) to 'backdrop-blur-sm' (Subtle) 
+      */}
       <div 
         className={`
-          absolute inset-0 bg-black/20 backdrop-blur-xl transition-opacity duration-300 ease-out
+          absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity duration-300 ease-out
           ${visible ? 'opacity-100' : 'opacity-0'}
         `}
         onClick={onClose}
@@ -173,9 +173,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                   <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-2" />
                </div>
             ) : config.type === 'iframe' ? (
-              /* 
-                 IFRAME PLAYER 
-              */
               <div 
                 className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-full max-w-5xl aspect-video' : 'w-[90vw] h-[80vh] max-w-6xl'}`}
               >
@@ -188,7 +185,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 />
               </div>
             ) : config.type === 'video' ? (
-              /* NATIVE VIDEO */
               <video
                 src={config.src}
                 controls
@@ -197,17 +193,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
               />
             ) : (
-              /* 
-                 NATIVE IMAGE 
-                 Includes fallback: if API image fails, switch to iframe
-              */
               <img
                 src={config.src}
                 alt={artwork.title || "Artwork"}
                 className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
                 onError={() => {
-                    // Image load failed (maybe permission, or actually a video?)
-                    // Fallback to Iframe Player to be safe
                     setDriveMode('iframe');
                 }}
               />
