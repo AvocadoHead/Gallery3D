@@ -253,6 +253,27 @@ const App: React.FC = () => {
     window.history.replaceState(null, '', window.location.pathname);
   };
 
+  const handleDeleteGallery = async (galleryId: string) => {
+    if (!supabase || !session) return;
+    if (!window.confirm('Are you sure you want to delete this gallery? This cannot be undone.')) return;
+
+    try {
+      const { error } = await supabase.from('galleries').delete().eq('id', galleryId);
+      if (error) throw error;
+      
+      // Refresh list
+      refreshMyGalleries(session.user.id);
+      
+      // If we deleted the current gallery, clear state
+      if (galleryId === galleryDbId) {
+        handleStartNew();
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Failed to delete gallery.');
+    }
+  };
+
   const handleSaveGallery = async (asNew: boolean = false) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
@@ -493,6 +514,7 @@ const App: React.FC = () => {
         onSave={handleSaveGallery} 
         onStartNew={handleStartNew} 
         onCopyLink={handleCopyLink} 
+        onDeleteGallery={handleDeleteGallery}
         onLoadGallery={async (slug) => { 
           try {
             setBuilderOpen(false);
