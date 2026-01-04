@@ -33,7 +33,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       setDriveMode('loading');
 
       // --- GOOGLE DRIVE DETECTION & API CHECK ---
-      // Check if it's a drive link OR explicitly marked as gdrive provider
       const isDrive = artwork.fullUrl.includes('drive.google.com') || (artwork as any).provider === 'gdrive';
       
       if (isDrive) {
@@ -46,7 +45,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
              return;
           }
 
-          // Ask Google API
+          // Ask Google API for MimeType
           fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=mimeType&key=${GOOGLE_API_KEY}`)
             .then(async (res) => {
                 if (!res.ok) throw new Error('API Request Failed'); 
@@ -67,7 +66,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
           setDriveMode('iframe');
         }
       } else {
-        setDriveMode('image'); // Not drive, assume standard image logic downstream
+        setDriveMode('image'); // Not drive, assume standard image logic
       }
     } else {
       setVisible(false);
@@ -95,21 +94,21 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
       }
     }
 
-    // 3. Google Drive (Dependent on API Result)
+    // 3. Google Drive
     const isDrive = url.includes('drive.google.com') || (artwork as any).provider === 'gdrive';
     
     if (isDrive) {
       const id = extractDriveId(url) || extractDriveId((artwork as any).embedUrl);
       
       if (id) {
-        // Wait for API...
         if (driveMode === 'loading') return { type: 'loading' };
 
-        // API said "IMAGE" -> Native Ratio
+        // API said "IMAGE" -> Use API Media Download Link (Native Ratio, Reliable)
         if (driveMode === 'image') {
            return { 
              type: 'image', 
-             src: `https://drive.google.com/uc?export=view&id=${id}` 
+             // This endpoint serves the raw image data directly
+             src: `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${GOOGLE_API_KEY}` 
            };
         }
 
@@ -136,10 +135,10 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
       
-      {/* LAYER 1: BACKDROP - Light & Blurred */}
+      {/* LAYER 1: BACKDROP */}
       <div 
         className={`
-          absolute inset-0 bg-black/10 backdrop-blur-xl transition-opacity duration-300 ease-out
+          absolute inset-0 bg-black/20 backdrop-blur-xl transition-opacity duration-300 ease-out
           ${visible ? 'opacity-100' : 'opacity-0'}
         `}
         onClick={onClose}
@@ -176,8 +175,6 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
             ) : config.type === 'iframe' ? (
               /* 
                  IFRAME PLAYER 
-                 - YT/Vimeo: Fixed 16:9 Aspect Ratio
-                 - Drive Video: Flexible Container (Minimizes black bars)
               */
               <div 
                 className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-full max-w-5xl aspect-video' : 'w-[90vw] h-[80vh] max-w-6xl'}`}
@@ -191,7 +188,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 />
               </div>
             ) : config.type === 'video' ? (
-              /* NATIVE VIDEO (Direct MP4) */
+              /* NATIVE VIDEO */
               <video
                 src={config.src}
                 controls
@@ -200,11 +197,19 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
                 className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
               />
             ) : (
-              /* NATIVE IMAGE (Native Ratio, No Frame) */
+              /* 
+                 NATIVE IMAGE 
+                 Includes fallback: if API image fails, switch to iframe
+              */
               <img
                 src={config.src}
                 alt={artwork.title || "Artwork"}
                 className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                onError={() => {
+                    // Image load failed (maybe permission, or actually a video?)
+                    // Fallback to Iframe Player to be safe
+                    setDriveMode('iframe');
+                }}
               />
             )}
         </div>
