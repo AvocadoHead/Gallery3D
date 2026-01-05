@@ -37,9 +37,8 @@ const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
 const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
+  // We keep 'loaded' state just to remove the spinner, but we trigger load aggressively
   const [loaded, setLoaded] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [muted, setMuted] = useState(true);
   
   const hasDedicatedPreview = useMemo(
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
@@ -53,13 +52,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     normalizeSize(item.aspectRatio, scale),
   );
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setMounted(true);
-    }, index * 20); 
-    return () => clearTimeout(timeout);
-  }, [index]);
 
   useFrame((state) => {
     if (!groupRef.current) return;
@@ -121,7 +113,12 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         <img
           src={thumb}
           alt="art"
-          className={`w-full h-full object-contain rounded-xl transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          // FIX: Removing transition-opacity prevents the "flash" when scrolling back
+          className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          // FIX: Eager loading forces browser to keep image in memory
+          loading="eager"
+          // FIX: Sync decoding prevents "white frame" while texture decodes
+          decoding="sync"
           onLoad={(e) => {
             const el = e.target as HTMLImageElement;
             handleSize(el.naturalWidth, el.naturalHeight);
@@ -141,6 +138,8 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         playsInline
         loop
         muted={muted}
+        // FIX: Force preload
+        preload="auto"
         onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
         onLoadedData={() => setLoaded(true)}
         onError={() => setUseVideo(false)}
@@ -149,29 +148,58 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   };
 
   return (
-    <group position={position} ref={groupRef}>
-      <Float speed={1.5} rotationIntensity={0.05} floatIntensity={0.5} floatingRange={[-0.1, 0.1]}>
-        <Html transform occlude distanceFactor={12} zIndexRange={[100, 0]} style={{ transform: 'translate3d(0,0,0)', willChange: 'opacity, transform' }}>
+    // FIX: frustumCulled={false} tells 3D engine "Always render this, even if off screen"
+    <group position={position} ref={groupRef} frustumCulled={false}>
+      <Float
+        speed={1.5} 
+        rotationIntensity={0.05} 
+        floatIntensity={0.5} 
+        floatingRange={[-0.1, 0.1]}
+      >
+        <Html 
+            transform 
+            occlude 
+            distanceFactor={12} 
+            zIndexRange={[100, 0]}
+            style={{ 
+                transform: 'translate3d(0,0,0)', 
+                willChange: 'transform' // Hints GPU to keep this layer active
+            }}
+        >
           <div
             className={`
-              relative group cursor-pointer select-none transition-opacity duration-700 ease-out
-              ${mounted && !clearing ? 'opacity-100' : 'opacity-0'}
-              ${clearing ? 'scale-75 blur-[1px]' : hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
+              relative group cursor-pointer select-none
+              /* FIX: Removed transition-opacity duration */
+              ${clearing ? 'scale-75 blur-[1px] opacity-0' : 'scale-100 opacity-100'}
+              ${hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
             `}
-            onClick={(e) => { e.stopPropagation(); onClick(item); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick(item);
+            }}
             onPointerEnter={() => setHover(true)}
             onPointerLeave={() => setHover(false)}
             style={{
               width: `${computedSize.width}px`,
               height: `${computedSize.height}px`,
               transform: hovered && !clearing ? 'scale(1.1)' : 'scale(1)',
-              transition: 'transform 0.2s ease-out, opacity 0.5s ease-out'
+              transition: 'transform 0.2s ease-out' // Only animate scale, not opacity
             }}
           >
-            <div className={`w-full h-full bg-white rounded-2xl p-2 transition-shadow duration-300 ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}`}>
+            <div
+              className={`
+                w-full h-full bg-white rounded-2xl p-2 
+                transition-shadow duration-300
+                ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
+              `}
+            >
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
                 {renderMedia()}
-                {!loaded && <div className="absolute inset-0 flex items-center justify-center bg-white/40"><div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" /></div>}
+                {!loaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/40">
+                    <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -190,7 +218,6 @@ interface GallerySceneProps {
 }
 
 const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
-  // Lower minimum radius to 10 for tighter clusters
   const radius = Math.max(
     10, 
     Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
@@ -202,12 +229,34 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
     <>
       <ambientLight intensity={1} />
       <Environment preset="city" />
-      <group>
+
+      {/* FIX: frustumCulled on the main group too */}
+      <group frustumCulled={false}>
         {items.map((item, i) => (
-          <GalleryItem key={item.id} item={item} index={i} position={coords[i].position} onClick={onSelect} radius={radius} clearing={clearing} scale={cardScale} />
+          <GalleryItem
+            key={item.id}
+            item={item}
+            index={i}
+            position={coords[i].position}
+            onClick={onSelect}
+            radius={radius}
+            clearing={clearing}
+            scale={cardScale}
+          />
         ))}
       </group>
-      <OrbitControls enablePan={false} enableZoom minDistance={Math.max(2, radius * 0.08)} maxDistance={Math.max(90, radius * 1.35)} autoRotate autoRotateSpeed={0.6} dampingFactor={0.08} rotateSpeed={0.55} zoomSpeed={4.5} />
+
+      <OrbitControls
+        enablePan={false}
+        enableZoom
+        minDistance={Math.max(2, radius * 0.08)}
+        maxDistance={Math.max(90, radius * 1.35)}
+        autoRotate
+        autoRotateSpeed={0.6}
+        dampingFactor={0.08}
+        rotateSpeed={0.55}
+        zoomSpeed={4.5}
+      />
     </>
   );
 };
