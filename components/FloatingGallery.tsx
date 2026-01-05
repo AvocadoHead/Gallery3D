@@ -37,8 +37,10 @@ const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
 const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
-  // We keep 'loaded' state just to remove the spinner, but we trigger load aggressively
   const [loaded, setLoaded] = useState(false);
+  
+  // FIX: Added 'muted' state which was missing in the previous snippet
+  const [muted, setMuted] = useState(true);
   
   const hasDedicatedPreview = useMemo(
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
@@ -74,7 +76,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     }
   }, [hovered, useVideo]);
 
-  // Volume Fading
+  // Volume Fading Logic
   useEffect(() => {
     if (!useVideo) return;
     let raf: number;
@@ -85,8 +87,10 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
       const step = 0.08;
       const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
       videoRef.current.volume = next;
+      
       const shouldMute = next < 0.05;
       if (muted !== shouldMute) setMuted(shouldMute);
+      
       if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
     };
 
@@ -113,11 +117,9 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         <img
           src={thumb}
           alt="art"
-          // FIX: Removing transition-opacity prevents the "flash" when scrolling back
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          // FIX: Eager loading forces browser to keep image in memory
+          // OPTIMIZATION: Eager load to prevent "pop-in"
           loading="eager"
-          // FIX: Sync decoding prevents "white frame" while texture decodes
           decoding="sync"
           onLoad={(e) => {
             const el = e.target as HTMLImageElement;
@@ -138,7 +140,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         playsInline
         loop
         muted={muted}
-        // FIX: Force preload
+        // OPTIMIZATION: Force load
         preload="auto"
         onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
         onLoadedData={() => setLoaded(true)}
@@ -148,7 +150,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   };
 
   return (
-    // FIX: frustumCulled={false} tells 3D engine "Always render this, even if off screen"
+    // OPTIMIZATION: frustumCulled={false} keeps off-screen items rendered
     <group position={position} ref={groupRef} frustumCulled={false}>
       <Float
         speed={1.5} 
@@ -163,13 +165,13 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
             zIndexRange={[100, 0]}
             style={{ 
                 transform: 'translate3d(0,0,0)', 
-                willChange: 'transform' // Hints GPU to keep this layer active
+                willChange: 'transform' 
             }}
         >
           <div
             className={`
               relative group cursor-pointer select-none
-              /* FIX: Removed transition-opacity duration */
+              /* OPTIMIZATION: Removed transition-opacity to prevent fading glitches */
               ${clearing ? 'scale-75 blur-[1px] opacity-0' : 'scale-100 opacity-100'}
               ${hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
             `}
@@ -183,7 +185,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
               width: `${computedSize.width}px`,
               height: `${computedSize.height}px`,
               transform: hovered && !clearing ? 'scale(1.1)' : 'scale(1)',
-              transition: 'transform 0.2s ease-out' // Only animate scale, not opacity
+              transition: 'transform 0.2s ease-out'
             }}
           >
             <div
@@ -230,7 +232,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <ambientLight intensity={1} />
       <Environment preset="city" />
 
-      {/* FIX: frustumCulled on the main group too */}
+      {/* OPTIMIZATION: Disable frustum culling on the main group */}
       <group frustumCulled={false}>
         {items.map((item, i) => (
           <GalleryItem
