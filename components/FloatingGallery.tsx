@@ -39,9 +39,12 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
   
-  // FIX: Added 'muted' state which was missing in the previous snippet
+  // FIX: This was missing in the broken version, causing the crash.
   const [muted, setMuted] = useState(true);
   
+  // Staggered mounting to smooth out initial load
+  const [mounted, setMounted] = useState(false);
+
   const hasDedicatedPreview = useMemo(
     () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
     [item.fallbackPreview, item.previewUrl, item.videoUrl],
@@ -54,6 +57,13 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     normalizeSize(item.aspectRatio, scale),
   );
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setMounted(true);
+    }, index * 20); 
+    return () => clearTimeout(timeout);
+  }, [index]);
 
   useFrame((state) => {
     if (!groupRef.current) return;
@@ -118,7 +128,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
           src={thumb}
           alt="art"
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          // OPTIMIZATION: Eager load to prevent "pop-in"
+          // OPTIMIZATION: Force eager loading to prevent "pop-in"
           loading="eager"
           decoding="sync"
           onLoad={(e) => {
@@ -140,7 +150,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         playsInline
         loop
         muted={muted}
-        // OPTIMIZATION: Force load
         preload="auto"
         onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
         onLoadedData={() => setLoaded(true)}
@@ -150,7 +159,8 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   };
 
   return (
-    // OPTIMIZATION: frustumCulled={false} keeps off-screen items rendered
+    // FIX: frustumCulled={false} tells 3D engine "Always render this, even if off screen"
+    // This solves the "missing items" / "glitching" when rotating.
     <group position={position} ref={groupRef} frustumCulled={false}>
       <Float
         speed={1.5} 
@@ -165,15 +175,16 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
             zIndexRange={[100, 0]}
             style={{ 
                 transform: 'translate3d(0,0,0)', 
-                willChange: 'transform' 
+                willChange: 'transform' // Hints GPU to keep this layer active
             }}
         >
           <div
             className={`
               relative group cursor-pointer select-none
-              /* OPTIMIZATION: Removed transition-opacity to prevent fading glitches */
-              ${clearing ? 'scale-75 blur-[1px] opacity-0' : 'scale-100 opacity-100'}
-              ${hovered ? 'scale-110 z-50' : 'scale-100 z-0'}
+              /* FIX: Removed transition-opacity to prevent flickering. We control visibility via 'mounted' */
+              ${mounted && !clearing ? 'opacity-100' : 'opacity-0'}
+              ${clearing ? 'scale-75 blur-[1px]' : 'scale-100'}
+              ${hovered ? 'scale-110 z-50' : 'z-0'}
             `}
             onClick={(e) => {
               e.stopPropagation();
@@ -185,7 +196,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
               width: `${computedSize.width}px`,
               height: `${computedSize.height}px`,
               transform: hovered && !clearing ? 'scale(1.1)' : 'scale(1)',
-              transition: 'transform 0.2s ease-out'
+              transition: 'transform 0.2s ease-out' // Animate scale only
             }}
           >
             <div
@@ -232,7 +243,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <ambientLight intensity={1} />
       <Environment preset="city" />
 
-      {/* OPTIMIZATION: Disable frustum culling on the main group */}
+      {/* FIX: Disable frustum culling on the main group too */}
       <group frustumCulled={false}>
         {items.map((item, i) => (
           <GalleryItem
