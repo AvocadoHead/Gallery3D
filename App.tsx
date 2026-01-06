@@ -26,9 +26,20 @@ import {
   MediaItem,
 } from './constants';
 
+// --- NEW PATIENCE LOADER ---
 const Loader = () => (
-  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-    <div className="w-10 h-10 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+  <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-slate-50/90 backdrop-blur-md transition-opacity duration-700">
+    <div className="relative mb-4">
+      <div className="w-16 h-16 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+      </div>
+    </div>
+    <h2 className="text-xl font-light text-slate-800 tracking-widest uppercase animate-pulse">Curating Gallery</h2>
+    <p className="text-xs text-slate-500 mt-2 font-medium max-w-xs text-center leading-relaxed">
+      Please have patience.<br/>
+      Creating a beautiful 3D experience for you.
+    </p>
   </div>
 );
 
@@ -40,7 +51,6 @@ const App: React.FC = () => {
 
   // --- UI State ---
   const [builderOpen, setBuilderOpen] = useState(false);
-  // Controls which tab opens when the modal launches
   const [initialTab, setInitialTab] = useState<'galleries' | 'support'>('galleries'); 
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -308,7 +318,6 @@ const App: React.FC = () => {
       window.history.replaceState(null, '', link);
       refreshMyGalleries();
       
-      // Trigger Donation Prompt
       setDonationToast(true);
       setTimeout(() => setDonationToast(false), 6000);
 
@@ -346,7 +355,6 @@ const App: React.FC = () => {
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 2000);
       
-      // Trigger Donation Prompt on share
       setTimeout(() => setDonationToast(true), 1000);
       setTimeout(() => setDonationToast(false), 6000);
     } catch (err) {
@@ -402,7 +410,7 @@ const App: React.FC = () => {
         ) : (
           <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
         )}
-        {loadingRemote && <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10"><Loader /></div>}
+        {loadingRemote && <Loader />}
       </div>
 
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
@@ -503,9 +511,9 @@ const App: React.FC = () => {
               </div>
               <button 
                 onClick={() => {
-                    setInitialTab('support'); // Set Support Tab
-                    setBuilderOpen(true);     // Open Modal
-                    setDonationToast(false);  // Close Toast
+                    setInitialTab('support'); 
+                    setBuilderOpen(true);     
+                    setDonationToast(false);  
                 }} 
                 className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-bold transition whitespace-nowrap"
               >
@@ -519,7 +527,7 @@ const App: React.FC = () => {
       <BuilderModal
         isOpen={builderOpen}
         onClose={() => setBuilderOpen(false)}
-        initialTab={initialTab} // PASSING THE TAB
+        initialTab={initialTab}
         session={session}
         galleryItemsCount={galleryItems.length}
         inputValue={inputValue}
