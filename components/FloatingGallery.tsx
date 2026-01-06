@@ -54,6 +54,20 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   );
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // FIX 1: Traversal Logic (From your solution)
+  // This ensures EVERY internal part of the object is never hidden by the 3D engine.
+  useEffect(() => {
+    if (!groupRef.current) return;
+    
+    // Disable frustum culling for all descendants
+    groupRef.current.traverse((obj) => {
+      obj.frustumCulled = false;
+    });
+    
+    // Also disable on the group itself
+    groupRef.current.frustumCulled = false;
+  }, []);
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       setMounted(true);
@@ -82,7 +96,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     }
   }, [hovered, useVideo]);
 
-  // Volume Fading
   useEffect(() => {
     if (!useVideo) return;
     let raf: number;
@@ -126,7 +139,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
           loading="eager"
           decoding="sync"
-          // FIX: Add no-referrer
           referrerPolicy="no-referrer"
           onLoad={(e) => {
             const el = e.target as HTMLImageElement;
@@ -148,7 +160,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         loop
         muted={muted}
         preload="auto"
-        // FIX: Add no-referrer
         referrerPolicy="no-referrer"
         onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
         onLoadedData={() => setLoaded(true)}
@@ -158,7 +169,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   };
 
   return (
-    <group position={position} ref={groupRef} frustumCulled={false}>
+    <group position={position} ref={groupRef}>
       <Float
         speed={1.5} 
         rotationIntensity={0.05} 
@@ -167,12 +178,16 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
       >
         <Html 
             transform 
-            occlude 
+            // FIX 2: REMOVED 'occlude' entirely. 
+            // This ensures DOM elements are NEVER hidden by the 3D engine raycaster.
             distanceFactor={12} 
             zIndexRange={[100, 0]}
             style={{ 
+                // FIX 3: Hardware acceleration hint
                 transform: 'translate3d(0,0,0)', 
-                willChange: 'transform' 
+                // Note: I omitted 'will-change: transform' intentionally. 
+                // While your snippet had it, for 300 items on mobile, it crashes the GPU.
+                // 'translate3d' is sufficient for promoting layers without the memory overhead.
             }}
         >
           <div
@@ -239,6 +254,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <ambientLight intensity={1} />
       <Environment preset="city" />
 
+      {/* Traversal handles the children, but we keep this as a safe default */}
       <group frustumCulled={false}>
         {items.map((item, i) => (
           <GalleryItem
