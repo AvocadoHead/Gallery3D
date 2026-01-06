@@ -39,10 +39,9 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
   
-  // FIX: This was missing in the broken version, causing the crash.
+  // FIX: Ensure 'muted' is defined
   const [muted, setMuted] = useState(true);
   
-  // Staggered mounting to smooth out initial load
   const [mounted, setMounted] = useState(false);
 
   const hasDedicatedPreview = useMemo(
@@ -128,7 +127,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
           src={thumb}
           alt="art"
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          // OPTIMIZATION: Force eager loading to prevent "pop-in"
+          // OPTIMIZATION: Eager load
           loading="eager"
           decoding="sync"
           onLoad={(e) => {
@@ -159,8 +158,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   };
 
   return (
-    // FIX: frustumCulled={false} tells 3D engine "Always render this, even if off screen"
-    // This solves the "missing items" / "glitching" when rotating.
+    // FIX: frustumCulled={false} is critical
     <group position={position} ref={groupRef} frustumCulled={false}>
       <Float
         speed={1.5} 
@@ -175,13 +173,12 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
             zIndexRange={[100, 0]}
             style={{ 
                 transform: 'translate3d(0,0,0)', 
-                willChange: 'transform' // Hints GPU to keep this layer active
+                willChange: 'transform'
             }}
         >
           <div
             className={`
               relative group cursor-pointer select-none
-              /* FIX: Removed transition-opacity to prevent flickering. We control visibility via 'mounted' */
               ${mounted && !clearing ? 'opacity-100' : 'opacity-0'}
               ${clearing ? 'scale-75 blur-[1px]' : 'scale-100'}
               ${hovered ? 'scale-110 z-50' : 'z-0'}
@@ -196,7 +193,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
               width: `${computedSize.width}px`,
               height: `${computedSize.height}px`,
               transform: hovered && !clearing ? 'scale(1.1)' : 'scale(1)',
-              transition: 'transform 0.2s ease-out' // Animate scale only
+              transition: 'transform 0.2s ease-out'
             }}
           >
             <div
@@ -243,7 +240,6 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
       <ambientLight intensity={1} />
       <Environment preset="city" />
 
-      {/* FIX: Disable frustum culling on the main group too */}
       <group frustumCulled={false}>
         {items.map((item, i) => (
           <GalleryItem
