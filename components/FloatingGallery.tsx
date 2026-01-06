@@ -38,10 +38,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  
-  // FIX: Ensure 'muted' is defined
   const [muted, setMuted] = useState(true);
-  
   const [mounted, setMounted] = useState(false);
 
   const hasDedicatedPreview = useMemo(
@@ -85,7 +82,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
     }
   }, [hovered, useVideo]);
 
-  // Volume Fading Logic
+  // Volume Fading
   useEffect(() => {
     if (!useVideo) return;
     let raf: number;
@@ -127,9 +124,10 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
           src={thumb}
           alt="art"
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          // OPTIMIZATION: Eager load
           loading="eager"
           decoding="sync"
+          // FIX: Add no-referrer
+          referrerPolicy="no-referrer"
           onLoad={(e) => {
             const el = e.target as HTMLImageElement;
             handleSize(el.naturalWidth, el.naturalHeight);
@@ -150,6 +148,8 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         loop
         muted={muted}
         preload="auto"
+        // FIX: Add no-referrer
+        referrerPolicy="no-referrer"
         onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
         onLoadedData={() => setLoaded(true)}
         onError={() => setUseVideo(false)}
@@ -158,7 +158,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
   };
 
   return (
-    // FIX: frustumCulled={false} is critical
     <group position={position} ref={groupRef} frustumCulled={false}>
       <Float
         speed={1.5} 
@@ -173,7 +172,7 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
             zIndexRange={[100, 0]}
             style={{ 
                 transform: 'translate3d(0,0,0)', 
-                willChange: 'transform'
+                willChange: 'transform' 
             }}
         >
           <div
