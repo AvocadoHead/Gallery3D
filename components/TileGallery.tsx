@@ -10,21 +10,14 @@ interface TileGalleryProps {
 
 const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, gap }) => {
   
-  // Calculate columns based on Screen Width AND User Slider
   const getColumnCount = () => {
     const width = window.innerWidth;
     let baseCols = 1;
     
-    // Base breakpoint logic
-    if (width >= 640) baseCols = 2;   // sm
-    if (width >= 1024) baseCols = 3;  // lg
-    if (width >= 1500) baseCols = 4;  // xl
+    if (width >= 640) baseCols = 2;
+    if (width >= 1024) baseCols = 3;
+    if (width >= 1500) baseCols = 4;
 
-    // Adjust columns based on mediaScale slider
-    // Standard is 1.0. 
-    // If user wants smaller items (0.5), we ADD columns.
-    // If user wants larger items (2.0), we REMOVE columns.
-    
     if (mediaScale <= 0.6) return baseCols + 2; 
     if (mediaScale <= 0.8) return baseCols + 1;
     if (mediaScale >= 1.5) return Math.max(1, baseCols - 1);
@@ -35,7 +28,6 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
 
   const columns = getColumnCount();
 
-  // Distribute items into columns
   const columnWrapper = useMemo(() => {
     const cols: MediaItem[][] = Array.from({ length: columns }, () => []);
     items.forEach((item, i) => {
@@ -70,6 +62,8 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
                   alt="gallery item"
                   className="w-full h-auto object-cover block"
                   loading="lazy"
+                  // FIX: Add no-referrer
+                  referrerPolicy="no-referrer"
                 />
                 
                 {item.kind === 'video' && (
