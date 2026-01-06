@@ -358,6 +358,8 @@ export interface MediaItem {
   embedUrl?: string;
 
   aspectRatio?: number;
+  title?: string;
+  description?: string;
 }
 
 export interface GalleryMetadata {
@@ -407,18 +409,23 @@ export const createMediaItem = (raw: string): MediaItem | null => {
     };
   }
 
-  // 🔹 Google Drive
+  // 🔹 Google Drive (UPDATED)
   const driveId = getDriveId(input);
   if (driveId) {
     return {
       id: uniqueId(),
       originalUrl: input,
-      kind: 'embed',
+      // Default to 'image'. If it's a video, our Overlay logic will handle the player.
+      kind: 'image', 
       provider: 'gdrive',
-      previewUrl: `https://lh3.googleusercontent.com/d/${driveId}=w600`,
-      fullUrl: `https://lh3.googleusercontent.com/d/${driveId}=w2000`,
+      // FIX: Use new thumbnail endpoint (sz=w800 for preview)
+      previewUrl: `https://drive.google.com/thumbnail?id=${driveId}&sz=w800`,
+      // FIX: Use new thumbnail endpoint (sz=s4000 for full resolution)
+      fullUrl: `https://drive.google.com/thumbnail?id=${driveId}&sz=s4000`,
+      // Keep viewer link for fallback/iframe logic
       embedUrl: `https://drive.google.com/file/d/${driveId}/preview`,
-      aspectRatio: 16 / 9,
+      // Aspect ratio unknown until load
+      aspectRatio: undefined,
     };
   }
 
@@ -434,9 +441,12 @@ export const createMediaItem = (raw: string): MediaItem | null => {
     };
   }
 
-  // 🔹 Direct video WITHOUT preview → ❌ excluded from gallery
+  // 🔹 Direct video
   if (isDirectVideo(input)) {
-    return null;
+     // NOTE: Direct videos need a preview image to work well in 3D. 
+     // Currently we skip them if no preview is provided, or return a placeholder logic.
+     // For this project, we return null as requested previously.
+     return null;
   }
 
   return null;
