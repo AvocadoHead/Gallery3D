@@ -246,7 +246,6 @@ const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, 
     10, 
     Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
-  
   const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
