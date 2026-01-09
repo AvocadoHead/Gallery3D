@@ -7,38 +7,66 @@ import { getSphereCoordinates, MediaItem } from '../constants';
 interface ItemProps {
   item: MediaItem;
   position: [number, number, number];
-  rotation?: [number, number, number];
   onClick: (item: MediaItem) => void;
   index: number;
   radius: number;
   clearing: boolean;
   scale: number;
-  shadowOpacity: number;
 }
 
 const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
   const base = 220 * scale;
   const min = 150 * scale;
   const max = 260 * scale;
-  if (!aspectRatio || Number.isNaN(aspectRatio)) return { width: base, height: base };
-  if (aspectRatio >= 1) return { width: base, height: Math.min(max, Math.max(min, base / aspectRatio)) };
-  return { width: Math.min(max, Math.max(min, base * aspectRatio)), height: base };
+
+  if (!aspectRatio || Number.isNaN(aspectRatio)) {
+    return { width: base, height: base };
+  }
+
+  if (aspectRatio >= 1) {
+    const width = base;
+    const height = Math.min(max, Math.max(min, base / aspectRatio));
+    return { width, height };
+  }
+
+  const height = base;
+  const width = Math.min(max, Math.max(min, base * aspectRatio));
+  return { width, height };
 };
 
-const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearing, scale, shadowOpacity }: ItemProps) => {
+const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [muted, setMuted] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  const shouldShowVideoInCard = item.kind === 'video' && !item.previewUrl;
+  const hasDedicatedPreview = useMemo(
+    () => !!(item.fallbackPreview || (item.previewUrl && item.videoUrl && item.previewUrl !== item.videoUrl)),
+    [item.fallbackPreview, item.previewUrl, item.videoUrl],
+  );
+  
+  const shouldShowVideoInCard = item.kind === 'video' && !hasDedicatedPreview && !item.previewUrl;
   const [useVideo, setUseVideo] = useState(shouldShowVideoInCard);
   
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() =>
     normalizeSize(item.aspectRatio, scale),
   );
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // FIX 1: Traversal Logic (From your solution)
+  // This ensures EVERY internal part of the object is never hidden by the 3D engine.
+  useEffect(() => {
+    if (!groupRef.current) return;
+    
+    // Disable frustum culling for all descendants
+    groupRef.current.traverse((obj) => {
+      obj.frustumCulled = false;
+    });
+    
+    // Also disable on the group itself
+    groupRef.current.frustumCulled = false;
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -49,13 +77,12 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
 
   useFrame((state) => {
     if (!groupRef.current) return;
-    if (rotation) {
-        groupRef.current.rotation.set(rotation[0], rotation[1], rotation[2]);
-        return;
-    }
     groupRef.current.lookAt(state.camera.position);
+
     const edgeTilt = Math.min(0.35, (Math.abs(position[0]) / radius) * 0.35 + (Math.abs(position[1]) / radius) * 0.15);
-    if (edgeTilt > 0) groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
+    if (edgeTilt > 0) {
+      groupRef.current.rotateY(position[0] >= 0 ? edgeTilt : -edgeTilt);
+    }
   });
 
   useEffect(() => {
@@ -68,6 +95,27 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
         videoRef.current.muted = true;
     }
   }, [hovered, useVideo]);
+
+  useEffect(() => {
+    if (!useVideo) return;
+    let raf: number;
+    const fadeVolume = () => {
+      if (!videoRef.current) return;
+      const target = hovered ? 0.9 : 0;
+      const current = videoRef.current.volume;
+      const step = 0.08;
+      const next = hovered ? Math.min(1, current + step) : Math.max(0, current - step);
+      videoRef.current.volume = next;
+      
+      const shouldMute = next < 0.05;
+      if (muted !== shouldMute) setMuted(shouldMute);
+      
+      if (Math.abs(next - target) > 0.02) raf = requestAnimationFrame(fadeVolume);
+    };
+
+    raf = requestAnimationFrame(fadeVolume);
+    return () => cancelAnimationFrame(raf);
+  }, [hovered, muted, useVideo]);
 
   useEffect(() => {
     setComputedSize((prev) => {
@@ -88,9 +136,9 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
         <img
           src={thumb}
           alt="art"
-          // FIX: Use lazy loading to save GPU texture memory
-          loading="lazy"
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          loading="eager"
+          decoding="sync"
           referrerPolicy="no-referrer"
           onLoad={(e) => {
             const el = e.target as HTMLImageElement;
@@ -102,6 +150,7 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
         />
       );
     }
+
     return (
       <video
         ref={videoRef}
@@ -110,7 +159,7 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
         playsInline
         loop
         muted={muted}
-        preload="metadata"
+        preload="auto"
         referrerPolicy="no-referrer"
         onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
         onLoadedData={() => setLoaded(true)}
@@ -120,15 +169,26 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
   };
 
   return (
-    // FIX: Reverted to frustumCulled={true} (Default) to save GPU
     <group position={position} ref={groupRef}>
-      <Float speed={1.5} rotationIntensity={0.05} floatIntensity={0.5} floatingRange={[-0.1, 0.1]}>
-        {/* FIX: Removed 'occlude' prop. This prevents the "missing items" glitch. */}
+      <Float
+        speed={1.5} 
+        rotationIntensity={0.05} 
+        floatIntensity={0.5} 
+        floatingRange={[-0.1, 0.1]}
+      >
         <Html 
             transform 
+            // FIX 2: REMOVED 'occlude' entirely. 
+            // This ensures DOM elements are NEVER hidden by the 3D engine raycaster.
             distanceFactor={12} 
             zIndexRange={[100, 0]}
-            style={{ transform: 'translate3d(0,0,0)' }}
+            style={{ 
+                // FIX 3: Hardware acceleration hint
+                transform: 'translate3d(0,0,0)', 
+                // Note: I omitted 'will-change: transform' intentionally. 
+                // While your snippet had it, for 300 items on mobile, it crashes the GPU.
+                // 'translate3d' is sufficient for promoting layers without the memory overhead.
+            }}
         >
           <div
             className={`
@@ -137,7 +197,10 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
               ${clearing ? 'scale-75 blur-[1px]' : 'scale-100'}
               ${hovered ? 'scale-110 z-50' : 'z-0'}
             `}
-            onClick={(e) => { e.stopPropagation(); onClick(item); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick(item);
+            }}
             onPointerEnter={() => setHover(true)}
             onPointerLeave={() => setHover(false)}
             style={{
@@ -148,12 +211,19 @@ const GalleryItem = ({ item, position, rotation, onClick, index, radius, clearin
             }}
           >
             <div
-              className={`w-full h-full bg-white rounded-2xl p-2 transition-shadow duration-300`}
-              style={{ boxShadow: hovered && !clearing ? `0 20px 50px rgba(0,0,0,${shadowOpacity + 0.1})` : `0 10px 30px rgba(0,0,0,${shadowOpacity})` }}
+              className={`
+                w-full h-full bg-white rounded-2xl p-2 
+                transition-shadow duration-300
+                ${hovered && !clearing ? 'shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-2 ring-white/50' : 'shadow-lg'}
+              `}
             >
               <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
                 {renderMedia()}
-                {!loaded && <div className="absolute inset-0 flex items-center justify-center bg-white/40"><div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" /></div>}
+                {!loaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/40">
+                    <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -169,57 +239,43 @@ interface GallerySceneProps {
   clearing: boolean;
   cardScale: number;
   radiusBase: number;
-  shadowOpacity: number;
-  bgColor: string;
-  isCarousel?: boolean;
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase, shadowOpacity, bgColor, isCarousel }) => {
-  const radius = Math.max(10, Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)));
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
+  const radius = Math.max(
+    10, 
+    Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
+  );
   
-  const coords = useMemo(() => {
-    if (isCarousel) {
-        return items.map((_, i) => {
-            const angle = i * 0.5;
-            const y = -i * 10 + (items.length * 10) / 2;
-            return {
-                position: [Math.sin(angle) * radius, y * 0.1, Math.cos(angle) * radius] as [number, number, number],
-                rotation: [0, angle, 0] as [number, number, number]
-            };
-        });
-    }
-    return getSphereCoordinates(items.length || 1, radius).map(p => ({ position: p.position, rotation: undefined }));
-  }, [items.length, radius, isCarousel]);
+  const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
 
   return (
     <>
       <ambientLight intensity={1} />
       <Environment preset="city" />
-      <fog attach="fog" args={[bgColor, radius * 1.5, radius * 3.5]} />
 
-      <group>
+      {/* Traversal handles the children, but we keep this as a safe default */}
+      <group frustumCulled={false}>
         {items.map((item, i) => (
           <GalleryItem
             key={item.id}
             item={item}
             index={i}
             position={coords[i].position}
-            rotation={coords[i].rotation}
             onClick={onSelect}
             radius={radius}
             clearing={clearing}
             scale={cardScale}
-            shadowOpacity={shadowOpacity}
           />
         ))}
       </group>
 
       <OrbitControls
-        enablePan={!!isCarousel}
+        enablePan={false}
         enableZoom
         minDistance={Math.max(2, radius * 0.08)}
-        maxDistance={Math.max(90, radius * 2.5)}
-        autoRotate={!isCarousel}
+        maxDistance={Math.max(90, radius * 1.35)}
+        autoRotate
         autoRotateSpeed={0.6}
         dampingFactor={0.08}
         rotateSpeed={0.55}
