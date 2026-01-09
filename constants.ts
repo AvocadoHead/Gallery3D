@@ -297,9 +297,7 @@ export const RAW_LINKS = [
 
 const extractUrls = (text: string): string[] => {
   if (!text) return [];
-  // Robust Regex: Matches http/https and stops at whitespace, quotes, or brackets
-  // This allows parsing complex Facebook/Social links correctly
-  return (text.match(/https?:\/\/[^\s,"']+/g) || []).map((v) => v.trim());
+  return (text.match(/https?:\/\/[^\s,]+/g) || []).map((v) => v.trim());
 };
 
 export const sanitizeWhatsapp = (value?: string) =>
@@ -336,19 +334,8 @@ const getVimeoId = (url: string) => {
 const isDirectVideo = (url: string) =>
   /\.(mp4|mov|webm|m4v|ogg)(\?|$)/i.test(url);
 
-const isImage = (url: string) => {
-  // 1. Standard Extensions
-  if (/\.(png|jpg|jpeg|webp|gif|avif|svg)(\?|$)/i.test(url)) return true;
-  
-  // 2. Known Social CDNs (Facebook, Instagram, LinkedIn often have complex query strings without extensions)
-  if (url.includes('fbcdn.net')) return true;
-  if (url.includes('instagram.com')) return true;
-  if (url.includes('licdn.com')) return true;
-  if (url.includes('images.unsplash.com')) return true;
-  if (url.includes('lh3.googleusercontent.com')) return true; 
-  
-  return false;
-};
+const isImage = (url: string) =>
+  /\.(png|jpg|jpeg|webp|gif|avif|svg)(\?|$)/i.test(url);
 
 /* ============================================================
    🔹 TYPES
@@ -371,11 +358,8 @@ export interface MediaItem {
   embedUrl?: string;
 
   aspectRatio?: number;
-  
-  // CMS Fields
   title?: string;
   description?: string;
-  category?: string;
 }
 
 export interface GalleryMetadata {
@@ -425,26 +409,27 @@ export const createMediaItem = (raw: string): MediaItem | null => {
     };
   }
 
-  // 🔹 Google Drive
+  // 🔹 Google Drive (UPDATED)
   const driveId = getDriveId(input);
   if (driveId) {
     return {
       id: uniqueId(),
       originalUrl: input,
-      // Default to 'image'. The Overlay component will use the API Key to determine if it's actually a video.
+      // Default to 'image'. If it's a video, our Overlay logic will handle the player.
       kind: 'image', 
       provider: 'gdrive',
-      // Use new thumbnail endpoint (sz=w800 for preview)
+      // FIX: Use new thumbnail endpoint (sz=w800 for preview)
       previewUrl: `https://drive.google.com/thumbnail?id=${driveId}&sz=w800`,
-      // Use new thumbnail endpoint (sz=s4000 for full resolution)
+      // FIX: Use new thumbnail endpoint (sz=s4000 for full resolution)
       fullUrl: `https://drive.google.com/thumbnail?id=${driveId}&sz=s4000`,
       // Keep viewer link for fallback/iframe logic
       embedUrl: `https://drive.google.com/file/d/${driveId}/preview`,
+      // Aspect ratio unknown until load
       aspectRatio: undefined,
     };
   }
 
-  // 🔹 Direct image (Including Social Media)
+  // 🔹 Direct image
   if (isImage(input)) {
     return {
       id: uniqueId(),
@@ -458,8 +443,9 @@ export const createMediaItem = (raw: string): MediaItem | null => {
 
   // 🔹 Direct video
   if (isDirectVideo(input)) {
-     // Currently we skip direct video links if they don't have a thumbnail logic attached, 
-     // or you can return them with a placeholder if desired.
+     // NOTE: Direct videos need a preview image to work well in 3D. 
+     // Currently we skip them if no preview is provided, or return a placeholder logic.
+     // For this project, we return null as requested previously.
      return null;
   }
 
@@ -504,17 +490,28 @@ const decodeBase64Url = (value: string) => {
   return JSON.parse(json);
 };
 
-export const encodeGalleryParam = (items: MediaItem[], metadata: GalleryMetadata = {}) =>
-  encodeBase64Url({ urls: items.map((i) => i.originalUrl), ...metadata });
+export const encodeGalleryParam = (
+  items: MediaItem[],
+  metadata: GalleryMetadata = {}
+) =>
+  encodeBase64Url({
+    urls: items.map((i) => i.originalUrl),
+    ...metadata,
+  });
 
-export const decodeGalleryParam = (value: string | null): DecodedGalleryPayload => {
+export const decodeGalleryParam = (
+  value: string | null
+): DecodedGalleryPayload => {
   if (!value) return { urls: [] };
+
   try {
     const parsed = decodeBase64Url(value);
     if (Array.isArray(parsed)) return { urls: parsed };
     if (parsed?.urls) return parsed;
   } catch {}
+
   if (value.includes('http')) return { urls: extractUrls(value) };
+
   return { urls: [] };
 };
 
@@ -526,10 +523,12 @@ export const getSphereCoordinates = (count: number, radius: number) => {
   const points: { position: [number, number, number] }[] = [];
   const golden = Math.PI * (3 - Math.sqrt(5));
   const divisor = Math.max(1, count - 1);
+
   for (let i = 0; i < count; i++) {
     const y = 1 - (i / divisor) * 2;
     const r = Math.sqrt(1 - y * y);
     const theta = golden * i;
+
     points.push({
       position: [
         Math.cos(theta) * r * radius,
@@ -538,5 +537,6 @@ export const getSphereCoordinates = (count: number, radius: number) => {
       ],
     });
   }
+
   return points;
 };
