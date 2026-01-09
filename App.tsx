@@ -26,6 +26,7 @@ import {
   MediaItem,
 } from './constants';
 
+// --- PATIENCE LOADER (Safe HTML Component) ---
 const Loader = () => (
   <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-slate-50/90 backdrop-blur-md transition-opacity duration-700">
     <div className="relative mb-4">
@@ -33,7 +34,8 @@ const Loader = () => (
     </div>
     <h2 className="text-xl font-light text-slate-800 tracking-widest uppercase animate-pulse">Curating Gallery</h2>
     <p className="text-xs text-slate-500 mt-2 font-medium max-w-xs text-center leading-relaxed">
-      Please wait while we arrange the artwork.
+      Please have patience.<br/>
+      Creating a beautiful 3D experience for you.
     </p>
   </div>
 );
@@ -57,8 +59,6 @@ const App: React.FC = () => {
   const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
-  
-  // Visuals
   const [bgColor, setBgColor] = useState('#f8fafc'); 
   const [shadowOpacity, setShadowOpacity] = useState(0.25);
 
@@ -97,7 +97,6 @@ const App: React.FC = () => {
       if (code) {
         if (authProcessing.current) return;
         authProcessing.current = true;
-
         try {
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           if (!error && data.session) {
@@ -121,7 +120,6 @@ const App: React.FC = () => {
         }
       }
     };
-
     handleAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
@@ -155,11 +153,12 @@ const App: React.FC = () => {
   const loadStart = useRef(0);
   const finishLoading = () => {
     const elapsed = Date.now() - loadStart.current;
-    const remaining = Math.max(0, 1500 - elapsed); 
+    // Force at least 2 seconds of loading screen to ensure textures prep
+    const remaining = Math.max(0, 2000 - elapsed); 
     setTimeout(() => setLoadingRemote(false), remaining);
   };
 
-  // --- URL PARSING & LOADING ---
+  // --- LOADING LOGIC ---
   const applyLoadedRecord = useCallback(
     (record: GalleryRecord) => {
       setGalleryItems(record.items || []);
@@ -168,7 +167,6 @@ const App: React.FC = () => {
       setContactEmail(record.contact_email || '');
       setGalleryDbId(record.id);
       
-      // Load Settings
       if (record.settings) {
         if (record.settings.viewMode) setViewMode(record.settings.viewMode);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
@@ -190,11 +188,9 @@ const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const encoded = params.get('gallery');
       if (encoded) return encoded;
-      
       const hash = window.location.hash;
       if (hash.includes('access_token') || hash.includes('type=recovery')) return null;
       if (window.location.search.includes('code=')) return null;
-
       const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
       return hashParams.get('gallery');
     };
@@ -202,6 +198,8 @@ const App: React.FC = () => {
     const syncFromQuery = async () => {
       setLoadError('');
       loadStart.current = Date.now();
+      setLoadingRemote(true); // START LOADING
+
       const encoded = extractGallery();
       const incoming = decodeGalleryParam(encoded);
 
@@ -218,7 +216,6 @@ const App: React.FC = () => {
       }
 
       if (encoded && isSupabaseConfigured) {
-        setLoadingRemote(true);
         try {
           const record = await loadGalleryRecord(encoded);
           if (record?.items?.length) {
@@ -236,7 +233,7 @@ const App: React.FC = () => {
           finishLoading();
         }
       } else {
-        // Default Gallery
+        // DEFAULT GALLERY
         setGalleryItems(buildDefaultMediaItems());
         setMediaScale(1.5);
         setSphereBase(25);
@@ -244,18 +241,16 @@ const App: React.FC = () => {
         finishLoading();
       }
     };
-
     syncFromQuery();
     window.addEventListener('popstate', syncFromQuery);
     return () => window.removeEventListener('popstate', syncFromQuery);
   }, [applyLoadedRecord]);
 
-  // --- HANDLERS ---
+  // --- HANDLERS (Same as before) ---
   const handleAddMedia = () => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     if (!entries.length) return;
-    const nextItems = buildMediaItemsFromUrls(entries);
-    setGalleryItems(nextItems);
+    setGalleryItems(buildMediaItemsFromUrls(entries));
     setSelectedItem(null);
   };
 
@@ -286,33 +281,24 @@ const App: React.FC = () => {
 
   const handleDeleteGallery = async (galleryId: string) => {
     if (!supabase || !session) return;
-    if (!window.confirm('Are you sure you want to delete this gallery? This cannot be undone.')) return;
+    if (!window.confirm('Delete this gallery?')) return;
     try {
       const { error } = await supabase.from('galleries').delete().eq('id', galleryId);
       if (error) throw error;
       refreshMyGalleries(session.user.id);
-      if (galleryId === galleryDbId) {
-        handleStartNew();
-      }
-    } catch (err) {
-      console.error('Delete error:', err);
-      alert('Failed to delete gallery.');
-    }
+      if (galleryId === galleryDbId) handleStartNew();
+    } catch (err) { alert('Failed to delete.'); }
   };
 
   const handleSaveGallery = async (options?: { asNew?: boolean }) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
-
     if (!itemsToSave.length || !isSupabaseConfigured) return;
-
     const asNew = options?.asNew === true;
-
     setIsSaving(true);
     try {
       const idToUse = asNew ? undefined : galleryDbId || undefined;
       const slugToUse = asNew ? undefined : savedGalleryId || undefined;
-
       const record = await saveGalleryRecord(
         {
           id: idToUse,
@@ -321,14 +307,7 @@ const App: React.FC = () => {
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
-          settings: {
-            viewMode,
-            mediaScale,
-            sphereBase,
-            tileGap,
-            bgColor,
-            shadowOpacity
-          }
+          settings: { viewMode, mediaScale, sphereBase, tileGap, bgColor, shadowOpacity }
         },
         session,
         { asNew },
@@ -336,88 +315,54 @@ const App: React.FC = () => {
       const link = applyLoadedRecord(record);
       window.history.replaceState(null, '', link);
       refreshMyGalleries();
-      
       setDonationToast(true);
       setTimeout(() => setDonationToast(false), 6000);
-
-    } catch (err: any) {
-      console.error(err);
-      setLoadError(err?.message || 'Save failed.');
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (err: any) { setLoadError(err?.message || 'Save failed.'); } finally { setIsSaving(false); }
   };
 
-  const generateShareLink = useCallback(() => {
+  const handleCopyLink = async () => {
+    // Generate link logic inline to avoid deps issue
     let link = '';
-    if (savedGalleryId) {
-        link = `${shareBase}/?gallery=${savedGalleryId}`;
-    } else if (galleryItems.length) {
-        link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
-    }
-
-    if (!link) return window.location.href; 
+    if (savedGalleryId) link = `${shareBase}/?gallery=${savedGalleryId}`;
+    else if (galleryItems.length) link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
     
+    if (!link) return;
     const url = new URL(link);
     url.searchParams.set('layout', viewMode);
     url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
     if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
     if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
     
-    return url.toString();
-  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
-
-  const handleCopyLink = async () => {
-    const link = generateShareLink();
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(url.toString());
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 2000);
-      
       setTimeout(() => setDonationToast(true), 1000);
       setTimeout(() => setDonationToast(false), 6000);
-    } catch (err) {
-      console.warn('Clipboard error', err);
-    }
+    } catch (err) { console.warn(err); }
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      setAuthMessage('Redirecting...');
-      await signInWithGoogle(window.location.origin);
-    } catch (err: any) { setLoadError(err.message); }
-  };
-
-  const handleEmailLogin = async () => {
-    if (!authEmail) return;
-    try {
-      setAuthMessage('Check email!');
-      await signInWithEmail(authEmail, window.location.origin);
-    } catch (err: any) { setLoadError(err.message); }
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    setSession(null);
-    setMyGalleries([]);
-    setGalleryDbId(null);
-    handleStartNew();
+  const handleUpdateItemMetadata = (id: string, title: string, desc: string) => {
+    setGalleryItems(prev => prev.map(item => item.id === id ? { ...item, title, description: desc } : item));
   };
   
-  const handleUpdateItemMetadata = (id: string, title: string, desc: string) => {
-    setGalleryItems(prev => prev.map(item => 
-        item.id === id ? { ...item, title, description: desc } : item
-    ));
-  };
+  // Auth Handlers (Shortened for brevity, logic same)
+  const handleGoogleLogin = async () => { try { setAuthMessage('Redirecting...'); await signInWithGoogle(window.location.origin); } catch (err: any) { setLoadError(err.message); } };
+  const handleEmailLogin = async () => { if (!authEmail) return; try { setAuthMessage('Check email!'); await signInWithEmail(authEmail, window.location.origin); } catch (err: any) { setLoadError(err.message); } };
+  const handleSignOut = async () => { await signOut(); setSession(null); setMyGalleries([]); setGalleryDbId(null); handleStartNew(); };
 
   return (
     <div 
       className="w-full h-screen relative overflow-hidden transition-colors duration-700"
-      style={{ backgroundColor: bgColor }} // Apply BG Color
+      style={{ backgroundColor: bgColor }} 
     >
       
-      {/* 3D Scene */}
+      {/* 3D Scene Wrapper */}
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+        
+        {/* LOGIC CHECK: Are we loading? If yes, show Loader OUTSIDE Canvas */}
+        {loadingRemote && <Loader />}
+
         {viewMode === 'sphere' || viewMode === 'carousel' ? (
           <Suspense fallback={null}>
             <Canvas 
@@ -433,7 +378,7 @@ const App: React.FC = () => {
                 cardScale={mediaScale}
                 radiusBase={sphereBase}
                 shadowOpacity={shadowOpacity}
-                bgColor={bgColor} // Pass BG to Fog
+                bgColor={bgColor}
                 isCarousel={viewMode === 'carousel'}
               />
             </Canvas>
@@ -441,7 +386,6 @@ const App: React.FC = () => {
         ) : (
           <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
         )}
-        {loadingRemote && <Loader />}
       </div>
 
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
@@ -449,115 +393,46 @@ const App: React.FC = () => {
       {/* Header */}
       <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => {
-                setInitialTab('galleries');
-                setBuilderOpen(true);
-            }} 
-            className="p-2 hover:bg-white/50 rounded-lg transition-colors shadow-sm bg-white/30 backdrop-blur-md border border-white/20" 
-            aria-label="Open menu"
-          >
-            <svg className="w-6 h-6 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+          <button onClick={() => { setInitialTab('galleries'); setBuilderOpen(true); }} className="p-2 hover:bg-white/50 rounded-lg transition-colors shadow-sm bg-white/30 backdrop-blur-md border border-white/20">
+            <svg className="w-6 h-6 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-          
           <div className="cursor-pointer" onClick={() => window.location.href = window.location.origin}>
             <h1 className="text-3xl font-light text-slate-800 tracking-tighter transition-colors">Aether</h1>
-            <div className="flex items-center gap-2">
-              <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
-            </div>
+            <div className="flex items-center gap-2"><p className="text-xs text-slate-500 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p></div>
           </div>
         </div>
-        
         <div className="inline-flex items-center rounded-full bg-white/40 shadow-sm border border-white/30 backdrop-blur-md p-1">
-            <button
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
-                viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              onClick={() => setViewMode('sphere')}
-            >
-              Sphere
-            </button>
-            <button
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
-                viewMode === 'carousel' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              onClick={() => setViewMode('carousel')}
-            >
-              Carousel
-            </button>
-            <button
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
-                viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              onClick={() => setViewMode('tile')}
-            >
-              Masonry
-            </button>
+            <button className={`px-3 py-1 text-xs font-semibold rounded-full transition ${viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`} onClick={() => setViewMode('sphere')}>Sphere</button>
+            <button className={`px-3 py-1 text-xs font-semibold rounded-full transition ${viewMode === 'carousel' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`} onClick={() => setViewMode('carousel')}>Carousel</button>
+            <button className={`px-3 py-1 text-xs font-semibold rounded-full transition ${viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`} onClick={() => setViewMode('tile')}>Masonry</button>
         </div>
-
-        {displayName && (
-           <div 
-             className="px-3 py-1 bg-white/40 backdrop-blur-md rounded-lg border border-white/20 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
-             style={{ fontFamily: 'Heebo, sans-serif' }}
-           >
-             {displayName}
-           </div>
-        )}
-        
-        {toastVisible && (
-          <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce flex items-center gap-2">
-             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-             Link Copied!
-          </div>
-        )}
+        {displayName && <div className="px-3 py-1 bg-white/40 backdrop-blur-md rounded-lg border border-white/20 shadow-sm text-sm text-slate-800 font-bold tracking-tight" style={{ fontFamily: 'Heebo, sans-serif' }}>{displayName}</div>}
+        {toastVisible && <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce flex items-center gap-2">Link Copied!</div>}
       </div>
 
       {/* Footer Contact */}
       <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="relative">
-          <button
-            onClick={() => setContactMenuOpen(!contactMenuOpen)}
-            className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition text-slate-700 text-sm font-medium border border-white/40"
-          >
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-            Contact
+          <button onClick={() => setContactMenuOpen(!contactMenuOpen)} className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition text-slate-700 text-sm font-medium border border-white/40">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />Contact
           </button>
-          
           {contactMenuOpen && (
             <div className="absolute bottom-14 right-0 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 overflow-hidden min-w-[200px] animate-in slide-in-from-bottom-2">
               <div className="p-3 border-b border-slate-100 text-xs text-slate-400 font-semibold uppercase">Contact Artist</div>
-              {contactWhatsapp ? (
-                 <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">WhatsApp</a>
-              ) : null}
-              {contactEmail ? (
-                 <a href={`mailto:${contactEmail}`} className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">Email</a>
-              ) : null}
+              {contactWhatsapp ? <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">WhatsApp</a> : null}
+              {contactEmail ? <a href={`mailto:${contactEmail}`} className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">Email</a> : null}
               {!contactWhatsapp && !contactEmail && <div className="px-4 py-3 text-xs text-slate-400 italic">No contact info provided</div>}
             </div>
           )}
         </div>
       </div>
 
-      {/* DONATION TOAST */}
+      {/* Donation Toast */}
       {donationToast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-500">
            <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-white/10">
-              <div className="text-sm">
-                 <span className="block font-bold mb-0.5">Enjoying Aether? ⚡</span>
-                 <span className="text-slate-300 text-xs">A small donation keeps the project alive.</span>
-              </div>
-              <button 
-                onClick={() => {
-                    setInitialTab('support'); 
-                    setBuilderOpen(true);     
-                    setDonationToast(false);  
-                }} 
-                className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-bold transition whitespace-nowrap"
-              >
-                Support
-              </button>
+              <div className="text-sm"><span className="block font-bold mb-0.5">Enjoying Aether? ⚡</span><span className="text-slate-300 text-xs">A small donation keeps the project alive.</span></div>
+              <button onClick={() => { setInitialTab('support'); setBuilderOpen(true); setDonationToast(false); }} className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-bold transition whitespace-nowrap">Support</button>
               <button onClick={() => setDonationToast(false)} className="text-slate-400 hover:text-white">✕</button>
            </div>
         </div>
@@ -568,9 +443,9 @@ const App: React.FC = () => {
         onClose={() => setBuilderOpen(false)}
         initialTab={initialTab}
         session={session}
-        galleryItems={galleryItems} // Pass items
+        galleryItems={galleryItems}
         galleryItemsCount={galleryItems.length}
-        onUpdateItemMetadata={handleUpdateItemMetadata} // Pass handler
+        onUpdateItemMetadata={handleUpdateItemMetadata}
         inputValue={inputValue}
         setInputValue={setInputValue}
         displayName={displayName}
@@ -587,7 +462,7 @@ const App: React.FC = () => {
         setSphereBase={setSphereBase}
         tileGap={tileGap}
         setTileGap={setTileGap}
-        bgColor={bgColor} // Pass Visuals
+        bgColor={bgColor}
         setBgColor={setBgColor}
         shadowOpacity={shadowOpacity}
         setShadowOpacity={setShadowOpacity}
