@@ -9,13 +9,17 @@ export interface GalleryRecord {
   contact_whatsapp?: string | null;
   contact_email?: string | null;
   items: MediaItem[];
-  // New field for saving view preferences
+  // We keep your preferred name here for the frontend
   layout_settings?: {
-    viewMode?: 'sphere' | 'tile';
+    viewMode?: 'sphere' | 'tile' | 'carousel';
     mediaScale?: number;
     sphereBase?: number;
     tileGap?: number;
+    bgColor?: string;
+    shadowOpacity?: number;
   };
+  // The database actually calls this 'settings', so we map it below
+  settings?: any; 
   created_at?: string;
   updated_at?: string;
 }
@@ -38,21 +42,12 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false, // Manual handling in App.tsx
+        detectSessionInUrl: false,
         flowType: 'pkce',
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       },
     })
   : null;
-
-export const listenToAuth = (cb: (session: Session | null) => void) => {
-  if (!supabase) return () => {};
-  supabase.auth.getSession().then(({ data }) => cb(data.session ?? null));
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    cb(session);
-  });
-  return () => data.subscription.unsubscribe();
-};
 
 export const signInWithGoogle = async (redirectTo?: string) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
@@ -88,16 +83,19 @@ export const saveGalleryRecord = async (
   const slug = options?.asNew ? generateSlug() : (payload.slug || generateSlug());
   const ownerId = payload.owner_id || session?.user?.id || null;
   
+  // MAP Frontend 'layout_settings' to DB 'settings'
   const writePayload: any = {
-    ...payload,
     slug,
     owner_id: ownerId,
+    display_name: payload.display_name,
+    contact_whatsapp: payload.contact_whatsapp,
+    contact_email: payload.contact_email,
+    items: payload.items,
+    settings: payload.layout_settings, // <--- CRITICAL MAPPING
     updated_at: new Date().toISOString(),
   };
 
-  if (options?.asNew) {
-    delete writePayload.id;
-  } else {
+  if (!options?.asNew && payload.id) {
     writePayload.id = payload.id;
   }
 
@@ -108,31 +106,40 @@ export const saveGalleryRecord = async (
     .single();
 
   if (error) throw error;
-  return data as GalleryRecord;
+  
+  // Map back for the frontend to use immediately
+  const result = data as GalleryRecord;
+  if (result.settings) {
+    result.layout_settings = result.settings;
+  }
+  return result;
 };
 
 export const loadGalleryRecord = async (slugOrId: string) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
 
-  // FIX FOR 400 ERROR:
-  // Check if string is a valid UUID. If not, only search the slug column.
-  // Postgres crashes if you try to compare a short text slug against a UUID column.
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
-
   let query = supabase.from(TABLE).select('*');
 
   if (isUUID) {
-    // If it looks like a UUID, check both ID and Slug
     query = query.or(`slug.eq.${slugOrId},id.eq.${slugOrId}`);
   } else {
-    // If it's a short slug, ONLY check slug
     query = query.eq('slug', slugOrId);
   }
 
   const { data, error } = await query.limit(1).maybeSingle();
 
   if (error) throw error;
-  return data as GalleryRecord | null;
+  
+  if (data) {
+    // MAP DB 'settings' to Frontend 'layout_settings'
+    const record = data as GalleryRecord;
+    if (record.settings) {
+      record.layout_settings = record.settings;
+    }
+    return record;
+  }
+  return null;
 };
 
 export const listUserGalleries = async (ownerId: string) => {
