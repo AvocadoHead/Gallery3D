@@ -26,10 +26,14 @@ import {
   MediaItem,
 } from './constants';
 
+// --- NEW PATIENCE LOADER ---
 const Loader = () => (
   <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-slate-50/90 backdrop-blur-md transition-opacity duration-700">
     <div className="relative mb-4">
       <div className="w-16 h-16 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+      </div>
     </div>
     <h2 className="text-xl font-light text-slate-800 tracking-widest uppercase animate-pulse">Curating Gallery</h2>
     <p className="text-xs text-slate-500 mt-2 font-medium max-w-xs text-center leading-relaxed">
@@ -54,12 +58,10 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   // --- Gallery Configuration ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile' | 'carousel'>('sphere');
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
   const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
-  const [bgColor, setBgColor] = useState('#f8fafc'); 
-  const [shadowOpacity, setShadowOpacity] = useState(0.25);
 
   // --- Data State ---
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
@@ -68,8 +70,10 @@ const App: React.FC = () => {
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   
+  // Database IDs
   const [savedGalleryId, setSavedGalleryId] = useState(''); 
   const [galleryDbId, setGalleryDbId] = useState<string | null>(null);
+  
   const [isClearing, setIsClearing] = useState(false);
 
   // --- Remote/Auth State ---
@@ -87,12 +91,15 @@ const App: React.FC = () => {
   // --- AUTH LOGIC ---
   useEffect(() => {
     if (!supabase) return;
+
     const handleAuth = async () => {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
+
       if (code) {
         if (authProcessing.current) return;
         authProcessing.current = true;
+
         try {
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           if (!error && data.session) {
@@ -101,9 +108,13 @@ const App: React.FC = () => {
             setBuilderOpen(true);
             window.history.replaceState(null, '', window.location.pathname);
           } else {
-             setLoadError('Login failed.');
+             setLoadError('Login failed. Please try again.');
           }
-        } catch (err) { console.error(err); } finally { authProcessing.current = false; }
+        } catch (err) {
+          console.error('Auth exception:', err);
+        } finally {
+          authProcessing.current = false;
+        }
       } else {
         const { data } = await supabase.auth.getSession();
         if (data.session) {
@@ -112,7 +123,9 @@ const App: React.FC = () => {
         }
       }
     };
+
     handleAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setSession(newSession);
@@ -123,6 +136,7 @@ const App: React.FC = () => {
         setBuilderOpen(true);
       }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -133,17 +147,14 @@ const App: React.FC = () => {
     try {
       const data = await listUserGalleries(uid);
       setMyGalleries(data);
-    } catch (err) { console.warn(err); } finally { setIsLoadingMyGalleries(false); }
+    } catch (err) {
+      console.warn('Unable to list user galleries', err);
+    } finally {
+      setIsLoadingMyGalleries(false);
+    }
   }, [session, isSupabaseConfigured]);
 
-  const loadStart = useRef(0);
-  const finishLoading = () => {
-    const elapsed = Date.now() - loadStart.current;
-    const remaining = Math.max(0, 2000 - elapsed); 
-    setTimeout(() => setLoadingRemote(false), remaining);
-  };
-
-  // --- LOADING LOGIC ---
+  // --- URL PARSING & LOADING ---
   const applyLoadedRecord = useCallback(
     (record: GalleryRecord) => {
       setGalleryItems(record.items || []);
@@ -157,8 +168,6 @@ const App: React.FC = () => {
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
         if (record.settings.tileGap) setTileGap(record.settings.tileGap);
-        if (record.settings.bgColor) setBgColor(record.settings.bgColor);
-        if (record.settings.shadowOpacity !== undefined) setShadowOpacity(record.settings.shadowOpacity);
       }
 
       const id = record.slug || record.id;
@@ -173,18 +182,17 @@ const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const encoded = params.get('gallery');
       if (encoded) return encoded;
+      
       const hash = window.location.hash;
       if (hash.includes('access_token') || hash.includes('type=recovery')) return null;
       if (window.location.search.includes('code=')) return null;
+
       const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
       return hashParams.get('gallery');
     };
 
     const syncFromQuery = async () => {
       setLoadError('');
-      loadStart.current = Date.now();
-      setLoadingRemote(true);
-
       const encoded = extractGallery();
       const incoming = decodeGalleryParam(encoded);
 
@@ -196,18 +204,17 @@ const App: React.FC = () => {
         setSavedGalleryId('');
         setGalleryDbId(null);
         setInputValue(incoming.urls.join('\n')); 
-        finishLoading();
         return;
       }
 
       if (encoded && isSupabaseConfigured) {
+        setLoadingRemote(true);
         try {
           const record = await loadGalleryRecord(encoded);
           if (record?.items?.length) {
             applyLoadedRecord(record);
             const urls = record.items.map(i => i.originalUrl).join('\n');
             setInputValue(urls);
-            finishLoading();
             return;
           }
           setLoadError('Gallery not found.');
@@ -215,50 +222,176 @@ const App: React.FC = () => {
           console.warn(err);
           setLoadError('Unable to load gallery.');
         } finally {
-          finishLoading();
+          setLoadingRemote(false);
         }
-      } else {
-        setGalleryItems(buildDefaultMediaItems());
-        setMediaScale(1.5);
-        setSphereBase(25);
-        setBgColor('#f8fafc');
-        finishLoading();
       }
+
+      setGalleryItems(buildDefaultMediaItems());
     };
+
     syncFromQuery();
     window.addEventListener('popstate', syncFromQuery);
     return () => window.removeEventListener('popstate', syncFromQuery);
   }, [applyLoadedRecord]);
 
-  // --- HANDLERS (Briefly) ---
+  // --- HANDLERS ---
   const handleAddMedia = () => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     if (!entries.length) return;
-    setGalleryItems(buildMediaItemsFromUrls(entries));
+    const nextItems = buildMediaItemsFromUrls(entries);
+    setGalleryItems(nextItems);
     setSelectedItem(null);
   };
-  const handleClear = () => { setIsClearing(true); setSelectedItem(null); setInputValue(''); setTimeout(() => { setGalleryItems([]); setIsClearing(false); }, 650); };
-  const handleStartNew = () => { setGalleryItems([]); setInputValue(''); setDisplayName(''); setContactWhatsapp(''); setContactEmail(''); setSavedGalleryId(''); setGalleryDbId(null); setViewMode('sphere'); setMediaScale(1); setSphereBase(62); setBgColor('#f8fafc'); window.history.replaceState(null, '', window.location.pathname); };
-  const handleDeleteGallery = async (galleryId: string) => { if (!supabase || !session) return; if (!window.confirm('Delete?')) return; try { await supabase.from('galleries').delete().eq('id', galleryId); refreshMyGalleries(session.user.id); if (galleryId === galleryDbId) handleStartNew(); } catch (err) { alert('Failed.'); } };
-  const handleSaveGallery = async (options?: { asNew?: boolean }) => { /* ... logic same as before ... */ };
-  const handleCopyLink = async () => { /* ... logic same as before ... */ };
-  const handleUpdateItemMetadata = (id: string, title: string, desc: string) => { setGalleryItems(prev => prev.map(item => item.id === id ? { ...item, title, description: desc } : item)); };
-  const handleGoogleLogin = async () => { await signInWithGoogle(window.location.origin); };
-  const handleEmailLogin = async () => { if (!authEmail) return; await signInWithEmail(authEmail, window.location.origin); };
-  const handleSignOut = async () => { await signOut(); setSession(null); setMyGalleries([]); setGalleryDbId(null); handleStartNew(); };
+
+  const handleClear = () => {
+    setIsClearing(true);
+    setSelectedItem(null);
+    setInputValue('');
+    setTimeout(() => {
+      setGalleryItems([]);
+      setIsClearing(false);
+    }, 650);
+  };
+
+  const handleStartNew = () => {
+    setGalleryItems([]);
+    setInputValue('');
+    setDisplayName('');
+    setContactWhatsapp('');
+    setContactEmail('');
+    setSavedGalleryId('');
+    setGalleryDbId(null);
+    setViewMode('sphere');
+    setMediaScale(1);
+    window.history.replaceState(null, '', window.location.pathname);
+  };
+
+  const handleDeleteGallery = async (galleryId: string) => {
+    if (!supabase || !session) return;
+    if (!window.confirm('Are you sure you want to delete this gallery? This cannot be undone.')) return;
+
+    try {
+      const { error } = await supabase.from('galleries').delete().eq('id', galleryId);
+      if (error) throw error;
+      refreshMyGalleries(session.user.id);
+      if (galleryId === galleryDbId) {
+        handleStartNew();
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Failed to delete gallery.');
+    }
+  };
+
+  const handleSaveGallery = async (options?: { asNew?: boolean }) => {
+    const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+    const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
+
+    if (!itemsToSave.length || !isSupabaseConfigured) return;
+
+    const asNew = options?.asNew === true;
+
+    setIsSaving(true);
+    try {
+      const idToUse = asNew ? undefined : galleryDbId || undefined;
+      const slugToUse = asNew ? undefined : savedGalleryId || undefined;
+
+      const record = await saveGalleryRecord(
+        {
+          id: idToUse,
+          slug: slugToUse,
+          items: itemsToSave,
+          display_name: displayName || null,
+          contact_email: contactEmail || null,
+          contact_whatsapp: contactWhatsapp || null,
+          settings: {
+            viewMode,
+            mediaScale,
+            sphereBase,
+            tileGap
+          }
+        },
+        session,
+        { asNew },
+      );
+      const link = applyLoadedRecord(record);
+      window.history.replaceState(null, '', link);
+      refreshMyGalleries();
+      
+      setDonationToast(true);
+      setTimeout(() => setDonationToast(false), 6000);
+
+    } catch (err: any) {
+      console.error(err);
+      setLoadError(err?.message || 'Save failed.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const generateShareLink = useCallback(() => {
+    let link = '';
+    if (savedGalleryId) {
+        link = `${shareBase}/?gallery=${savedGalleryId}`;
+    } else if (galleryItems.length) {
+        link = `${shareBase}/?gallery=${encodeGalleryParam(galleryItems, { displayName, contactWhatsapp, contactEmail })}`;
+    }
+
+    if (!link) return window.location.href; 
+    
+    const url = new URL(link);
+    url.searchParams.set('layout', viewMode);
+    url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
+    if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
+    if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
+    
+    return url.toString();
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
+
+  const handleCopyLink = async () => {
+    const link = generateShareLink();
+    try {
+      await navigator.clipboard.writeText(link);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 2000);
+      
+      setTimeout(() => setDonationToast(true), 1000);
+      setTimeout(() => setDonationToast(false), 6000);
+    } catch (err) {
+      console.warn('Clipboard error', err);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setAuthMessage('Redirecting...');
+      await signInWithGoogle(window.location.origin);
+    } catch (err: any) { setLoadError(err.message); }
+  };
+
+  const handleEmailLogin = async () => {
+    if (!authEmail) return;
+    try {
+      setAuthMessage('Check email!');
+      await signInWithEmail(authEmail, window.location.origin);
+    } catch (err: any) { setLoadError(err.message); }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setSession(null);
+    setMyGalleries([]);
+    setGalleryDbId(null);
+    handleStartNew();
+  };
 
   return (
-    <div 
-      className="w-full h-screen relative overflow-hidden transition-colors duration-700"
-      style={{ backgroundColor: bgColor }} 
-    >
+    <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
-      {/* 3D Scene Wrapper - LOADER IS OUTSIDE CANVAS */}
+      {/* 3D Scene */}
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-        {loadingRemote && <Loader />}
-
-        {viewMode === 'sphere' || viewMode === 'carousel' ? (
-          <Suspense fallback={null}>
+        {viewMode === 'sphere' ? (
+          <Suspense fallback={<Loader />}>
             <Canvas 
                 camera={{ position: [0, 0, 65], fov: 50 }} 
                 dpr={[1, 1.5]} 
@@ -271,15 +404,13 @@ const App: React.FC = () => {
                 clearing={isClearing}
                 cardScale={mediaScale}
                 radiusBase={sphereBase}
-                shadowOpacity={shadowOpacity}
-                bgColor={bgColor}
-                isCarousel={viewMode === 'carousel'}
               />
             </Canvas>
           </Suspense>
         ) : (
           <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
         )}
+        {loadingRemote && <Loader />}
       </div>
 
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
@@ -287,41 +418,107 @@ const App: React.FC = () => {
       {/* Header */}
       <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => { setInitialTab('galleries'); setBuilderOpen(true); }} className="p-2 hover:bg-white/50 rounded-lg transition-colors shadow-sm bg-white/30 backdrop-blur-md border border-white/20">
-            <svg className="w-6 h-6 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+          <button 
+            onClick={() => {
+                setInitialTab('galleries');
+                setBuilderOpen(true);
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" 
+            aria-label="Open menu"
+          >
+            <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
+          
           <div className="cursor-pointer" onClick={() => window.location.href = window.location.origin}>
             <h1 className="text-3xl font-light text-slate-800 tracking-tighter transition-colors">Aether</h1>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
+            </div>
           </div>
         </div>
-        <div className="inline-flex items-center rounded-full bg-white/40 shadow-sm border border-white/30 backdrop-blur-md p-1">
-            <button className={`px-3 py-1 text-xs font-semibold rounded-full transition ${viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`} onClick={() => setViewMode('sphere')}>Sphere</button>
-            <button className={`px-3 py-1 text-xs font-semibold rounded-full transition ${viewMode === 'carousel' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`} onClick={() => setViewMode('carousel')}>Carousel</button>
-            <button className={`px-3 py-1 text-xs font-semibold rounded-full transition ${viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`} onClick={() => setViewMode('tile')}>Masonry</button>
+        
+        <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
+            <button
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              onClick={() => setViewMode('sphere')}
+            >
+              Sphere
+            </button>
+            <button
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              onClick={() => setViewMode('tile')}
+            >
+              Masonry
+            </button>
         </div>
-        {displayName && <div className="px-3 py-1 bg-white/40 backdrop-blur-md rounded-lg border border-white/20 shadow-sm text-sm text-slate-800 font-bold tracking-tight" style={{ fontFamily: 'Heebo, sans-serif' }}>{displayName}</div>}
-        {toastVisible && <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce flex items-center gap-2">Link Copied!</div>}
+
+        {displayName && (
+           <div 
+             className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
+             style={{ fontFamily: 'Heebo, sans-serif' }}
+           >
+             {displayName}
+           </div>
+        )}
+        
+        {toastVisible && (
+          <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce flex items-center gap-2">
+             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+             Link Copied!
+          </div>
+        )}
       </div>
 
+      {/* Footer Contact */}
       <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        <button onClick={() => setContactMenuOpen(!contactMenuOpen)} className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition text-slate-700 text-sm font-medium border border-white/40">
-           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />Contact
-        </button>
-        {contactMenuOpen && (
-            <div className="absolute bottom-14 right-0 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 overflow-hidden min-w-[200px] animate-in slide-in-from-bottom-2">
-              <div className="p-3 border-b border-slate-100 text-xs text-slate-400 font-semibold uppercase">Contact Artist</div>
-              {contactWhatsapp ? <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">WhatsApp</a> : null}
-              {contactEmail ? <a href={`mailto:${contactEmail}`} className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">Email</a> : null}
+        <div className="relative">
+          <button
+            onClick={() => setContactMenuOpen(!contactMenuOpen)}
+            className="flex items-center gap-3 px-5 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition text-slate-600 text-sm font-medium border border-white"
+          >
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+            Contact
+          </button>
+          
+          {contactMenuOpen && (
+            <div className="absolute bottom-14 right-0 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden min-w-[200px] animate-in slide-in-from-bottom-2">
+              <div className="p-3 border-b border-slate-50 text-xs text-slate-400 font-semibold uppercase">Contact Artist</div>
+              {contactWhatsapp ? (
+                 <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">WhatsApp</a>
+              ) : null}
+              {contactEmail ? (
+                 <a href={`mailto:${contactEmail}`} className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">Email</a>
+              ) : null}
               {!contactWhatsapp && !contactEmail && <div className="px-4 py-3 text-xs text-slate-400 italic">No contact info provided</div>}
             </div>
           )}
+        </div>
       </div>
 
+      {/* DONATION TOAST */}
       {donationToast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-500">
            <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-white/10">
-              <div className="text-sm"><span className="block font-bold mb-0.5">Enjoying Aether? ⚡</span><span className="text-slate-300 text-xs">A small donation keeps the project alive.</span></div>
-              <button onClick={() => { setInitialTab('support'); setBuilderOpen(true); setDonationToast(false); }} className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-bold transition whitespace-nowrap">Support</button>
+              <div className="text-sm">
+                 <span className="block font-bold mb-0.5">Enjoying Aether? ⚡</span>
+                 <span className="text-slate-300 text-xs">A small donation keeps the project alive.</span>
+              </div>
+              <button 
+                onClick={() => {
+                    setInitialTab('support'); 
+                    setBuilderOpen(true);     
+                    setDonationToast(false);  
+                }} 
+                className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-bold transition whitespace-nowrap"
+              >
+                Support
+              </button>
               <button onClick={() => setDonationToast(false)} className="text-slate-400 hover:text-white">✕</button>
            </div>
         </div>
@@ -332,9 +529,7 @@ const App: React.FC = () => {
         onClose={() => setBuilderOpen(false)}
         initialTab={initialTab}
         session={session}
-        galleryItems={galleryItems}
         galleryItemsCount={galleryItems.length}
-        onUpdateItemMetadata={handleUpdateItemMetadata}
         inputValue={inputValue}
         setInputValue={setInputValue}
         displayName={displayName}
@@ -351,10 +546,6 @@ const App: React.FC = () => {
         setSphereBase={setSphereBase}
         tileGap={tileGap}
         setTileGap={setTileGap}
-        bgColor={bgColor}
-        setBgColor={setBgColor}
-        shadowOpacity={shadowOpacity}
-        setShadowOpacity={setShadowOpacity}
         myGalleries={myGalleries}
         isLoadingMyGalleries={isLoadingMyGalleries}
         savedGalleryId={savedGalleryId}
@@ -370,7 +561,21 @@ const App: React.FC = () => {
         onStartNew={handleStartNew} 
         onCopyLink={handleCopyLink} 
         onDeleteGallery={handleDeleteGallery}
-        onLoadGallery={async (slug) => { try { setBuilderOpen(false); const record = await loadGalleryRecord(slug); if (record) { const link = applyLoadedRecord(record); window.history.replaceState(null, '', link); const urls = record.items.map(i => i.originalUrl).join('\n'); setInputValue(urls); } } catch (err) { console.error('Load error:', err); setLoadError('Failed to load gallery'); } }}
+        onLoadGallery={async (slug) => { 
+          try {
+            setBuilderOpen(false);
+            const record = await loadGalleryRecord(slug); 
+            if (record) {
+              const link = applyLoadedRecord(record);
+              window.history.replaceState(null, '', link);
+              const urls = record.items.map(i => i.originalUrl).join('\n');
+              setInputValue(urls);
+            }
+          } catch (err) {
+            console.error('Load error:', err);
+            setLoadError('Failed to load gallery');
+          }
+        }}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}
