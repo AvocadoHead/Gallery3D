@@ -26,19 +26,14 @@ import {
   MediaItem,
 } from './constants';
 
-// --- NEW PATIENCE LOADER ---
 const Loader = () => (
   <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-slate-50/90 backdrop-blur-md transition-opacity duration-700">
     <div className="relative mb-4">
       <div className="w-16 h-16 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-      </div>
     </div>
     <h2 className="text-xl font-light text-slate-800 tracking-widest uppercase animate-pulse">Curating Gallery</h2>
     <p className="text-xs text-slate-500 mt-2 font-medium max-w-xs text-center leading-relaxed">
-      Please have patience.<br/>
-      Creating a beautiful 3D experience for you.
+      Please wait while we arrange the artwork.
     </p>
   </div>
 );
@@ -58,10 +53,14 @@ const App: React.FC = () => {
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   // --- Gallery Configuration ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
+  const [viewMode, setViewMode] = useState<'sphere' | 'tile' | 'carousel'>('sphere');
   const [mediaScale, setMediaScale] = useState(1);
   const [sphereBase, setSphereBase] = useState(62);
   const [tileGap, setTileGap] = useState(12);
+  
+  // Visuals
+  const [bgColor, setBgColor] = useState('#f8fafc'); 
+  const [shadowOpacity, setShadowOpacity] = useState(0.25);
 
   // --- Data State ---
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
@@ -70,7 +69,6 @@ const App: React.FC = () => {
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   
-  // Database IDs
   const [savedGalleryId, setSavedGalleryId] = useState(''); 
   const [galleryDbId, setGalleryDbId] = useState<string | null>(null);
   
@@ -154,6 +152,13 @@ const App: React.FC = () => {
     }
   }, [session, isSupabaseConfigured]);
 
+  const loadStart = useRef(0);
+  const finishLoading = () => {
+    const elapsed = Date.now() - loadStart.current;
+    const remaining = Math.max(0, 1500 - elapsed); 
+    setTimeout(() => setLoadingRemote(false), remaining);
+  };
+
   // --- URL PARSING & LOADING ---
   const applyLoadedRecord = useCallback(
     (record: GalleryRecord) => {
@@ -163,11 +168,14 @@ const App: React.FC = () => {
       setContactEmail(record.contact_email || '');
       setGalleryDbId(record.id);
       
+      // Load Settings
       if (record.settings) {
         if (record.settings.viewMode) setViewMode(record.settings.viewMode);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
         if (record.settings.tileGap) setTileGap(record.settings.tileGap);
+        if (record.settings.bgColor) setBgColor(record.settings.bgColor);
+        if (record.settings.shadowOpacity !== undefined) setShadowOpacity(record.settings.shadowOpacity);
       }
 
       const id = record.slug || record.id;
@@ -193,6 +201,7 @@ const App: React.FC = () => {
 
     const syncFromQuery = async () => {
       setLoadError('');
+      loadStart.current = Date.now();
       const encoded = extractGallery();
       const incoming = decodeGalleryParam(encoded);
 
@@ -204,6 +213,7 @@ const App: React.FC = () => {
         setSavedGalleryId('');
         setGalleryDbId(null);
         setInputValue(incoming.urls.join('\n')); 
+        finishLoading();
         return;
       }
 
@@ -215,6 +225,7 @@ const App: React.FC = () => {
             applyLoadedRecord(record);
             const urls = record.items.map(i => i.originalUrl).join('\n');
             setInputValue(urls);
+            finishLoading();
             return;
           }
           setLoadError('Gallery not found.');
@@ -222,11 +233,16 @@ const App: React.FC = () => {
           console.warn(err);
           setLoadError('Unable to load gallery.');
         } finally {
-          setLoadingRemote(false);
+          finishLoading();
         }
+      } else {
+        // Default Gallery
+        setGalleryItems(buildDefaultMediaItems());
+        setMediaScale(1.5);
+        setSphereBase(25);
+        setBgColor('#f8fafc');
+        finishLoading();
       }
-
-      setGalleryItems(buildDefaultMediaItems());
     };
 
     syncFromQuery();
@@ -263,13 +279,14 @@ const App: React.FC = () => {
     setGalleryDbId(null);
     setViewMode('sphere');
     setMediaScale(1);
+    setSphereBase(62);
+    setBgColor('#f8fafc');
     window.history.replaceState(null, '', window.location.pathname);
   };
 
   const handleDeleteGallery = async (galleryId: string) => {
     if (!supabase || !session) return;
     if (!window.confirm('Are you sure you want to delete this gallery? This cannot be undone.')) return;
-
     try {
       const { error } = await supabase.from('galleries').delete().eq('id', galleryId);
       if (error) throw error;
@@ -308,7 +325,9 @@ const App: React.FC = () => {
             viewMode,
             mediaScale,
             sphereBase,
-            tileGap
+            tileGap,
+            bgColor,
+            shadowOpacity
           }
         },
         session,
@@ -384,14 +403,23 @@ const App: React.FC = () => {
     setGalleryDbId(null);
     handleStartNew();
   };
+  
+  const handleUpdateItemMetadata = (id: string, title: string, desc: string) => {
+    setGalleryItems(prev => prev.map(item => 
+        item.id === id ? { ...item, title, description: desc } : item
+    ));
+  };
 
   return (
-    <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
+    <div 
+      className="w-full h-screen relative overflow-hidden transition-colors duration-700"
+      style={{ backgroundColor: bgColor }} // Apply BG Color
+    >
       
       {/* 3D Scene */}
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-        {viewMode === 'sphere' ? (
-          <Suspense fallback={<Loader />}>
+        {viewMode === 'sphere' || viewMode === 'carousel' ? (
+          <Suspense fallback={null}>
             <Canvas 
                 camera={{ position: [0, 0, 65], fov: 50 }} 
                 dpr={[1, 1.5]} 
@@ -404,6 +432,9 @@ const App: React.FC = () => {
                 clearing={isClearing}
                 cardScale={mediaScale}
                 radiusBase={sphereBase}
+                shadowOpacity={shadowOpacity}
+                bgColor={bgColor} // Pass BG to Fog
+                isCarousel={viewMode === 'carousel'}
               />
             </Canvas>
           </Suspense>
@@ -423,10 +454,10 @@ const App: React.FC = () => {
                 setInitialTab('galleries');
                 setBuilderOpen(true);
             }} 
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" 
+            className="p-2 hover:bg-white/50 rounded-lg transition-colors shadow-sm bg-white/30 backdrop-blur-md border border-white/20" 
             aria-label="Open menu"
           >
-            <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
@@ -434,12 +465,12 @@ const App: React.FC = () => {
           <div className="cursor-pointer" onClick={() => window.location.href = window.location.origin}>
             <h1 className="text-3xl font-light text-slate-800 tracking-tighter transition-colors">Aether</h1>
             <div className="flex items-center gap-2">
-              <p className="text-xs text-slate-400 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
+              <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mt-1 ml-1 transition-colors">Gallery</p>
             </div>
           </div>
         </div>
         
-        <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
+        <div className="inline-flex items-center rounded-full bg-white/40 shadow-sm border border-white/30 backdrop-blur-md p-1">
             <button
               className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
                 viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
@@ -447,6 +478,14 @@ const App: React.FC = () => {
               onClick={() => setViewMode('sphere')}
             >
               Sphere
+            </button>
+            <button
+              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                viewMode === 'carousel' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              onClick={() => setViewMode('carousel')}
+            >
+              Carousel
             </button>
             <button
               className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
@@ -460,7 +499,7 @@ const App: React.FC = () => {
 
         {displayName && (
            <div 
-             className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
+             className="px-3 py-1 bg-white/40 backdrop-blur-md rounded-lg border border-white/20 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
              style={{ fontFamily: 'Heebo, sans-serif' }}
            >
              {displayName}
@@ -480,15 +519,15 @@ const App: React.FC = () => {
         <div className="relative">
           <button
             onClick={() => setContactMenuOpen(!contactMenuOpen)}
-            className="flex items-center gap-3 px-5 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition text-slate-600 text-sm font-medium border border-white"
+            className="flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition text-slate-700 text-sm font-medium border border-white/40"
           >
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
             Contact
           </button>
           
           {contactMenuOpen && (
-            <div className="absolute bottom-14 right-0 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden min-w-[200px] animate-in slide-in-from-bottom-2">
-              <div className="p-3 border-b border-slate-50 text-xs text-slate-400 font-semibold uppercase">Contact Artist</div>
+            <div className="absolute bottom-14 right-0 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 overflow-hidden min-w-[200px] animate-in slide-in-from-bottom-2">
+              <div className="p-3 border-b border-slate-100 text-xs text-slate-400 font-semibold uppercase">Contact Artist</div>
               {contactWhatsapp ? (
                  <a href={`https://wa.me/${sanitizeWhatsapp(contactWhatsapp)}`} target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">WhatsApp</a>
               ) : null}
@@ -529,7 +568,9 @@ const App: React.FC = () => {
         onClose={() => setBuilderOpen(false)}
         initialTab={initialTab}
         session={session}
+        galleryItems={galleryItems} // Pass items
         galleryItemsCount={galleryItems.length}
+        onUpdateItemMetadata={handleUpdateItemMetadata} // Pass handler
         inputValue={inputValue}
         setInputValue={setInputValue}
         displayName={displayName}
@@ -546,6 +587,10 @@ const App: React.FC = () => {
         setSphereBase={setSphereBase}
         tileGap={tileGap}
         setTileGap={setTileGap}
+        bgColor={bgColor} // Pass Visuals
+        setBgColor={setBgColor}
+        shadowOpacity={shadowOpacity}
+        setShadowOpacity={setShadowOpacity}
         myGalleries={myGalleries}
         isLoadingMyGalleries={isLoadingMyGalleries}
         savedGalleryId={savedGalleryId}
