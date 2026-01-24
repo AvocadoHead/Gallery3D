@@ -304,7 +304,7 @@ const App: React.FC = () => {
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
-          settings: {
+          layout_settings: {
             viewMode,
             mediaScale,
             sphereBase,
