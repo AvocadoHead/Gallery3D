@@ -356,6 +356,7 @@ export interface MediaItem {
 
   videoUrl?: string;
   embedUrl?: string;
+  fallbackPreview?: string; // optional still image used when preview/video fails
 
   aspectRatio?: number;
   title?: string;
@@ -534,6 +535,31 @@ export const getSphereCoordinates = (count: number, radius: number) => {
         Math.cos(theta) * r * radius,
         y * radius,
         Math.sin(theta) * r * radius,
+      ],
+    });
+  }
+
+  return points;
+};
+
+/* ============================================================
+   🔹 CAROUSEL LAYOUT (horizontal ring)
+   Items sit on a gently undulating circle around the Y axis, so the
+   auto-rotating camera reveals them one after another like a carousel.
+   ============================================================ */
+
+export const getCarouselCoordinates = (count: number, radius: number) => {
+  const points: { position: [number, number, number] }[] = [];
+  const ringRadius = Math.max(12, radius * 0.75);
+  const wave = Math.min(ringRadius * 0.18, 6);
+
+  for (let i = 0; i < count; i++) {
+    const theta = (i / Math.max(1, count)) * Math.PI * 2;
+    points.push({
+      position: [
+        Math.cos(theta) * ringRadius,
+        Math.sin(theta * 2) * wave, // subtle vertical undulation
+        Math.sin(theta) * ringRadius,
       ],
     });
   }

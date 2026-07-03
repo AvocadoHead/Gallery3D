@@ -5,6 +5,8 @@ import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
 import TileGallery from './components/TileGallery';
 import BuilderModal from './components/BuilderModal';
+import Landing from './components/Landing';
+import Explore from './components/Explore';
 import {
   GalleryRecord,
   GallerySummary,
@@ -12,6 +14,7 @@ import {
   loadGalleryRecord,
   listUserGalleries,
   saveGalleryRecord,
+  incrementViews,
   signInWithEmail,
   signInWithGoogle,
   signOut,
@@ -26,6 +29,10 @@ import {
   MediaItem,
 } from './constants';
 
+type AppView = 'landing' | 'gallery' | 'explore';
+type ViewMode = 'sphere' | 'tile' | 'carousel';
+type BuilderTab = 'content' | 'appearance' | 'galleries' | 'support';
+
 // --- NEW PATIENCE LOADER ---
 const Loader = () => (
   <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-slate-50/90 backdrop-blur-md transition-opacity duration-700">
@@ -35,10 +42,9 @@ const Loader = () => (
         <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
       </div>
     </div>
-    <h2 className="text-xl font-light text-slate-800 tracking-widest uppercase animate-pulse">Curating Gallery</h2>
+    <h2 className="text-xl font-light text-slate-800 tracking-widest uppercase animate-pulse">Curating your gallery</h2>
     <p className="text-xs text-slate-500 mt-2 font-medium max-w-xs text-center leading-relaxed">
-      Please have patience.<br/>
-      Creating a beautiful 3D experience for you.
+      Arranging your media into a beautiful 3D space…
     </p>
   </div>
 );
@@ -49,16 +55,25 @@ const App: React.FC = () => {
     [],
   );
 
+  // --- Navigation ---
+  const [view, setView] = useState<AppView>(() => {
+    if (typeof window === 'undefined') return 'landing';
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('gallery') || p.get('code') || window.location.hash.includes('gallery=')) return 'gallery';
+    if (p.get('view') === 'explore') return 'explore';
+    return 'landing';
+  });
+
   // --- UI State ---
   const [builderOpen, setBuilderOpen] = useState(false);
-  const [initialTab, setInitialTab] = useState<'galleries' | 'support'>('galleries'); 
+  const [initialTab, setInitialTab] = useState<BuilderTab>('galleries');
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [donationToast, setDonationToast] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
 
   // --- Gallery Configuration ---
-  const [viewMode, setViewMode] = useState<'sphere' | 'tile'>('sphere');
+  const [viewMode, setViewMode] = useState<ViewMode>('sphere');
   const [mediaScale, setMediaScale] = useState(0.8);
   const [sphereBase, setSphereBase] = useState(30);
   const [tileGap, setTileGap] = useState(12);
@@ -69,6 +84,13 @@ const App: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+
+  // Helpers to move between the builder tabs and open the modal.
+  const openBuilder = useCallback((tab: BuilderTab = 'galleries') => {
+    setInitialTab(tab);
+    setBuilderOpen(true);
+  }, []);
   
   // Database IDs
   const [savedGalleryId, setSavedGalleryId] = useState(''); 
@@ -161,8 +183,9 @@ const App: React.FC = () => {
       setDisplayName(record.display_name || '');
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
+      setIsPublic(!!record.is_public);
       setGalleryDbId(record.id);
-      
+
       if (record.settings) {
         if (record.settings.viewMode) setViewMode(record.settings.viewMode);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
@@ -191,6 +214,19 @@ const App: React.FC = () => {
       return hashParams.get('gallery');
     };
 
+    // Apply the optional display params a share link may carry (?layout, ?scale, ?radius, ?gap).
+    const applyDisplayParams = () => {
+      const p = new URLSearchParams(window.location.search);
+      const layout = p.get('layout');
+      if (layout === 'sphere' || layout === 'tile' || layout === 'carousel') setViewMode(layout);
+      const scale = p.get('scale');
+      if (scale) setMediaScale(Math.min(3, Math.max(0.3, parseInt(scale, 10) / 100)));
+      const radius = p.get('radius');
+      if (radius) setSphereBase(Math.min(150, Math.max(10, parseInt(radius, 10))));
+      const gap = p.get('gap');
+      if (gap) setTileGap(Math.min(50, Math.max(0, parseInt(gap, 10))));
+    };
+
     const syncFromQuery = async () => {
       setLoadError('');
       const encoded = extractGallery();
@@ -203,7 +239,9 @@ const App: React.FC = () => {
         setContactEmail(incoming.contactEmail || '');
         setSavedGalleryId('');
         setGalleryDbId(null);
-        setInputValue(incoming.urls.join('\n')); 
+        setInputValue(incoming.urls.join('\n'));
+        applyDisplayParams();
+        setView('gallery');
         return;
       }
 
@@ -215,6 +253,8 @@ const App: React.FC = () => {
             applyLoadedRecord(record);
             const urls = record.items.map(i => i.originalUrl).join('\n');
             setInputValue(urls);
+            setView('gallery');
+            if (record.slug) incrementViews(record.slug); // best-effort view count
             return;
           }
           setLoadError('Gallery not found.');
@@ -259,6 +299,7 @@ const App: React.FC = () => {
     setDisplayName('');
     setContactWhatsapp('');
     setContactEmail('');
+    setIsPublic(false);
     setSavedGalleryId('');
     setGalleryDbId(null);
     setViewMode('sphere');
@@ -304,6 +345,7 @@ const App: React.FC = () => {
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
+          is_public: isPublic,
           layout_settings: {
             viewMode,
             mediaScale,
@@ -316,6 +358,7 @@ const App: React.FC = () => {
       );
       const link = applyLoadedRecord(record);
       window.history.replaceState(null, '', link);
+      setView('gallery');
       refreshMyGalleries();
       
       setDonationToast(true);
@@ -342,7 +385,7 @@ const App: React.FC = () => {
     const url = new URL(link);
     url.searchParams.set('layout', viewMode);
     url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
-    if (viewMode === 'sphere') url.searchParams.set('radius', sphereBase.toString());
+    if (viewMode === 'sphere' || viewMode === 'carousel') url.searchParams.set('radius', sphereBase.toString());
     if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
     
     return url.toString();
@@ -385,17 +428,42 @@ const App: React.FC = () => {
     handleStartNew();
   };
 
+  // Load a gallery by slug/id and show it (used by Explore + the builder list).
+  const handleOpenSlug = useCallback(async (slug: string) => {
+    setBuilderOpen(false);
+    setView('gallery');
+    setLoadingRemote(true);
+    try {
+      const record = await loadGalleryRecord(slug);
+      if (record) {
+        const link = applyLoadedRecord(record);
+        window.history.replaceState(null, '', link);
+        setInputValue(record.items.map((i) => i.originalUrl).join('\n'));
+        if (record.slug) incrementViews(record.slug);
+      } else {
+        setLoadError('Gallery not found.');
+      }
+    } catch (err) {
+      console.error('Load error:', err);
+      setLoadError('Failed to load gallery');
+    } finally {
+      setLoadingRemote(false);
+    }
+  }, [applyLoadedRecord]);
+
   return (
     <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
-      {/* 3D Scene */}
+      {/* 3D Scene (always mounted — it doubles as the living backdrop behind the landing) */}
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-        {viewMode === 'sphere' ? (
+        {viewMode === 'tile' ? (
+          <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
+        ) : (
           <Suspense fallback={<Loader />}>
-            <Canvas 
-                camera={{ position: [0, 0, 65], fov: 50 }} 
-                dpr={[1, 1.5]} 
-                gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }} 
+            <Canvas
+                camera={{ position: [0, 0, 65], fov: 50 }}
+                dpr={[1, 1.5]}
+                gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
                 className="bg-transparent"
             >
               <GalleryScene
@@ -404,11 +472,10 @@ const App: React.FC = () => {
                 clearing={isClearing}
                 cardScale={mediaScale}
                 radiusBase={sphereBase}
+                layout={viewMode}
               />
             </Canvas>
           </Suspense>
-        ) : (
-          <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
         )}
         {loadingRemote && <Loader />}
       </div>
@@ -416,14 +483,11 @@ const App: React.FC = () => {
       <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
 
       {/* Header */}
-      <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => {
-                setInitialTab('galleries');
-                setBuilderOpen(true);
-            }} 
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md" 
+          <button
+            onClick={() => openBuilder('galleries')}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md"
             aria-label="Open menu"
           >
             <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -439,23 +503,39 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
-            <button
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
-                viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              onClick={() => setViewMode('sphere')}
-            >
-              Sphere
-            </button>
-            <button
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
-                viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              onClick={() => setViewMode('tile')}
-            >
-              Masonry
-            </button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
+              <button
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                  viewMode === 'sphere' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                onClick={() => setViewMode('sphere')}
+              >
+                Sphere
+              </button>
+              <button
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                  viewMode === 'carousel' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                onClick={() => setViewMode('carousel')}
+              >
+                Carousel
+              </button>
+              <button
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                  viewMode === 'tile' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                onClick={() => setViewMode('tile')}
+              >
+                Masonry
+              </button>
+          </div>
+          <button
+            onClick={() => setView('explore')}
+            className="px-3 py-1 text-xs font-semibold rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm text-slate-600 hover:text-slate-900 transition"
+          >
+            Explore
+          </button>
         </div>
 
         {displayName && (
@@ -476,7 +556,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Footer Contact */}
-      <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="relative">
           <button
             onClick={() => setContactMenuOpen(!contactMenuOpen)}
@@ -524,6 +604,31 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Landing hero — living 3D sphere behind it */}
+      {view === 'landing' && (
+        <Landing
+          session={session}
+          onBuild={() => {
+            setView('gallery');
+            openBuilder('content');
+          }}
+          onExplore={() => setView('explore')}
+          onDemo={() => setView('gallery')}
+        />
+      )}
+
+      {/* Explore / discovery page */}
+      {view === 'explore' && (
+        <Explore
+          onOpen={handleOpenSlug}
+          onBack={() => setView('landing')}
+          onBuild={() => {
+            setView('gallery');
+            openBuilder('content');
+          }}
+        />
+      )}
+
       <BuilderModal
         isOpen={builderOpen}
         onClose={() => setBuilderOpen(false)}
@@ -538,6 +643,8 @@ const App: React.FC = () => {
         setContactWhatsapp={setContactWhatsapp}
         contactEmail={contactEmail}
         setContactEmail={setContactEmail}
+        isPublic={isPublic}
+        setIsPublic={setIsPublic}
         viewMode={viewMode}
         setViewMode={setViewMode}
         mediaScale={mediaScale}
@@ -557,25 +664,12 @@ const App: React.FC = () => {
         setAuthEmail={setAuthEmail}
         onAddMedia={handleAddMedia}
         onClear={handleClear}
-        onSave={handleSaveGallery} 
-        onStartNew={handleStartNew} 
-        onCopyLink={handleCopyLink} 
+        onSave={handleSaveGallery}
+        onStartNew={handleStartNew}
+        onCopyLink={handleCopyLink}
+        getShareLink={generateShareLink}
         onDeleteGallery={handleDeleteGallery}
-        onLoadGallery={async (slug) => { 
-          try {
-            setBuilderOpen(false);
-            const record = await loadGalleryRecord(slug); 
-            if (record) {
-              const link = applyLoadedRecord(record);
-              window.history.replaceState(null, '', link);
-              const urls = record.items.map(i => i.originalUrl).join('\n');
-              setInputValue(urls);
-            }
-          } catch (err) {
-            console.error('Load error:', err);
-            setLoadError('Failed to load gallery');
-          }
-        }}
+        onLoadGallery={handleOpenSlug}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}
         onSignOut={handleSignOut}

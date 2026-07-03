@@ -1,5 +1,15 @@
 import { createClient, Session, SupabaseClient } from '@supabase/supabase-js';
 import { MediaItem } from './constants';
+import { Database } from './types/supabase';
+
+export interface LayoutSettings {
+  viewMode?: 'sphere' | 'tile' | 'carousel';
+  mediaScale?: number;
+  sphereBase?: number;
+  tileGap?: number;
+  bgColor?: string;
+  shadowOpacity?: number;
+}
 
 export interface GalleryRecord {
   id: string;
@@ -9,17 +19,13 @@ export interface GalleryRecord {
   contact_whatsapp?: string | null;
   contact_email?: string | null;
   items: MediaItem[];
-  // We keep your preferred name here for the frontend
-  layout_settings?: {
-    viewMode?: 'sphere' | 'tile' | 'carousel';
-    mediaScale?: number;
-    sphereBase?: number;
-    tileGap?: number;
-    bgColor?: string;
-    shadowOpacity?: number;
-  };
-  // The database actually calls this 'settings', so we map it below
-  settings?: any; 
+  is_public?: boolean;
+  cover_url?: string | null;
+  view_count?: number;
+  // Frontend-facing name for the layout config.
+  layout_settings?: LayoutSettings;
+  // The database column is called `settings`; we map between the two below.
+  settings?: LayoutSettings | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -32,13 +38,29 @@ export interface GallerySummary {
   created_at: string | null;
 }
 
+/** A public gallery card for the Explore page, with its author's profile. */
+export interface PublicGallery {
+  id: string;
+  slug: string | null;
+  display_name: string | null;
+  cover_url: string | null;
+  view_count: number;
+  item_count: number;
+  updated_at: string;
+  author: {
+    handle: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null;
+}
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl!, supabaseAnonKey!, {
+export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
+  ? createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -73,6 +95,17 @@ export const signOut = async () => {
 const TABLE = 'galleries';
 const generateSlug = () => crypto.randomUUID().slice(0, 8);
 
+/** Pick a representative thumbnail for a gallery (used as its Explore cover). */
+const deriveCover = (items: MediaItem[]): string | null =>
+  items.find((i) => i.previewUrl || i.fallbackPreview)?.previewUrl ||
+  items[0]?.fallbackPreview ||
+  null;
+
+const mapSettingsToLayout = (record: GalleryRecord): GalleryRecord => {
+  if (record.settings) record.layout_settings = record.settings;
+  return record;
+};
+
 export const saveGalleryRecord = async (
   payload: Omit<GalleryRecord, 'id'> & { id?: string },
   session: Session | null,
@@ -80,20 +113,21 @@ export const saveGalleryRecord = async (
 ) => {
   if (!supabase) throw new Error('Supabase is not configured yet.');
 
-  const slug = options?.asNew ? generateSlug() : (payload.slug || generateSlug());
+  const slug = options?.asNew ? generateSlug() : payload.slug || generateSlug();
   const ownerId = payload.owner_id || session?.user?.id || null;
-  
-  // MAP Frontend 'layout_settings' to DB 'settings'
-  const writePayload: any = {
+
+  const writePayload = {
     slug,
     owner_id: ownerId,
-    display_name: payload.display_name,
-    contact_whatsapp: payload.contact_whatsapp,
-    contact_email: payload.contact_email,
-    items: payload.items,
-    settings: payload.layout_settings, // <--- CRITICAL MAPPING
+    display_name: payload.display_name ?? null,
+    contact_whatsapp: payload.contact_whatsapp ?? null,
+    contact_email: payload.contact_email ?? null,
+    items: payload.items as unknown as Database['public']['Tables']['galleries']['Insert']['items'],
+    settings: (payload.layout_settings ?? {}) as unknown as Database['public']['Tables']['galleries']['Insert']['settings'],
+    is_public: payload.is_public ?? false,
+    cover_url: payload.cover_url ?? deriveCover(payload.items),
     updated_at: new Date().toISOString(),
-  };
+  } as Database['public']['Tables']['galleries']['Insert'];
 
   if (!options?.asNew && payload.id) {
     writePayload.id = payload.id;
@@ -106,13 +140,7 @@ export const saveGalleryRecord = async (
     .single();
 
   if (error) throw error;
-  
-  // Map back for the frontend to use immediately
-  const result = data as GalleryRecord;
-  if (result.settings) {
-    result.layout_settings = result.settings;
-  }
-  return result;
+  return mapSettingsToLayout(data as unknown as GalleryRecord);
 };
 
 export const loadGalleryRecord = async (slugOrId: string) => {
@@ -128,18 +156,8 @@ export const loadGalleryRecord = async (slugOrId: string) => {
   }
 
   const { data, error } = await query.limit(1).maybeSingle();
-
   if (error) throw error;
-  
-  if (data) {
-    // MAP DB 'settings' to Frontend 'layout_settings'
-    const record = data as GalleryRecord;
-    if (record.settings) {
-      record.layout_settings = record.settings;
-    }
-    return record;
-  }
-  return null;
+  return data ? mapSettingsToLayout(data as unknown as GalleryRecord) : null;
 };
 
 export const listUserGalleries = async (ownerId: string) => {
@@ -154,4 +172,41 @@ export const listUserGalleries = async (ownerId: string) => {
 
   if (error) throw error;
   return (data || []) as GallerySummary[];
+};
+
+/** Public galleries for the Explore page, newest first, with author profile. */
+export const listPublicGalleries = async (limit = 60): Promise<PublicGallery[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select(
+      'id, slug, display_name, cover_url, view_count, item_count, updated_at, author:profiles!galleries_owner_profile_fkey(handle, display_name, avatar_url)',
+    )
+    .eq('is_public', true)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    slug: row.slug,
+    display_name: row.display_name,
+    cover_url: row.cover_url,
+    view_count: row.view_count ?? 0,
+    item_count: row.item_count ?? 0,
+    updated_at: row.updated_at,
+    author: row.author ?? null,
+  }));
+};
+
+/** Fire-and-forget view counter for a public gallery. */
+export const incrementViews = async (slug: string) => {
+  if (!supabase || !slug) return;
+  try {
+    await supabase.rpc('increment_gallery_views', { gallery_slug: slug });
+  } catch {
+    /* view counting is best-effort — never block the UI */
+  }
 };

@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { getSphereCoordinates, MediaItem } from '../constants';
+import { getSphereCoordinates, getCarouselCoordinates, MediaItem } from '../constants';
 
 interface ItemProps {
   item: MediaItem;
@@ -160,7 +160,6 @@ const GalleryItem = ({ item, position, onClick, index, radius, clearing, scale }
         loop
         muted={muted}
         preload="auto"
-        referrerPolicy="no-referrer"
         onLoadedMetadata={(e) => handleSize((e.target as HTMLVideoElement).videoWidth, (e.target as HTMLVideoElement).videoHeight)}
         onLoadedData={() => setLoaded(true)}
         onError={() => setUseVideo(false)}
@@ -239,15 +238,22 @@ interface GallerySceneProps {
   clearing: boolean;
   cardScale: number;
   radiusBase: number;
+  layout?: 'sphere' | 'carousel';
 }
 
-const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase }) => {
+const GalleryScene: React.FC<GallerySceneProps> = ({ onSelect, items, clearing, cardScale, radiusBase, layout = 'sphere' }) => {
   const radius = Math.max(
-    10, 
+    10,
     Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
   );
-  
-  const coords = useMemo(() => getSphereCoordinates(items.length || 1, radius), [items.length, radius]);
+
+  const coords = useMemo(
+    () =>
+      layout === 'carousel'
+        ? getCarouselCoordinates(items.length || 1, radius)
+        : getSphereCoordinates(items.length || 1, radius),
+    [items.length, radius, layout],
+  );
 
   return (
     <>

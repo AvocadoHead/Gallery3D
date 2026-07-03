@@ -21,8 +21,10 @@ interface BuilderModalProps {
   setContactWhatsapp: (val: string) => void;
   contactEmail: string;
   setContactEmail: (val: string) => void;
-  viewMode: 'sphere' | 'tile';
-  setViewMode: (val: 'sphere' | 'tile') => void;
+  isPublic: boolean;
+  setIsPublic: (val: boolean) => void;
+  viewMode: 'sphere' | 'tile' | 'carousel';
+  setViewMode: (val: 'sphere' | 'tile' | 'carousel') => void;
   mediaScale: number;
   setMediaScale: (val: number) => void;
   sphereBase: number;
@@ -43,6 +45,7 @@ interface BuilderModalProps {
   onSave: (options?: { asNew?: boolean }) => void;
   onStartNew: () => void;
   onCopyLink: () => void;
+  getShareLink: () => string;
   onLoadGallery: (slug: string) => void;
   onDeleteGallery: (id: string) => void;
   onGoogleLogin: () => void;
@@ -221,11 +224,17 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
           {/* TAB 2: EDIT */}
           {activeTab === 'content' && (
             <div className="space-y-6">
+              {/* Noob-friendly explainer */}
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-[13px] text-blue-900 leading-relaxed">
+                <span className="font-bold">New here?</span> Paste one link per line below — Google Drive
+                images, YouTube or Vimeo videos, or any direct image URL. Hit <b>Update</b> to see them
+                arrange into your 3D gallery, then <b>Share</b> to send it to anyone.
+              </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Media URLs</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Media links · one per line</label>
                 <textarea
                   className="w-full h-32 p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono"
-                  placeholder="Paste image/video links here..."
+                  placeholder={"https://drive.google.com/file/d/.../view\nhttps://youtu.be/...\nhttps://example.com/art.jpg"}
                   value={props.inputValue}
                   onChange={(e) => props.setInputValue(e.target.value)}
                 />
@@ -241,6 +250,23 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <input type="text" placeholder="WhatsApp (e.g. 15551234567)" className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={props.contactWhatsapp} onChange={(e) => props.setContactWhatsapp(e.target.value)} />
                   <input type="email" placeholder="Email Address" className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={props.contactEmail} onChange={(e) => props.setContactEmail(e.target.value)} />
                 </div>
+              </div>
+
+              {/* Public / discovery toggle */}
+              <div className="pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => props.setIsPublic(!props.isPublic)}
+                  className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition"
+                >
+                  <span className="text-left">
+                    <span className="block text-sm font-bold text-slate-800">List on Explore</span>
+                    <span className="block text-xs text-slate-400">Show this gallery on the public discovery page.</span>
+                  </span>
+                  <span className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${props.isPublic ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${props.isPublic ? 'translate-x-5' : ''}`} />
+                  </span>
+                </button>
               </div>
               {props.session && (
                  <div className="pt-4 border-t border-slate-100">
@@ -263,9 +289,10 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Layout</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => props.setViewMode('sphere')} className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}>Sphere</button>
-                  <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-sm font-bold transition flex items-center justify-center gap-2 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}>Masonry</button>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => props.setViewMode('sphere')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">◍</span>Sphere</button>
+                  <button onClick={() => props.setViewMode('carousel')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'carousel' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">⟳</span>Carousel</button>
+                  <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▦</span>Masonry</button>
                 </div>
               </div>
               <div className="space-y-6">
@@ -273,7 +300,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Size</span><span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span></div>
                     <input type="range" min="0.3" max="3.0" step="0.1" value={props.mediaScale} onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
                  </div>
-                 {props.viewMode === 'sphere' && (
+                 {(props.viewMode === 'sphere' || props.viewMode === 'carousel') && (
                     <div>
                         <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Radius</span><span className="text-xs text-slate-400">{props.sphereBase}</span></div>
                         <input type="range" min="10" max="150" step="5" value={props.sphereBase} onChange={(e) => props.setSphereBase(parseInt(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
