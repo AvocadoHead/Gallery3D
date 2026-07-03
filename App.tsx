@@ -63,6 +63,9 @@ const App: React.FC = () => {
     if (p.get('view') === 'explore') return 'explore';
     return 'landing';
   });
+  // Where to return when the user backs out of Explore (it can be reached from
+  // either the landing hero or the gallery header, and should return there).
+  const [exploreOrigin, setExploreOrigin] = useState<'landing' | 'gallery'>('landing');
 
   // --- UI State ---
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -531,7 +534,10 @@ const App: React.FC = () => {
               </button>
           </div>
           <button
-            onClick={() => setView('explore')}
+            onClick={() => {
+              setExploreOrigin('gallery');
+              setView('explore');
+            }}
             className="px-3 py-1 text-xs font-semibold rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm text-slate-600 hover:text-slate-900 transition"
           >
             Explore
@@ -612,7 +618,10 @@ const App: React.FC = () => {
             setView('gallery');
             openBuilder('content');
           }}
-          onExplore={() => setView('explore')}
+          onExplore={() => {
+            setExploreOrigin('landing');
+            setView('explore');
+          }}
           onDemo={() => setView('gallery')}
         />
       )}
@@ -621,7 +630,7 @@ const App: React.FC = () => {
       {view === 'explore' && (
         <Explore
           onOpen={handleOpenSlug}
-          onBack={() => setView('landing')}
+          onBack={() => setView(exploreOrigin)}
           onBuild={() => {
             setView('gallery');
             openBuilder('content');
