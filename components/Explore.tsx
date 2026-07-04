@@ -59,13 +59,14 @@ const Explore: React.FC<ExploreProps> = ({ onOpen, onBack, onBuild }) => {
   const [galleries, setGalleries] = useState<PublicGallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sort, setSort] = useState<'newest' | 'popular'>('newest');
 
   useEffect(() => {
     let alive = true;
     (async () => {
       setLoading(true);
       try {
-        const data = await listPublicGalleries(60);
+        const data = await listPublicGalleries(60, sort);
         if (alive) setGalleries(data);
       } catch (err: any) {
         if (alive) setError(err?.message || 'Could not load galleries.');
@@ -76,7 +77,7 @@ const Explore: React.FC<ExploreProps> = ({ onOpen, onBack, onBuild }) => {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [sort]);
 
   return (
     <div className="fixed inset-0 z-[120] bg-gradient-to-br from-slate-50 to-slate-100 overflow-y-auto">
@@ -109,6 +110,23 @@ const Explore: React.FC<ExploreProps> = ({ onOpen, onBack, onBuild }) => {
 
       {/* Body */}
       <div className="max-w-6xl mx-auto px-5 py-8">
+        {isSupabaseConfigured && (
+          <div className="flex justify-end mb-5">
+            <div className="inline-flex items-center rounded-full bg-white shadow-sm border border-slate-200 p-0.5">
+              {(['newest', 'popular'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSort(s)}
+                  className={`px-4 py-1.5 text-xs font-semibold rounded-full transition capitalize ${
+                    sort === s ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {s === 'popular' ? 'Most viewed' : 'Newest'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {!isSupabaseConfigured ? (
           <div className="text-center py-24 text-slate-400">Connect Supabase to browse public galleries.</div>
         ) : loading ? (

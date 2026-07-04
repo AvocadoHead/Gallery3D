@@ -2,6 +2,8 @@ import { createClient, Session, SupabaseClient } from '@supabase/supabase-js';
 import { MediaItem } from './constants';
 import { Database } from './types/supabase';
 
+export type Visibility = 'private' | 'unlisted' | 'public';
+
 export interface LayoutSettings {
   viewMode?: 'sphere' | 'tile' | 'carousel';
   mediaScale?: number;
@@ -9,6 +11,10 @@ export interface LayoutSettings {
   tileGap?: number;
   bgColor?: string;
   shadowOpacity?: number;
+  // Gallery-level typography defaults (Phase 4.2); per-item fields override.
+  titleFont?: string;
+  titleSize?: 'S' | 'M' | 'L' | 'XL';
+  titleColor?: string;
 }
 
 export interface GalleryRecord {
@@ -19,7 +25,9 @@ export interface GalleryRecord {
   contact_whatsapp?: string | null;
   contact_email?: string | null;
   items: MediaItem[];
-  is_public?: boolean;
+  visibility?: Visibility;
+  /** Read-only mirror of visibility === 'public' (generated column in the DB). */
+  is_public?: boolean | null;
   cover_url?: string | null;
   view_count?: number;
   // Frontend-facing name for the layout config.
@@ -34,6 +42,7 @@ export interface GallerySummary {
   id: string;
   slug: string | null;
   display_name: string | null;
+  visibility: Visibility;
   updated_at: string;
   created_at: string | null;
 }
@@ -124,7 +133,8 @@ export const saveGalleryRecord = async (
     contact_email: payload.contact_email ?? null,
     items: payload.items as unknown as Database['public']['Tables']['galleries']['Insert']['items'],
     settings: (payload.layout_settings ?? {}) as unknown as Database['public']['Tables']['galleries']['Insert']['settings'],
-    is_public: payload.is_public ?? false,
+    // `visibility` drives everything; `is_public` is a generated column now.
+    visibility: payload.visibility ?? 'unlisted',
     cover_url: payload.cover_url ?? deriveCover(payload.items),
     updated_at: new Date().toISOString(),
   } as Database['public']['Tables']['galleries']['Insert'];
@@ -165,26 +175,43 @@ export const listUserGalleries = async (ownerId: string) => {
 
   const { data, error } = await supabase
     .from(TABLE)
-    .select('id, slug, display_name, updated_at, created_at')
+    .select('id, slug, display_name, visibility, updated_at, created_at')
     .eq('owner_id', ownerId)
     .order('updated_at', { ascending: false, nullsFirst: false })
     .limit(50);
 
   if (error) throw error;
-  return (data || []) as GallerySummary[];
+  return (data || []) as unknown as GallerySummary[];
 };
 
-/** Public galleries for the Explore page, newest first, with author profile. */
-export const listPublicGalleries = async (limit = 60): Promise<PublicGallery[]> => {
+/** Flip a single gallery's visibility inline, without reloading + resaving it. */
+export const updateGalleryVisibility = async (id: string, visibility: Visibility) => {
+  if (!supabase) throw new Error('Supabase is not configured yet.');
+  const { error } = await supabase
+    .from(TABLE)
+    .update({ visibility, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+};
+
+/** Public galleries for the Explore page, with author profile. */
+export const listPublicGalleries = async (
+  limit = 60,
+  sort: 'newest' | 'popular' = 'newest',
+): Promise<PublicGallery[]> => {
   if (!supabase) return [];
+
+  const orderCol = sort === 'popular' ? 'view_count' : 'updated_at';
 
   const { data, error } = await supabase
     .from(TABLE)
     .select(
       'id, slug, display_name, cover_url, view_count, item_count, updated_at, author:profiles!galleries_owner_profile_fkey(handle, display_name, avatar_url)',
     )
-    .eq('is_public', true)
-    .order('updated_at', { ascending: false })
+    .eq('visibility', 'public')
+    .gt('item_count', 0) // Phase 2.3: skip empty galleries
+    .not('cover_url', 'is', null) // …and ones without a working cover
+    .order(orderCol, { ascending: false })
     .limit(limit);
 
   if (error) throw error;

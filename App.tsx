@@ -10,10 +10,12 @@ import Explore from './components/Explore';
 import {
   GalleryRecord,
   GallerySummary,
+  Visibility,
   isSupabaseConfigured,
   loadGalleryRecord,
   listUserGalleries,
   saveGalleryRecord,
+  updateGalleryVisibility,
   incrementViews,
   signInWithEmail,
   signInWithGoogle,
@@ -23,9 +25,11 @@ import {
 import {
   buildDefaultMediaItems,
   buildMediaItemsFromUrls,
+  mergeMediaItems,
   decodeGalleryParam,
   encodeGalleryParam,
   sanitizeWhatsapp,
+  SHARE_INLINE_ITEM_LIMIT,
   MediaItem,
 } from './constants';
 
@@ -74,6 +78,12 @@ const App: React.FC = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [donationToast, setDonationToast] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
+  const [infoToast, setInfoToast] = useState('');
+
+  const flashInfo = useCallback((msg: string) => {
+    setInfoToast(msg);
+    setTimeout(() => setInfoToast(''), 3500);
+  }, []);
 
   // --- Gallery Configuration ---
   const [viewMode, setViewMode] = useState<ViewMode>('sphere');
@@ -87,7 +97,11 @@ const App: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [contactWhatsapp, setContactWhatsapp] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [isPublic, setIsPublic] = useState(false);
+  const [visibility, setVisibility] = useState<Visibility>('unlisted');
+
+  // Gallery-level typography defaults (Phase 4.2).
+  const [titleFont, setTitleFont] = useState<string>('Inter');
+  const [titleSize, setTitleSize] = useState<'S' | 'M' | 'L' | 'XL'>('M');
 
   // Helpers to move between the builder tabs and open the modal.
   const openBuilder = useCallback((tab: BuilderTab = 'galleries') => {
@@ -158,7 +172,7 @@ const App: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setSession(null);
         setMyGalleries([]);
-        setBuilderOpen(true);
+        flashInfo('Signed out.');
       }
     });
 
@@ -186,7 +200,7 @@ const App: React.FC = () => {
       setDisplayName(record.display_name || '');
       setContactWhatsapp(record.contact_whatsapp || '');
       setContactEmail(record.contact_email || '');
-      setIsPublic(!!record.is_public);
+      setVisibility(record.visibility || 'unlisted');
       setGalleryDbId(record.id);
 
       if (record.settings) {
@@ -194,6 +208,8 @@ const App: React.FC = () => {
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
         if (record.settings.tileGap) setTileGap(record.settings.tileGap);
+        if (record.settings.titleFont) setTitleFont(record.settings.titleFont);
+        if (record.settings.titleSize) setTitleSize(record.settings.titleSize);
       }
 
       const id = record.slug || record.id;
@@ -281,8 +297,8 @@ const App: React.FC = () => {
   const handleAddMedia = () => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     if (!entries.length) return;
-    const nextItems = buildMediaItemsFromUrls(entries);
-    setGalleryItems(nextItems);
+    // Preserve any per-item titles/descriptions for URLs that already existed.
+    setGalleryItems(mergeMediaItems(galleryItems, entries));
     setSelectedItem(null);
   };
 
@@ -302,11 +318,13 @@ const App: React.FC = () => {
     setDisplayName('');
     setContactWhatsapp('');
     setContactEmail('');
-    setIsPublic(false);
+    setVisibility('unlisted');
     setSavedGalleryId('');
     setGalleryDbId(null);
     setViewMode('sphere');
-    setMediaScale(1);
+    setMediaScale(0.8); // match the app-wide default (Phase 5)
+    setTitleFont('Inter');
+    setTitleSize('M');
     window.history.replaceState(null, '', window.location.pathname);
   };
 
@@ -327,9 +345,21 @@ const App: React.FC = () => {
     }
   };
 
+  // Phase 2.2: flip a saved gallery's visibility inline from the My Galleries list.
+  const handleSetVisibility = async (galleryId: string, next: Visibility) => {
+    try {
+      await updateGalleryVisibility(galleryId, next);
+      if (galleryId === galleryDbId) setVisibility(next);
+      refreshMyGalleries();
+    } catch (err: any) {
+      console.error('Visibility update failed:', err);
+      flashInfo(err?.message || 'Could not update visibility.');
+    }
+  };
+
   const handleSaveGallery = async (options?: { asNew?: boolean }) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
-    const itemsToSave = entries.length ? buildMediaItemsFromUrls(entries) : galleryItems;
+    const itemsToSave = entries.length ? mergeMediaItems(galleryItems, entries) : galleryItems;
 
     if (!itemsToSave.length || !isSupabaseConfigured) return;
 
@@ -348,12 +378,14 @@ const App: React.FC = () => {
           display_name: displayName || null,
           contact_email: contactEmail || null,
           contact_whatsapp: contactWhatsapp || null,
-          is_public: isPublic,
+          visibility,
           layout_settings: {
             viewMode,
             mediaScale,
             sphereBase,
-            tileGap
+            tileGap,
+            titleFont,
+            titleSize,
           }
         },
         session,
@@ -395,6 +427,13 @@ const App: React.FC = () => {
   }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
 
   const handleCopyLink = async () => {
+    // A big unsaved gallery would base64-encode into a multi-10KB URL that
+    // breaks WhatsApp / some browsers — require a save-to-share short link.
+    if (!savedGalleryId && galleryItems.length > SHARE_INLINE_ITEM_LIMIT) {
+      flashInfo(`Save this gallery first to share ${galleryItems.length} items with a short link.`);
+      openBuilder('galleries');
+      return;
+    }
     const link = generateShareLink();
     try {
       await navigator.clipboard.writeText(link);
@@ -476,6 +515,7 @@ const App: React.FC = () => {
                 cardScale={mediaScale}
                 radiusBase={sphereBase}
                 layout={viewMode}
+                titleDefaults={{ font: titleFont, size: titleSize }}
               />
             </Canvas>
           </Suspense>
@@ -483,7 +523,14 @@ const App: React.FC = () => {
         {loadingRemote && <Loader />}
       </div>
 
-      <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} />
+      <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} titleDefaults={{ font: titleFont, size: titleSize }} />
+
+      {/* Lightweight info toast (sign-out, share nudges, errors) */}
+      {infoToast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[300] px-4 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-full shadow-xl border border-white/10 animate-in slide-in-from-top-2 fade-in max-w-[90vw] text-center">
+          {infoToast}
+        </div>
+      )}
 
       {/* Header */}
       <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
@@ -643,6 +690,8 @@ const App: React.FC = () => {
         onClose={() => setBuilderOpen(false)}
         initialTab={initialTab}
         session={session}
+        galleryItems={galleryItems}
+        setGalleryItems={setGalleryItems}
         galleryItemsCount={galleryItems.length}
         inputValue={inputValue}
         setInputValue={setInputValue}
@@ -652,8 +701,8 @@ const App: React.FC = () => {
         setContactWhatsapp={setContactWhatsapp}
         contactEmail={contactEmail}
         setContactEmail={setContactEmail}
-        isPublic={isPublic}
-        setIsPublic={setIsPublic}
+        visibility={visibility}
+        setVisibility={setVisibility}
         viewMode={viewMode}
         setViewMode={setViewMode}
         mediaScale={mediaScale}
@@ -662,6 +711,10 @@ const App: React.FC = () => {
         setSphereBase={setSphereBase}
         tileGap={tileGap}
         setTileGap={setTileGap}
+        titleFont={titleFont}
+        setTitleFont={setTitleFont}
+        titleSize={titleSize}
+        setTitleSize={setTitleSize}
         myGalleries={myGalleries}
         isLoadingMyGalleries={isLoadingMyGalleries}
         savedGalleryId={savedGalleryId}
@@ -678,6 +731,7 @@ const App: React.FC = () => {
         onCopyLink={handleCopyLink}
         getShareLink={generateShareLink}
         onDeleteGallery={handleDeleteGallery}
+        onSetVisibility={handleSetVisibility}
         onLoadGallery={handleOpenSlug}
         onGoogleLogin={handleGoogleLogin}
         onEmailLogin={handleEmailLogin}

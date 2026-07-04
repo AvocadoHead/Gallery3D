@@ -361,7 +361,44 @@ export interface MediaItem {
   aspectRatio?: number;
   title?: string;
   description?: string;
+
+  // Optional per-item typography (Phase 4.2). Gallery-level defaults live in
+  // layout settings; these override them for a single item.
+  titleFont?: string;             // one of CURATED_FONTS
+  titleSize?: 'S' | 'M' | 'L' | 'XL';
+  titleColor?: string;            // hex, e.g. '#ffffff'
 }
+
+/* Curated font set — same expressive power as "any font" without the cost of
+   loading arbitrary web fonts. Heebo/Rubik/Assistant are Hebrew-friendly. */
+export const CURATED_FONTS = [
+  'Inter',
+  'Heebo',
+  'Rubik',
+  'Assistant',
+  'Playfair Display',
+  'Poppins',
+  'Montserrat',
+  'Space Grotesk',
+  'Lora',
+  'Bebas Neue',
+] as const;
+
+export type CuratedFont = (typeof CURATED_FONTS)[number];
+
+export const TITLE_SIZE_PX: Record<'S' | 'M' | 'L' | 'XL', number> = {
+  S: 12,
+  M: 15,
+  L: 20,
+  XL: 28,
+};
+
+/* Above this item count, an unsaved share link's base64 payload gets too big
+   for WhatsApp / some browsers — the UI nudges the user to save first. */
+export const SHARE_INLINE_ITEM_LIMIT = 30;
+
+/** True for pasted direct-video URLs (.mp4/.webm/…). Exported for the builder. */
+export const isDirectVideoUrl = (url: string) => isDirectVideo(url);
 
 export interface GalleryMetadata {
   displayName?: string;
@@ -442,12 +479,20 @@ export const createMediaItem = (raw: string): MediaItem | null => {
     };
   }
 
-  // 🔹 Direct video
+  // 🔹 Direct video (.mp4/.webm/…) — render as an in-card <video> element.
+  // previewUrl is intentionally empty so FloatingGallery's shouldShowVideoInCard
+  // path renders the muted video (with hover-audio), and the lightbox plays it.
   if (isDirectVideo(input)) {
-     // NOTE: Direct videos need a preview image to work well in 3D. 
-     // Currently we skip them if no preview is provided, or return a placeholder logic.
-     // For this project, we return null as requested previously.
-     return null;
+    return {
+      id: uniqueId(),
+      originalUrl: input,
+      kind: 'video',
+      provider: 'html5',
+      previewUrl: '',
+      fullUrl: input,
+      videoUrl: input,
+      aspectRatio: undefined,
+    };
   }
 
   return null;
@@ -465,6 +510,29 @@ export const buildMediaItemsFromUrls = (urls: string[]) =>
 
 export const buildDefaultMediaItems = () =>
   buildMediaItemsFromUrls(RAW_LINKS);
+
+/* Rebuild items from a URL list while PRESERVING per-item metadata (title,
+   description, typography) and stable ids for URLs that already existed.
+   Used by the builder so editing the raw URL box never wipes item captions. */
+export const mergeMediaItems = (
+  existing: MediaItem[],
+  urls: string[],
+): MediaItem[] => {
+  const byUrl = new Map(existing.map((item) => [item.originalUrl, item]));
+  return buildMediaItemsFromUrls(urls).map((next) => {
+    const prev = byUrl.get(next.originalUrl);
+    if (!prev) return next;
+    return {
+      ...next,
+      id: prev.id,
+      title: prev.title,
+      description: prev.description,
+      titleFont: prev.titleFont,
+      titleSize: prev.titleSize,
+      titleColor: prev.titleColor,
+    };
+  });
+};
 
 /* ============================================================
    🔹 GALLERY PARAM ENCODE / DECODE
@@ -543,22 +611,72 @@ export const getSphereCoordinates = (count: number, radius: number) => {
 };
 
 /* ============================================================
-   🔹 CAROUSEL LAYOUT (horizontal ring)
-   Items sit on a gently undulating circle around the Y axis, so the
+   🔹 CAROUSEL LAYOUT (horizontal ring → helix at scale)
+   Small galleries sit on a single gently undulating ring, so the
    auto-rotating camera reveals them one after another like a carousel.
+   Once a single ring can no longer hold every card without overlap, the
+   layout spirals into a HELIX — multiple stacked rings with a small
+   vertical pitch — so a 400-item gallery stays legible instead of
+   collapsing into an overlapping "deck of cards".
    ============================================================ */
+
+// Approximate world-space spacing needed between adjacent card centres so
+// neighbours don't overlap. Cards are a few world-units wide at default scale.
+const CAROUSEL_MIN_SPACING = 7;
 
 export const getCarouselCoordinates = (count: number, radius: number) => {
   const points: { position: [number, number, number] }[] = [];
-  const ringRadius = Math.max(12, radius * 0.75);
-  const wave = Math.min(ringRadius * 0.18, 6);
+  const safeCount = Math.max(1, count);
+
+  const baseRing = Math.max(12, radius * 0.75);
+  // How far we let a *single* ring grow before spilling into a helix. Kept in
+  // reach of the camera's maxDistance (radius * 1.35 in GalleryScene).
+  const maxRing = Math.max(baseRing, radius * 1.4);
+  const fitAtMaxRing = Math.max(
+    6,
+    Math.floor((2 * Math.PI * maxRing) / CAROUSEL_MIN_SPACING),
+  );
+
+  // 🔹 SMALL / MEDIUM: single undulating ring, sized up to space cards out.
+  if (safeCount <= fitAtMaxRing) {
+    const neededRadius = (safeCount * CAROUSEL_MIN_SPACING) / (2 * Math.PI);
+    const ringRadius = Math.min(maxRing, Math.max(baseRing, neededRadius));
+    const wave = Math.min(ringRadius * 0.18, 6);
+
+    for (let i = 0; i < count; i++) {
+      const theta = (i / safeCount) * Math.PI * 2;
+      points.push({
+        position: [
+          Math.cos(theta) * ringRadius,
+          Math.sin(theta * 2) * wave, // subtle vertical undulation
+          Math.sin(theta) * ringRadius,
+        ],
+      });
+    }
+
+    return points;
+  }
+
+  // 🔹 LARGE: helix — stack multiple rings with a small vertical pitch.
+  const ringRadius = maxRing;
+  const perRing = fitAtMaxRing;
+  const ringCount = Math.ceil(safeCount / perRing);
+  const pitch = CAROUSEL_MIN_SPACING * 0.95; // vertical gap between rings
+  const totalHeight = (ringCount - 1) * pitch;
 
   for (let i = 0; i < count; i++) {
-    const theta = (i / Math.max(1, count)) * Math.PI * 2;
+    const ring = Math.floor(i / perRing);
+    const idxInRing = i % perRing;
+    const itemsThisRing = Math.min(perRing, count - ring * perRing);
+    // Offset each ring's start angle so the layout spirals like a helix
+    // rather than reading as separate stacked hoops.
+    const theta = (idxInRing / itemsThisRing) * Math.PI * 2 + ring * 0.35;
+    const y = totalHeight / 2 - ring * pitch;
+
     points.push({
       position: [
         Math.cos(theta) * ringRadius,
-        Math.sin(theta * 2) * wave, // subtle vertical undulation
+        y,
         Math.sin(theta) * ringRadius,
       ],
     });

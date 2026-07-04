@@ -22,7 +22,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
-          is_public: boolean
+          is_public: boolean | null
           item_count: number | null
           items: Json
           owner_id: string | null
@@ -30,6 +30,7 @@ export type Database = {
           slug: string
           updated_at: string
           view_count: number
+          visibility: string
         }
         Insert: {
           contact_email?: string | null
@@ -38,13 +39,13 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
-          is_public?: boolean
           items?: Json
           owner_id?: string | null
           settings?: Json
           slug?: string
           updated_at?: string
           view_count?: number
+          visibility?: string
         }
         Update: {
           contact_email?: string | null
@@ -53,13 +54,13 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
-          is_public?: boolean
           items?: Json
           owner_id?: string | null
           settings?: Json
           slug?: string
           updated_at?: string
           view_count?: number
+          visibility?: string
         }
         Relationships: [
           {

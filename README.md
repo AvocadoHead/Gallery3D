@@ -15,8 +15,9 @@
 Aether Gallery lets anyone build a beautiful gallery in about 30 seconds — no design or code
 skills required:
 
-1. **Paste links** — Google Drive images, YouTube / Vimeo videos, or any direct image URL (one per
-   line).
+1. **Paste links** — Google Drive images, YouTube / Vimeo videos, direct image URLs, or direct
+   video files (`.mp4` / `.webm` / `.mov`) — one per line. Direct videos play muted in-card and
+   unmute on hover.
 2. **Pick a look** — arrange your media as a rotating 3D **Sphere**, a **Carousel** ring, or a
    **Masonry** grid, and tune size, spacing, and radius live.
 3. **Share it** — sign in, save once, and get a single link you can send to anyone. Opt into the

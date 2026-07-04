@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { MediaItem } from '../constants';
+import { MediaItem, TITLE_SIZE_PX } from '../constants';
 
 // Read from Environment Variable
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
@@ -7,6 +7,7 @@ const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 interface OverlayProps {
   artwork: MediaItem | null;
   onClose: () => void;
+  titleDefaults?: { font?: string; size?: 'S' | 'M' | 'L' | 'XL'; color?: string };
 }
 
 // Helper to reliably extract Drive File ID
@@ -21,7 +22,7 @@ const extractDriveId = (url: string): string | null => {
   return null;
 };
 
-const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
+const Overlay: React.FC<OverlayProps> = ({ artwork, onClose, titleDefaults = {} }) => {
   const [visible, setVisible] = useState(false);
   
   // 'loading' | 'image' | 'iframe'
@@ -216,7 +217,18 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose }) => {
         {/* INFO BAR */}
         {(artwork.title || artwork.description) && (
           <div className="mt-4 pointer-events-auto px-6 py-3 bg-black/60 backdrop-blur-md rounded-full text-white text-center max-w-xl animate-in slide-in-from-bottom-4 duration-700 border border-white/10 shadow-lg">
-             {artwork.title && <h2 className="text-sm font-bold">{artwork.title}</h2>}
+             {artwork.title && (
+               <h2
+                 className="font-bold"
+                 style={{
+                   fontFamily: `'${artwork.titleFont || titleDefaults.font || 'Inter'}', sans-serif`,
+                   fontSize: `${TITLE_SIZE_PX[artwork.titleSize || titleDefaults.size || 'M']}px`,
+                   color: artwork.titleColor || titleDefaults.color || undefined,
+                 }}
+               >
+                 {artwork.title}
+               </h2>
+             )}
              {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
           </div>
         )}

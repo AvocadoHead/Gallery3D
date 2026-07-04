@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { GallerySummary } from '../supabaseClient';
+import { GallerySummary, Visibility } from '../supabaseClient';
+import { MediaItem, CURATED_FONTS } from '../constants';
+
+const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
+  { value: 'private', label: 'Private', icon: '🔒', hint: 'Only you can open it.' },
+  { value: 'unlisted', label: 'Unlisted', icon: '🔗', hint: 'Anyone with the link can view — not listed publicly.' },
+  { value: 'public', label: 'Public', icon: '🌐', hint: 'Shown on the public Explore page.' },
+];
+
+const SIZE_OPTIONS: Array<'S' | 'M' | 'L' | 'XL'> = ['S', 'M', 'L', 'XL'];
 
 const IconGoogle = () => <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.64 2 12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c5.19 0 9.49-3.73 9.49-10c0-1.3-.15-2.29-.14-2.9z" /></svg>;
 const IconShare = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>;
@@ -12,6 +21,8 @@ interface BuilderModalProps {
   initialTab?: 'content' | 'appearance' | 'galleries' | 'support'; 
   
   session: Session | null;
+  galleryItems: MediaItem[];
+  setGalleryItems: (items: MediaItem[]) => void;
   galleryItemsCount: number;
   inputValue: string;
   setInputValue: (val: string) => void;
@@ -21,8 +32,8 @@ interface BuilderModalProps {
   setContactWhatsapp: (val: string) => void;
   contactEmail: string;
   setContactEmail: (val: string) => void;
-  isPublic: boolean;
-  setIsPublic: (val: boolean) => void;
+  visibility: Visibility;
+  setVisibility: (val: Visibility) => void;
   viewMode: 'sphere' | 'tile' | 'carousel';
   setViewMode: (val: 'sphere' | 'tile' | 'carousel') => void;
   mediaScale: number;
@@ -31,6 +42,10 @@ interface BuilderModalProps {
   setSphereBase: (val: number) => void;
   tileGap: number;
   setTileGap: (val: number) => void;
+  titleFont: string;
+  setTitleFont: (val: string) => void;
+  titleSize: 'S' | 'M' | 'L' | 'XL';
+  setTitleSize: (val: 'S' | 'M' | 'L' | 'XL') => void;
   myGalleries: GallerySummary[];
   isLoadingMyGalleries: boolean;
   savedGalleryId: string;
@@ -48,6 +63,7 @@ interface BuilderModalProps {
   getShareLink: () => string;
   onLoadGallery: (slug: string) => void;
   onDeleteGallery: (id: string) => void;
+  onSetVisibility: (id: string, visibility: Visibility) => void;
   onGoogleLogin: () => void;
   onEmailLogin: () => void;
   onSignOut: () => void;
@@ -57,6 +73,12 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'galleries' | 'support'>('galleries');
   const [shareMenuOpen, setShareMenuOpen] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [visMenuOpen, setVisMenuOpen] = useState<string | null>(null);
+
+  const updateItem = (id: string, patch: Partial<MediaItem>) => {
+    props.setGalleryItems(props.galleryItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+  };
 
   useEffect(() => {
     if (props.isOpen && props.initialTab) {
@@ -189,8 +211,31 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                             <div key={g.id} className="bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:shadow-md transition relative">
                                <div className="flex justify-between items-start mb-3">
                                   <div>
-                                     <h4 className="text-sm font-bold text-slate-800 truncate max-w-[180px]">{g.display_name || 'Untitled'}</h4>
+                                     <h4 className="text-sm font-bold text-slate-800 truncate max-w-[150px]">{g.display_name || 'Untitled'}</h4>
                                      <p className="text-[10px] text-slate-400 font-mono">{new Date(g.updated_at).toLocaleDateString()}</p>
+                                  </div>
+                                  {/* Inline visibility (Phase 2.2) */}
+                                  <div className="relative">
+                                     <button
+                                        onClick={() => setVisMenuOpen(visMenuOpen === g.id ? null : g.id)}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-100 transition"
+                                     >
+                                        <span>{VIS_OPTIONS.find((o) => o.value === g.visibility)?.icon || '🔗'}</span>
+                                        <span className="capitalize">{g.visibility || 'unlisted'}</span>
+                                     </button>
+                                     {visMenuOpen === g.id && (
+                                        <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-xl border border-slate-100 z-30 overflow-hidden animate-in zoom-in-95">
+                                           {VIS_OPTIONS.map((opt) => (
+                                              <button
+                                                 key={opt.value}
+                                                 onClick={() => { props.onSetVisibility(g.id, opt.value); setVisMenuOpen(null); }}
+                                                 className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${g.visibility === opt.value ? 'text-slate-900 font-bold' : 'text-slate-600'}`}
+                                              >
+                                                 <span>{opt.icon}</span> {opt.label}
+                                              </button>
+                                           ))}
+                                        </div>
+                                     )}
                                   </div>
                                </div>
                                <div className="flex gap-2">
@@ -252,21 +297,101 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                 </div>
               </div>
 
-              {/* Public / discovery toggle */}
+              {/* Per-item titles & descriptions (Phase 4.1) */}
+              {props.galleryItems.length > 0 && (
+                <div className="pt-4 border-t border-slate-200">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">
+                    Item Details · {props.galleryItems.length}
+                  </label>
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {props.galleryItems.map((item) => {
+                      const expanded = expandedItemId === item.id;
+                      return (
+                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedItemId(expanded ? null : item.id)}
+                            className="w-full flex items-center gap-3 p-2 text-left hover:bg-slate-50 transition"
+                          >
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
+                              {item.previewUrl || item.fallbackPreview ? (
+                                <img src={item.fallbackPreview || item.previewUrl} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-slate-400 text-sm">{item.kind === 'video' ? '▶' : '◈'}</span>
+                              )}
+                            </div>
+                            <span className="flex-1 text-sm text-slate-700 truncate">
+                              {item.title || <span className="text-slate-400 italic">Untitled</span>}
+                            </span>
+                            <svg className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                          {expanded && (
+                            <div className="p-3 pt-0 space-y-2 border-t border-slate-100">
+                              <input
+                                type="text"
+                                placeholder="Title"
+                                value={item.title || ''}
+                                onChange={(e) => updateItem(item.id, { title: e.target.value })}
+                                className="w-full p-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                              <textarea
+                                placeholder="Description"
+                                value={item.description || ''}
+                                onChange={(e) => updateItem(item.id, { description: e.target.value })}
+                                className="w-full h-16 p-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                              />
+                              <div className="flex gap-2">
+                                <select
+                                  value={item.titleFont || ''}
+                                  onChange={(e) => updateItem(item.id, { titleFont: e.target.value || undefined })}
+                                  className="flex-1 p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                                >
+                                  <option value="">Default font</option>
+                                  {CURATED_FONTS.map((f) => (
+                                    <option key={f} value={f}>{f}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={item.titleSize || ''}
+                                  onChange={(e) => updateItem(item.id, { titleSize: (e.target.value || undefined) as MediaItem['titleSize'] })}
+                                  className="w-24 p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                                >
+                                  <option value="">Size</option>
+                                  {SIZE_OPTIONS.map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Visibility (Phase 2.1) — segmented, defaults to unlisted so links work */}
               <div className="pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => props.setIsPublic(!props.isPublic)}
-                  className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition"
-                >
-                  <span className="text-left">
-                    <span className="block text-sm font-bold text-slate-800">List on Explore</span>
-                    <span className="block text-xs text-slate-400">Show this gallery on the public discovery page.</span>
-                  </span>
-                  <span className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${props.isPublic ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${props.isPublic ? 'translate-x-5' : ''}`} />
-                  </span>
-                </button>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Visibility</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {VIS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => props.setVisibility(opt.value)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${
+                        props.visibility === opt.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'
+                      }`}
+                    >
+                      <span className="text-base">{opt.icon}</span>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  {VIS_OPTIONS.find((o) => o.value === props.visibility)?.hint}
+                </p>
               </div>
               {props.session && (
                  <div className="pt-4 border-t border-slate-100">
@@ -313,6 +438,35 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     </div>
                  )}
               </div>
+              {/* Typography defaults (Phase 4.2) — per-item overrides live in Edit */}
+              <div className="pt-2 border-t border-slate-200">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Title Typography</label>
+                <div className="flex gap-2 mb-3">
+                  <select
+                    value={props.titleFont}
+                    onChange={(e) => props.setTitleFont(e.target.value)}
+                    className="flex-1 p-2.5 text-sm bg-white border border-slate-200 rounded-lg outline-none"
+                    style={{ fontFamily: `'${props.titleFont}', sans-serif` }}
+                  >
+                    {CURATED_FONTS.map((f) => (
+                      <option key={f} value={f} style={{ fontFamily: `'${f}', sans-serif` }}>{f}</option>
+                    ))}
+                  </select>
+                  <div className="inline-flex items-center rounded-lg bg-slate-100 p-0.5">
+                    {SIZE_OPTIONS.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => props.setTitleSize(s)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition ${props.titleSize === s ? 'bg-slate-900 text-white shadow' : 'text-slate-500'}`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">Applies to item titles on card hover and in the lightbox. Set per-item overrides in the Edit tab.</p>
+              </div>
+
               {props.session && props.savedGalleryId && (
                  <button onClick={() => props.onSave({ asNew: false })} disabled={props.isSaving} className="w-full py-3 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-xl font-bold text-sm shadow-sm transition">
                    {props.isSaving ? 'Saving...' : 'Save Layout Settings'}

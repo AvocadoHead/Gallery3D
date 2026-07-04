@@ -3,3 +3,8 @@ dist
 .DS_Store
 .env
 .env.local
+
+# DB / storage backups (do not commit)
+*.backup
+*.backup.gz
+hsdafjouczzkmgzjkftx.storage.zip
