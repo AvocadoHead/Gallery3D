@@ -34,8 +34,8 @@ interface BuilderModalProps {
   setContactEmail: (val: string) => void;
   visibility: Visibility;
   setVisibility: (val: Visibility) => void;
-  viewMode: 'sphere' | 'tile' | 'carousel';
-  setViewMode: (val: 'sphere' | 'tile' | 'carousel') => void;
+  viewMode: 'sphere' | 'tile' | 'carousel' | 'canvas';
+  setViewMode: (val: 'sphere' | 'tile' | 'carousel' | 'canvas') => void;
   mediaScale: number;
   setMediaScale: (val: number) => void;
   sphereBase: number;
@@ -414,10 +414,11 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Layout</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => props.setViewMode('sphere')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">◍</span>Sphere</button>
                   <button onClick={() => props.setViewMode('carousel')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'carousel' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">⟳</span>Carousel</button>
                   <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▦</span>Masonry</button>
+                  <button onClick={() => props.setViewMode('canvas')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'canvas' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▨</span>Canvas</button>
                 </div>
               </div>
               <div className="space-y-6">

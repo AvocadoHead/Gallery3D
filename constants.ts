@@ -367,6 +367,11 @@ export interface MediaItem {
   titleFont?: string;             // one of CURATED_FONTS
   titleSize?: 'S' | 'M' | 'L' | 'XL';
   titleColor?: string;            // hex, e.g. '#ffffff'
+
+  // Freeform canvas placement (Phase 6). Position + width in canvas units;
+  // height follows the item's aspect ratio. Items without this get an auto
+  // grid seed at view time, so galleries built before canvas mode still open.
+  canvas?: { x: number; y: number; w: number };
 }
 
 /* Curated font set — same expressive power as "any font" without the cost of
@@ -479,9 +484,8 @@ export const createMediaItem = (raw: string): MediaItem | null => {
     };
   }
 
-  // 🔹 Direct video (.mp4/.webm/…) — render as an in-card <video> element.
-  // previewUrl is intentionally empty so FloatingGallery's shouldShowVideoInCard
-  // path renders the muted video (with hover-audio), and the lightbox plays it.
+  // 🔹 Direct video (.mp4/.webm/…) — the card shows a static first frame
+  // (previewUrl intentionally empty); full playback happens in the lightbox.
   if (isDirectVideo(input)) {
     return {
       id: uniqueId(),

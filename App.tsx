@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
 import TileGallery from './components/TileGallery';
+import CanvasGallery from './components/CanvasGallery';
 import BuilderModal from './components/BuilderModal';
 import Landing from './components/Landing';
 import Explore from './components/Explore';
@@ -34,7 +35,7 @@ import {
 } from './constants';
 
 type AppView = 'landing' | 'gallery' | 'explore';
-type ViewMode = 'sphere' | 'tile' | 'carousel';
+type ViewMode = 'sphere' | 'tile' | 'carousel' | 'canvas';
 type BuilderTab = 'content' | 'appearance' | 'galleries' | 'support';
 
 // --- NEW PATIENCE LOADER ---
@@ -79,6 +80,9 @@ const App: React.FC = () => {
   const [donationToast, setDonationToast] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   const [infoToast, setInfoToast] = useState('');
+  // Phase 6.2: canvas "arrange" mode (drag/resize items). Kept separate from
+  // the builder modal, which would otherwise cover the canvas and block drags.
+  const [canvasEdit, setCanvasEdit] = useState(false);
 
   const flashInfo = useCallback((msg: string) => {
     setInfoToast(msg);
@@ -102,6 +106,11 @@ const App: React.FC = () => {
   // Gallery-level typography defaults (Phase 4.2).
   const [titleFont, setTitleFont] = useState<string>('Inter');
   const [titleSize, setTitleSize] = useState<'S' | 'M' | 'L' | 'XL'>('M');
+
+  // Arrange mode only makes sense in the canvas layout.
+  useEffect(() => {
+    if (viewMode !== 'canvas') setCanvasEdit(false);
+  }, [viewMode]);
 
   // Helpers to move between the builder tabs and open the modal.
   const openBuilder = useCallback((tab: BuilderTab = 'galleries') => {
@@ -237,7 +246,7 @@ const App: React.FC = () => {
     const applyDisplayParams = () => {
       const p = new URLSearchParams(window.location.search);
       const layout = p.get('layout');
-      if (layout === 'sphere' || layout === 'tile' || layout === 'carousel') setViewMode(layout);
+      if (layout === 'sphere' || layout === 'tile' || layout === 'carousel' || layout === 'canvas') setViewMode(layout);
       const scale = p.get('scale');
       if (scale) setMediaScale(Math.min(3, Math.max(0.3, parseInt(scale, 10) / 100)));
       const radius = p.get('radius');
@@ -356,6 +365,11 @@ const App: React.FC = () => {
       flashInfo(err?.message || 'Could not update visibility.');
     }
   };
+
+  // Phase 6.2: persist a canvas item's placement (drag/resize) onto the item.
+  const handleCommitCanvas = useCallback((id: string, canvas: { x: number; y: number; w: number }) => {
+    setGalleryItems((prev) => prev.map((it) => (it.id === id ? { ...it, canvas } : it)));
+  }, []);
 
   const handleSaveGallery = async (options?: { asNew?: boolean }) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
@@ -500,6 +514,14 @@ const App: React.FC = () => {
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
         {viewMode === 'tile' ? (
           <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
+        ) : viewMode === 'canvas' ? (
+          <CanvasGallery
+            items={galleryItems}
+            onSelect={setSelectedItem}
+            editable={canvasEdit && !!session}
+            onCommit={handleCommitCanvas}
+            mediaScale={mediaScale}
+          />
         ) : (
           <Suspense fallback={<Loader />}>
             <Canvas
@@ -579,7 +601,27 @@ const App: React.FC = () => {
               >
                 Masonry
               </button>
+              <button
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                  viewMode === 'canvas' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                onClick={() => setViewMode('canvas')}
+              >
+                Canvas
+              </button>
           </div>
+          {viewMode === 'canvas' && session && (
+            <button
+              onClick={() => setCanvasEdit((v) => !v)}
+              className={`px-3 py-1 text-xs font-semibold rounded-full shadow-sm border transition ${
+                canvasEdit
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white/80 text-slate-600 border-slate-200 backdrop-blur-sm hover:text-slate-900'
+              }`}
+            >
+              {canvasEdit ? 'Done' : 'Arrange'}
+            </button>
+          )}
           <button
             onClick={() => {
               setExploreOrigin('gallery');
