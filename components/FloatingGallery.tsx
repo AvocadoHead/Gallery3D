@@ -58,7 +58,7 @@ const GalleryItem = ({
 }: ItemProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(item.kind === 'text');
   const [mounted, setMounted] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
 
@@ -121,6 +121,16 @@ const GalleryItem = ({
   const titleColor = item.titleColor || titleDefaults.color || '#ffffff';
 
   const renderMedia = () => {
+    if (item.kind === 'text') {
+      return (
+        <div
+          className="w-full h-full flex items-center justify-center text-center p-2 font-bold text-slate-800 opacity-100"
+          style={{ fontFamily: `'${titleFont}', sans-serif`, fontSize: titleSizePx, color: titleColor }}
+        >
+          {item.text || 'Text'}
+        </div>
+      );
+    }
     if (showVideoFrame) {
       return (
         <video

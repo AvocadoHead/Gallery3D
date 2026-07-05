@@ -36,6 +36,9 @@ interface BuilderModalProps {
   setVisibility: (val: Visibility) => void;
   viewMode: 'sphere' | 'tile' | 'carousel' | 'canvas';
   setViewMode: (val: 'sphere' | 'tile' | 'carousel' | 'canvas') => void;
+  canvasMode: 'grid' | 'free';
+  setCanvasMode: (val: 'grid' | 'free') => void;
+  onEditLayout: () => void;
   mediaScale: number;
   setMediaScale: (val: number) => void;
   sphereBase: number;
@@ -421,6 +424,30 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <button onClick={() => props.setViewMode('canvas')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'canvas' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▨</span>Canvas</button>
                 </div>
               </div>
+
+              {/* Canvas editor controls (Phase 6) */}
+              {props.viewMode === 'canvas' && (
+                <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Canvas mode</span>
+                    <div className="inline-flex rounded-lg bg-white border border-slate-200 p-0.5">
+                      <button onClick={() => props.setCanvasMode('grid')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${props.canvasMode === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>Grid</button>
+                      <button onClick={() => props.setCanvasMode('free')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${props.canvasMode === 'free' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>Free</button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    <b>Grid</b> reflows items like a masonry — drag to reorder, resize each one.
+                    <b> Free</b> lets you place, overlap, and group items anywhere, and add text.
+                  </p>
+                  {props.session ? (
+                    <button onClick={props.onEditLayout} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm shadow-sm transition">
+                      Edit Layout →
+                    </button>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 italic">Sign in (My Galleries) to arrange the layout.</p>
+                  )}
+                </div>
+              )}
               <div className="space-y-6">
                  <div>
                     <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Size</span><span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span></div>

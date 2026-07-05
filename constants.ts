@@ -341,7 +341,7 @@ const isImage = (url: string) =>
    🔹 TYPES
    ============================================================ */
 
-export type MediaKind = 'image' | 'video' | 'embed';
+export type MediaKind = 'image' | 'video' | 'embed' | 'text';
 export type MediaProvider = 'gdrive' | 'youtube' | 'vimeo' | 'html5' | 'unknown';
 
 export interface MediaItem {
@@ -368,11 +368,33 @@ export interface MediaItem {
   titleSize?: 'S' | 'M' | 'L' | 'XL';
   titleColor?: string;            // hex, e.g. '#ffffff'
 
-  // Freeform canvas placement (Phase 6). Position + width in canvas units;
-  // height follows the item's aspect ratio. Items without this get an auto
-  // grid seed at view time, so galleries built before canvas mode still open.
-  canvas?: { x: number; y: number; w: number };
+  // Text-block content (kind === 'text'). Styled with the title* typography.
+  text?: string;
+
+  // Freeform layout placement (Phase 6). `w` (width) is shared by both grid and
+  // free modes; `x/y/z/rotation` apply in free mode. `h` is used for text blocks
+  // and freely-resized items where aspect ratio doesn't drive height. Items
+  // without `canvas` get an auto grid seed, so older galleries still open.
+  canvas?: {
+    x: number;
+    y: number;
+    w: number;
+    h?: number;
+    z?: number;
+    rotation?: number;
+  };
 }
+
+/** A blank text block for the freeform layout editor. */
+export const createTextItem = (text = 'New text'): MediaItem => ({
+  id: uniqueId(),
+  originalUrl: '',
+  kind: 'text',
+  provider: 'unknown',
+  previewUrl: '',
+  fullUrl: '',
+  text,
+});
 
 /* Curated font set — same expressive power as "any font" without the cost of
    loading arbitrary web fonts. Heebo/Rubik/Assistant are Hebrew-friendly. */

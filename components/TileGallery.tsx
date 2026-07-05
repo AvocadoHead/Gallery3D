@@ -52,6 +52,15 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
             style={{ gap: `${gap}px` }}
           >
             {col.map((item) => (
+              item.kind === 'text' ? (
+                <div
+                  key={item.id}
+                  className="relative rounded-lg overflow-hidden bg-white shadow-sm flex items-center justify-center text-center p-4 min-h-[80px] font-bold text-slate-800"
+                  style={item.titleFont ? { fontFamily: `'${item.titleFont}', sans-serif` } : undefined}
+                >
+                  {item.text || 'Text'}
+                </div>
+              ) : (
               <div
                 key={item.id}
                 onClick={() => onSelect(item)}
@@ -74,6 +83,7 @@ const TileGallery: React.FC<TileGalleryProps> = ({ items, onSelect, mediaScale, 
                 
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
               </div>
+              )
             ))}
           </div>
         ))}

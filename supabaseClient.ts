@@ -6,6 +6,7 @@ export type Visibility = 'private' | 'unlisted' | 'public';
 
 export interface LayoutSettings {
   viewMode?: 'sphere' | 'tile' | 'carousel' | 'canvas';
+  canvasMode?: 'grid' | 'free';
   mediaScale?: number;
   sphereBase?: number;
   tileGap?: number;

@@ -12,7 +12,13 @@
 - **Phase 3 (revised)** — direct `.mp4`/`.webm` URLs accepted, ▶ badge, lightbox playback *(45ac846)*.
 - **Phase 4** — per-item title/description editor, curated fonts, title sizes *(45ac846)*.
 - **Phase 5** — share-link size guard, README fix, misc polish *(45ac846)*.
-- **Phase 6** — Canvas freeform layout: pan/zoom viewer (plain DOM, no three.js), `MediaItem.canvas {x,y,w}` with an auto grid seed for pre-canvas galleries, and an **Arrange** edit mode (drag to move, corner to resize) that persists via the normal save path. Share links carry `?layout=canvas`. **Note:** edit mode is a dedicated header **Arrange** toggle, *not* "builder open" as originally sketched — the builder modal is a full-screen overlay that would cover the canvas and swallow pointer drags.
+- **Phase 6 — Unified Canvas layout editor** (plain DOM, no three.js). One "Canvas" layout with two sub-modes:
+  - **Grid** (default, masonry-like): drag to reorder, resize each item, neighbours reflow via CSS flex-wrap.
+  - **Free**: absolute placement with overlap, pan/zoom, **marquee multi-select**, group move + group resize (scale about the selection bbox), z-order (front/back), per-item rotation, and a "Tidy" pack-to-grid.
+  - **Text blocks** (`kind: 'text'`) can be added and styled with the title typography in either mode.
+  - `MediaItem.canvas {x,y,w,h?,z?,rotation?}`; `w` shared by both modes, `x/y/z/rotation` used in free. Auto grid seed for items without placement. `settings.canvasMode` persists the sub-mode; everything saves through the normal path.
+  - Edit is entered from the **Look tab → Edit Layout** (closes the builder so it doesn't cover the canvas); a toolbar handles mode/text/z-order/rotate/delete/Done.
+  - Share links carry `?layout=canvas`.
 - **Edge "jump" glitch fixed** *(Fable, 2026-07-04)* — see below.
 - **Hover-video playback: descoped by decision.** The video-budget/hover-audio machinery was removed. Video cards now show a static first frame (`preload="metadata"` + `#t=0.1`); playback happens only in the lightbox. Do not reintroduce without a new decision.
 

@@ -107,6 +107,9 @@ const App: React.FC = () => {
   const [titleFont, setTitleFont] = useState<string>('Inter');
   const [titleSize, setTitleSize] = useState<'S' | 'M' | 'L' | 'XL'>('M');
 
+  // Canvas layout sub-mode: reflow grid vs freeform overlap (Phase 6).
+  const [canvasMode, setCanvasMode] = useState<'grid' | 'free'>('grid');
+
   // Arrange mode only makes sense in the canvas layout.
   useEffect(() => {
     if (viewMode !== 'canvas') setCanvasEdit(false);
@@ -219,6 +222,7 @@ const App: React.FC = () => {
         if (record.settings.tileGap) setTileGap(record.settings.tileGap);
         if (record.settings.titleFont) setTitleFont(record.settings.titleFont);
         if (record.settings.titleSize) setTitleSize(record.settings.titleSize);
+        if (record.settings.canvasMode) setCanvasMode(record.settings.canvasMode);
       }
 
       const id = record.slug || record.id;
@@ -334,6 +338,8 @@ const App: React.FC = () => {
     setMediaScale(0.8); // match the app-wide default (Phase 5)
     setTitleFont('Inter');
     setTitleSize('M');
+    setCanvasMode('grid');
+    setCanvasEdit(false);
     window.history.replaceState(null, '', window.location.pathname);
   };
 
@@ -366,11 +372,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Phase 6.2: persist a canvas item's placement (drag/resize) onto the item.
-  const handleCommitCanvas = useCallback((id: string, canvas: { x: number; y: number; w: number }) => {
-    setGalleryItems((prev) => prev.map((it) => (it.id === id ? { ...it, canvas } : it)));
-  }, []);
-
   const handleSaveGallery = async (options?: { asNew?: boolean }) => {
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     const itemsToSave = entries.length ? mergeMediaItems(galleryItems, entries) : galleryItems;
@@ -395,6 +396,7 @@ const App: React.FC = () => {
           visibility,
           layout_settings: {
             viewMode,
+            canvasMode,
             mediaScale,
             sphereBase,
             tileGap,
@@ -519,8 +521,12 @@ const App: React.FC = () => {
             items={galleryItems}
             onSelect={setSelectedItem}
             editable={canvasEdit && !!session}
-            onCommit={handleCommitCanvas}
+            mode={canvasMode}
+            onChangeMode={setCanvasMode}
+            onChangeItems={setGalleryItems}
+            onExitEdit={() => setCanvasEdit(false)}
             mediaScale={mediaScale}
+            titleDefaults={{ font: titleFont, size: titleSize }}
           />
         ) : (
           <Suspense fallback={<Loader />}>
@@ -610,18 +616,6 @@ const App: React.FC = () => {
                 Canvas
               </button>
           </div>
-          {viewMode === 'canvas' && session && (
-            <button
-              onClick={() => setCanvasEdit((v) => !v)}
-              className={`px-3 py-1 text-xs font-semibold rounded-full shadow-sm border transition ${
-                canvasEdit
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white/80 text-slate-600 border-slate-200 backdrop-blur-sm hover:text-slate-900'
-              }`}
-            >
-              {canvasEdit ? 'Done' : 'Arrange'}
-            </button>
-          )}
           <button
             onClick={() => {
               setExploreOrigin('gallery');
@@ -747,6 +741,9 @@ const App: React.FC = () => {
         setVisibility={setVisibility}
         viewMode={viewMode}
         setViewMode={setViewMode}
+        canvasMode={canvasMode}
+        setCanvasMode={setCanvasMode}
+        onEditLayout={() => { setViewMode('canvas'); setCanvasEdit(true); setBuilderOpen(false); }}
         mediaScale={mediaScale}
         setMediaScale={setMediaScale}
         sphereBase={sphereBase}
