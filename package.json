@@ -12,9 +12,9 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.2",
     "@supabase/supabase-js": "^2.48.0",
+    "maath": "^0.10.8",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "react-pageflip": "^2.0.3",
     "three": "^0.181.2"
   },
   "devDependencies": {
