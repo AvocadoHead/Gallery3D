@@ -3,7 +3,6 @@ import { Session } from '@supabase/supabase-js';
 import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
-import TileGallery from './components/TileGallery';
 import CanvasGallery from './components/CanvasGallery';
 import BuilderModal from './components/BuilderModal';
 import Landing from './components/Landing';
@@ -35,7 +34,10 @@ import {
 } from './constants';
 
 type AppView = 'landing' | 'gallery' | 'explore';
-type ViewMode = 'sphere' | 'tile' | 'carousel' | 'canvas';
+// 'tile' (Masonry) is the editable layout: a reflow grid by default, with an
+// optional free/overlap sub-mode (see canvasMode). The old separate 'canvas'
+// layout was merged into it.
+type ViewMode = 'sphere' | 'tile' | 'carousel';
 type BuilderTab = 'content' | 'appearance' | 'galleries' | 'support';
 
 // --- NEW PATIENCE LOADER ---
@@ -110,9 +112,9 @@ const App: React.FC = () => {
   // Canvas layout sub-mode: reflow grid vs freeform overlap (Phase 6).
   const [canvasMode, setCanvasMode] = useState<'grid' | 'free'>('grid');
 
-  // Arrange mode only makes sense in the canvas layout.
+  // Arrange mode only makes sense in the editable (Masonry) layout.
   useEffect(() => {
-    if (viewMode !== 'canvas') setCanvasEdit(false);
+    if (viewMode !== 'tile') setCanvasEdit(false);
   }, [viewMode]);
 
   // Helpers to move between the builder tabs and open the modal.
@@ -216,7 +218,8 @@ const App: React.FC = () => {
       setGalleryDbId(record.id);
 
       if (record.settings) {
-        if (record.settings.viewMode) setViewMode(record.settings.viewMode);
+        const vm = record.settings.viewMode === 'canvas' ? 'tile' : record.settings.viewMode; // legacy
+        if (vm === 'sphere' || vm === 'tile' || vm === 'carousel') setViewMode(vm);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
         if (record.settings.tileGap) setTileGap(record.settings.tileGap);
@@ -249,8 +252,8 @@ const App: React.FC = () => {
     // Apply the optional display params a share link may carry (?layout, ?scale, ?radius, ?gap).
     const applyDisplayParams = () => {
       const p = new URLSearchParams(window.location.search);
-      const layout = p.get('layout');
-      if (layout === 'sphere' || layout === 'tile' || layout === 'carousel' || layout === 'canvas') setViewMode(layout);
+      const layout = p.get('layout') === 'canvas' ? 'tile' : p.get('layout'); // legacy 'canvas' → Masonry
+      if (layout === 'sphere' || layout === 'tile' || layout === 'carousel') setViewMode(layout);
       const scale = p.get('scale');
       if (scale) setMediaScale(Math.min(3, Math.max(0.3, parseInt(scale, 10) / 100)));
       const radius = p.get('radius');
@@ -515,8 +518,6 @@ const App: React.FC = () => {
       {/* 3D Scene (always mounted — it doubles as the living backdrop behind the landing) */}
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
         {viewMode === 'tile' ? (
-          <TileGallery items={galleryItems} onSelect={setSelectedItem} mediaScale={mediaScale} gap={tileGap} />
-        ) : viewMode === 'canvas' ? (
           <CanvasGallery
             items={galleryItems}
             onSelect={setSelectedItem}
@@ -606,14 +607,6 @@ const App: React.FC = () => {
                 onClick={() => setViewMode('tile')}
               >
                 Masonry
-              </button>
-              <button
-                className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
-                  viewMode === 'canvas' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-                }`}
-                onClick={() => setViewMode('canvas')}
-              >
-                Canvas
               </button>
           </div>
           <button
@@ -743,7 +736,7 @@ const App: React.FC = () => {
         setViewMode={setViewMode}
         canvasMode={canvasMode}
         setCanvasMode={setCanvasMode}
-        onEditLayout={() => { setViewMode('canvas'); setCanvasEdit(true); setBuilderOpen(false); }}
+        onEditLayout={() => { setViewMode('tile'); setCanvasEdit(true); setBuilderOpen(false); }}
         mediaScale={mediaScale}
         setMediaScale={setMediaScale}
         sphereBase={sphereBase}

@@ -34,8 +34,8 @@ interface BuilderModalProps {
   setContactEmail: (val: string) => void;
   visibility: Visibility;
   setVisibility: (val: Visibility) => void;
-  viewMode: 'sphere' | 'tile' | 'carousel' | 'canvas';
-  setViewMode: (val: 'sphere' | 'tile' | 'carousel' | 'canvas') => void;
+  viewMode: 'sphere' | 'tile' | 'carousel';
+  setViewMode: (val: 'sphere' | 'tile' | 'carousel') => void;
   canvasMode: 'grid' | 'free';
   setCanvasMode: (val: 'grid' | 'free') => void;
   onEditLayout: () => void;
@@ -417,19 +417,18 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Layout</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button onClick={() => props.setViewMode('sphere')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">◍</span>Sphere</button>
                   <button onClick={() => props.setViewMode('carousel')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'carousel' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">⟳</span>Carousel</button>
                   <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▦</span>Masonry</button>
-                  <button onClick={() => props.setViewMode('canvas')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'canvas' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▨</span>Canvas</button>
                 </div>
               </div>
 
-              {/* Canvas editor controls (Phase 6) */}
-              {props.viewMode === 'canvas' && (
+              {/* Masonry / layout editor controls (Phase 6) */}
+              {props.viewMode === 'tile' && (
                 <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Canvas mode</span>
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Arrange mode</span>
                     <div className="inline-flex rounded-lg bg-white border border-slate-200 p-0.5">
                       <button onClick={() => props.setCanvasMode('grid')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${props.canvasMode === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>Grid</button>
                       <button onClick={() => props.setCanvasMode('free')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${props.canvasMode === 'free' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>Free</button>
@@ -457,12 +456,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     <div>
                         <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Radius</span><span className="text-xs text-slate-400">{props.sphereBase}</span></div>
                         <input type="range" min="10" max="150" step="5" value={props.sphereBase} onChange={(e) => props.setSphereBase(parseInt(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
-                    </div>
-                 )}
-                 {props.viewMode === 'tile' && (
-                    <div>
-                        <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Gap</span><span className="text-xs text-slate-400">{props.tileGap}px</span></div>
-                        <input type="range" min="0" max="50" step="2" value={props.tileGap} onChange={(e) => props.setTileGap(parseInt(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
                     </div>
                  )}
               </div>
