@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
 import CanvasGallery from './components/CanvasGallery';
+import BookGallery from './components/BookGallery';
 import BuilderModal from './components/BuilderModal';
 import Landing from './components/Landing';
 import Explore from './components/Explore';
@@ -37,7 +38,7 @@ type AppView = 'landing' | 'gallery' | 'explore';
 // 'tile' (Masonry) is the editable layout: a reflow grid by default, with an
 // optional free/overlap sub-mode (see canvasMode). The old separate 'canvas'
 // layout was merged into it.
-type ViewMode = 'sphere' | 'tile' | 'carousel';
+type ViewMode = 'sphere' | 'tile' | 'carousel' | 'book';
 type BuilderTab = 'content' | 'appearance' | 'galleries' | 'support';
 
 // --- NEW PATIENCE LOADER ---
@@ -111,6 +112,8 @@ const App: React.FC = () => {
 
   // Canvas layout sub-mode: reflow grid vs freeform overlap (Phase 6).
   const [canvasMode, setCanvasMode] = useState<'grid' | 'free'>('grid');
+  // Book layout: items per page (Phase 7).
+  const [bookPerPage, setBookPerPage] = useState<1 | 2 | 4>(2);
 
   // Arrange mode only makes sense in the editable (Masonry) layout.
   useEffect(() => {
@@ -219,7 +222,8 @@ const App: React.FC = () => {
 
       if (record.settings) {
         const vm = record.settings.viewMode === 'canvas' ? 'tile' : record.settings.viewMode; // legacy
-        if (vm === 'sphere' || vm === 'tile' || vm === 'carousel') setViewMode(vm);
+        if (vm === 'sphere' || vm === 'tile' || vm === 'carousel' || vm === 'book') setViewMode(vm);
+        if (record.settings.bookPerPage) setBookPerPage(record.settings.bookPerPage);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
         if (record.settings.tileGap) setTileGap(record.settings.tileGap);
@@ -253,7 +257,7 @@ const App: React.FC = () => {
     const applyDisplayParams = () => {
       const p = new URLSearchParams(window.location.search);
       const layout = p.get('layout') === 'canvas' ? 'tile' : p.get('layout'); // legacy 'canvas' → Masonry
-      if (layout === 'sphere' || layout === 'tile' || layout === 'carousel') setViewMode(layout);
+      if (layout === 'sphere' || layout === 'tile' || layout === 'carousel' || layout === 'book') setViewMode(layout);
       const scale = p.get('scale');
       if (scale) setMediaScale(Math.min(3, Math.max(0.3, parseInt(scale, 10) / 100)));
       const radius = p.get('radius');
@@ -342,6 +346,7 @@ const App: React.FC = () => {
     setTitleFont('Inter');
     setTitleSize('M');
     setCanvasMode('grid');
+    setBookPerPage(2);
     setCanvasEdit(false);
     window.history.replaceState(null, '', window.location.pathname);
   };
@@ -403,6 +408,7 @@ const App: React.FC = () => {
           layout_settings: {
             viewMode,
             canvasMode,
+            bookPerPage,
             mediaScale,
             sphereBase,
             tileGap,
@@ -532,6 +538,14 @@ const App: React.FC = () => {
             mediaScale={mediaScale}
             titleDefaults={{ font: titleFont, size: titleSize }}
           />
+        ) : viewMode === 'book' ? (
+          <BookGallery
+            items={galleryItems}
+            onSelect={setSelectedItem}
+            perPage={bookPerPage}
+            title={displayName}
+            titleDefaults={{ font: titleFont, size: titleSize }}
+          />
         ) : (
           <Suspense fallback={<Loader />}>
             <Canvas
@@ -610,6 +624,14 @@ const App: React.FC = () => {
                 onClick={() => setViewMode('tile')}
               >
                 Masonry
+              </button>
+              <button
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                  viewMode === 'book' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                onClick={() => setViewMode('book')}
+              >
+                Book
               </button>
           </div>
           <button
@@ -739,6 +761,8 @@ const App: React.FC = () => {
         setViewMode={setViewMode}
         canvasMode={canvasMode}
         setCanvasMode={setCanvasMode}
+        bookPerPage={bookPerPage}
+        setBookPerPage={setBookPerPage}
         onEditLayout={() => { setViewMode('tile'); setCanvasEdit(true); setBuilderOpen(false); }}
         mediaScale={mediaScale}
         setMediaScale={setMediaScale}

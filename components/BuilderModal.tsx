@@ -34,10 +34,12 @@ interface BuilderModalProps {
   setContactEmail: (val: string) => void;
   visibility: Visibility;
   setVisibility: (val: Visibility) => void;
-  viewMode: 'sphere' | 'tile' | 'carousel';
-  setViewMode: (val: 'sphere' | 'tile' | 'carousel') => void;
+  viewMode: 'sphere' | 'tile' | 'carousel' | 'book';
+  setViewMode: (val: 'sphere' | 'tile' | 'carousel' | 'book') => void;
   canvasMode: 'grid' | 'free';
   setCanvasMode: (val: 'grid' | 'free') => void;
+  bookPerPage: 1 | 2 | 4;
+  setBookPerPage: (val: 1 | 2 | 4) => void;
   onEditLayout: () => void;
   mediaScale: number;
   setMediaScale: (val: number) => void;
@@ -417,10 +419,11 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Layout</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => props.setViewMode('sphere')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">◍</span>Sphere</button>
                   <button onClick={() => props.setViewMode('carousel')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'carousel' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">⟳</span>Carousel</button>
                   <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▦</span>Masonry</button>
+                  <button onClick={() => props.setViewMode('book')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'book' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">📖</span>Book</button>
                 </div>
               </div>
 
@@ -444,6 +447,28 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     </button>
                   ) : (
                     <p className="text-[11px] text-slate-400 italic">Sign in (My Galleries) to arrange the layout.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Book controls (Phase 7) */}
+              {props.viewMode === 'book' && (
+                <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items per page</span>
+                    <div className="inline-flex rounded-lg bg-white border border-slate-200 p-0.5">
+                      {([1, 2, 4] as const).map((n) => (
+                        <button key={n} onClick={() => props.setBookPerPage(n)} className={`px-3 py-1 text-xs font-bold rounded-md transition ${props.bookPerPage === n ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>{n}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    The book paginates your items in order. To reorder or resize them, arrange them in <b>Masonry</b> — the book follows that order.
+                  </p>
+                  {props.session && (
+                    <button onClick={props.onEditLayout} className="w-full py-2.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-100/50 rounded-lg font-bold text-sm shadow-sm transition">
+                      Arrange items in Masonry →
+                    </button>
                   )}
                 </div>
               )}

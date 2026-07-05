@@ -5,8 +5,9 @@ import { Database } from './types/supabase';
 export type Visibility = 'private' | 'unlisted' | 'public';
 
 export interface LayoutSettings {
-  viewMode?: 'sphere' | 'tile' | 'carousel' | 'canvas';
+  viewMode?: 'sphere' | 'tile' | 'carousel' | 'canvas' | 'book';
   canvasMode?: 'grid' | 'free';
+  bookPerPage?: 1 | 2 | 4;
   mediaScale?: number;
   sphereBase?: number;
   tileGap?: number;
