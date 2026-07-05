@@ -376,8 +376,11 @@ const App: React.FC = () => {
   };
 
   const handleSaveGallery = async (options?: { asNew?: boolean }) => {
+    // galleryItems is the source of truth — it already reflects the URL textarea
+    // (via Update) AND all layout-editor changes (canvas placement, sizes, text,
+    // order). Rebuilding from the textarea here would wipe that arrangement.
     const entries = inputValue.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
-    const itemsToSave = entries.length ? mergeMediaItems(galleryItems, entries) : galleryItems;
+    const itemsToSave = galleryItems.length ? galleryItems : buildMediaItemsFromUrls(entries);
 
     if (!itemsToSave.length || !isSupabaseConfigured) return;
 

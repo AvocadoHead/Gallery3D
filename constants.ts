@@ -544,20 +544,35 @@ export const mergeMediaItems = (
   existing: MediaItem[],
   urls: string[],
 ): MediaItem[] => {
-  const byUrl = new Map(existing.map((item) => [item.originalUrl, item]));
-  return buildMediaItemsFromUrls(urls).map((next) => {
-    const prev = byUrl.get(next.originalUrl);
-    if (!prev) return next;
-    return {
-      ...next,
-      id: prev.id,
-      title: prev.title,
-      description: prev.description,
-      titleFont: prev.titleFont,
-      titleSize: prev.titleSize,
-      titleColor: prev.titleColor,
-    };
-  });
+  const built = buildMediaItemsFromUrls(urls);
+  const builtByUrl = new Map(built.map((b) => [b.originalUrl, b]));
+  const existingByUrl = new Map(
+    existing.filter((e) => e.originalUrl).map((e) => [e.originalUrl, e]),
+  );
+
+  // 1) Keep existing items IN THEIR CURRENT ORDER (preserving canvas placement,
+  //    titles, typography). Text blocks / URL-less items are always kept.
+  //    URL items removed from the textarea are dropped.
+  const result: MediaItem[] = [];
+  const used = new Set<string>();
+  for (const item of existing) {
+    if (item.kind === 'text' || !item.originalUrl) {
+      result.push(item);
+      continue;
+    }
+    if (builtByUrl.has(item.originalUrl)) {
+      result.push(item);
+      used.add(item.originalUrl);
+    }
+  }
+  // 2) Append genuinely new URLs (in textarea order).
+  for (const b of built) {
+    if (!used.has(b.originalUrl) && !existingByUrl.has(b.originalUrl)) {
+      result.push(b);
+      used.add(b.originalUrl);
+    }
+  }
+  return result;
 };
 
 /* ============================================================
