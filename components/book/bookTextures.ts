@@ -41,40 +41,48 @@ export const normalizeImageUrl = (input?: string): string | null => {
   return null;
 };
 
-const blankTexture = (color = '#f5f5f5'): string => {
+const blankTexture = (scale: number, color = '#f5f5f5'): string => {
   const c = document.createElement('canvas');
-  c.width = PAGE_W;
-  c.height = PAGE_H;
+  c.width = Math.round(PAGE_W * scale);
+  c.height = Math.round(PAGE_H * scale);
   const ctx = c.getContext('2d')!;
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, c.width, c.height);
-  return c.toDataURL('image/png');
+  return c.toDataURL('image/jpeg', 0.85);
 };
 
-/** Load an image cross-origin; on failure retry through a CORS proxy. */
+/** Route a URL through weserv.nl, which fetches it server-side and serves it
+    back with `Access-Control-Allow-Origin: *` — so the canvas never taints. */
+const weserv = (url: string) =>
+  `https://images.weserv.nl/?url=${encodeURIComponent(url.replace(/^https?:\/\//i, ''))}`;
+
+/** Load an image with CORS. weserv first (reliable), then a direct attempt. */
 const loadImage = (url: string): Promise<HTMLImageElement | null> =>
   new Promise((resolve) => {
     const src = normalizeImageUrl(url) || url;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => {
-      const retry = new Image();
-      retry.crossOrigin = 'anonymous';
-      retry.onload = () => resolve(retry);
-      retry.onerror = () => resolve(null);
-      retry.src = `https://corsproxy.io/?${encodeURIComponent(src)}`;
+    const attempt = (candidate: string, next: () => void) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = next;
+      img.src = candidate;
     };
-    img.src = src;
+    if (src.startsWith('data:')) {
+      attempt(src, () => resolve(null));
+      return;
+    }
+    // weserv proxy → direct → give up
+    attempt(weserv(src), () => attempt(src, () => resolve(null)));
   });
 
-const renderLayout = (images: (HTMLImageElement | null)[], slots: Slot[]): string => {
+const renderLayout = (images: (HTMLImageElement | null)[], slots: Slot[], scale: number): string => {
   const canvas = document.createElement('canvas');
-  canvas.width = PAGE_W;
-  canvas.height = PAGE_H;
+  canvas.width = Math.round(PAGE_W * scale);
+  canvas.height = Math.round(PAGE_H * scale);
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(scale, scale);
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, PAGE_W, PAGE_H);
 
   const safeW = PAGE_W - PAD * 2;
   const safeH = PAGE_H - PAD * 2;
@@ -85,22 +93,23 @@ const renderLayout = (images: (HTMLImageElement | null)[], slots: Slot[]): strin
     const slotH = safeH * s.h - 10;
     const slotX = PAD + safeW * s.x + 5;
     const slotY = PAD + safeH * s.y + 5;
-    const scale = Math.min(slotW / img.width, slotH / img.height);
-    const dw = img.width * scale;
-    const dh = img.height * scale;
+    const imgScale = Math.min(slotW / img.width, slotH / img.height);
+    const dw = img.width * imgScale;
+    const dh = img.height * imgScale;
     ctx.drawImage(img, slotX + (slotW - dw) / 2, slotY + (slotH - dh) / 2, dw, dh);
   });
-  return canvas.toDataURL('image/png');
+  return canvas.toDataURL('image/jpeg', 0.85);
 };
 
 /** A dark title cover page. */
-const coverTexture = (title: string, color = '#0f172a'): string => {
+const coverTexture = (title: string, scale: number, color = '#0f172a'): string => {
   const canvas = document.createElement('canvas');
-  canvas.width = PAGE_W;
-  canvas.height = PAGE_H;
+  canvas.width = Math.round(PAGE_W * scale);
+  canvas.height = Math.round(PAGE_H * scale);
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(scale, scale);
   ctx.fillStyle = color;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, PAGE_W, PAGE_H);
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -115,7 +124,43 @@ const coverTexture = (title: string, color = '#0f172a'): string => {
   lines.push(line.trim());
   const lh = PAGE_W * 0.12;
   lines.forEach((l, i) => ctx.fillText(l, PAGE_W / 2, PAGE_H / 2 - ((lines.length - 1) * lh) / 2 + i * lh));
-  return canvas.toDataURL('image/png');
+  return canvas.toDataURL('image/jpeg', 0.85);
+};
+
+/** Full-bleed image cover with optional title gradient overlay. */
+const imageCoverTexture = (img: HTMLImageElement, scale: number, title?: string): string => {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(PAGE_W * scale);
+  canvas.height = Math.round(PAGE_H * scale);
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(scale, scale);
+  // Cover-crop: scale so image fills the entire page
+  const imgScale = Math.max(PAGE_W / img.width, PAGE_H / img.height);
+  const dw = img.width * imgScale;
+  const dh = img.height * imgScale;
+  ctx.drawImage(img, (PAGE_W - dw) / 2, (PAGE_H - dh) / 2, dw, dh);
+  if (title) {
+    const grad = ctx.createLinearGradient(0, PAGE_H * 0.65, 0, PAGE_H);
+    grad.addColorStop(0, 'transparent');
+    grad.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, PAGE_H * 0.65, PAGE_W, PAGE_H * 0.35);
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${Math.round(PAGE_W * 0.09)}px Inter, sans-serif`;
+    const words = title.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const w of words) {
+      if ((line + ' ' + w).length > 16) { lines.push(line.trim()); line = w; }
+      else line += ' ' + w;
+    }
+    lines.push(line.trim());
+    const lh = PAGE_W * 0.12;
+    lines.forEach((l, i) => ctx.fillText(l, PAGE_W / 2, PAGE_H * 0.85 - ((lines.length - 1) * lh) / 2 + i * lh));
+  }
+  return canvas.toDataURL('image/jpeg', 0.85);
 };
 
 const chunk = <T,>(arr: T[], size: number): T[][] => {
@@ -129,23 +174,47 @@ export const buildBookLeaves = async (
   urls: string[],
   perPage: 1 | 2 | 4,
   title: string,
-): Promise<BookLeaf[]> => {
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<{ leaves: BookLeaf[]; skipped: number }> => {
   const normalized = urls.map(normalizeImageUrl).filter((u): u is string => !!u);
 
-  const images = await Promise.all(normalized.map(loadImage));
-  const valid = images.filter((i): i is HTMLImageElement => !!i);
+  // Scale canvas resolution down for large books to limit GPU memory usage
+  const sides = Math.ceil(normalized.length / perPage) + 2;
+  const scale = sides <= 24 ? 1 : sides <= 80 ? 0.75 : 0.5;
 
-  const contentSides = chunk(valid, perPage).map((group) =>
-    renderLayout(group, GRID_LAYOUTS[perPage]),
+  let done = 0;
+  const images = await Promise.all(
+    normalized.map((u) =>
+      loadImage(u).then((img) => {
+        done += 1;
+        onProgress?.(done, normalized.length);
+        return img;
+      }),
+    ),
   );
 
-  const allSides = [coverTexture(title), ...contentSides, blankTexture()];
+  const valid = images.filter((i): i is HTMLImageElement => !!i);
+  const skipped = normalized.length - valid.length;
+
+  // First item → front cover, last item → back cover (need ≥3 so interior is non-empty)
+  const coverImg = valid.length >= 1 ? valid[0] : null;
+  const backImg = valid.length >= 3 ? valid[valid.length - 1] : null;
+  const interior = backImg ? valid.slice(1, -1) : valid.slice(coverImg ? 1 : 0);
+
+  const frontCover = coverImg ? imageCoverTexture(coverImg, scale, title) : coverTexture(title, scale);
+  const backCover = backImg ? imageCoverTexture(backImg, scale) : blankTexture(scale);
+  const contentSides = chunk(interior, perPage).map((group) =>
+    renderLayout(group, GRID_LAYOUTS[perPage], scale),
+  );
+  // Back cover must land on a leaf BACK — pad to keep contentSides even
+  if (contentSides.length % 2 === 1) contentSides.push(blankTexture(scale));
+  const allSides = [frontCover, ...contentSides, backCover];
 
   const leaves: BookLeaf[] = [];
   for (let i = 0; i < allSides.length; i += 2) {
-    leaves.push({ front: allSides[i], back: allSides[i + 1] || blankTexture() });
+    leaves.push({ front: allSides[i], back: allSides[i + 1] || blankTexture(scale) });
   }
   // Ensure at least a cover + back leaf so the book is never degenerate.
-  if (leaves.length === 0) leaves.push({ front: coverTexture(title), back: blankTexture() });
-  return leaves;
+  if (leaves.length === 0) leaves.push({ front: coverTexture(title, scale), back: blankTexture(scale) });
+  return { leaves, skipped };
 };

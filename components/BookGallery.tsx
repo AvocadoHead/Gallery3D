@@ -48,9 +48,16 @@ const BookScene: React.FC<{ pages: BookLeaf[]; page: number; setPage: (n: number
 const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
   const [leaves, setLeaves] = useState<BookLeaf[] | null>(null);
   const [page, setPage] = useState(0);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [skipped, setSkipped] = useState(0);
+  const [skipDismissed, setSkipDismissed] = useState(false);
 
   const urls = useMemo(
-    () => items.filter((i) => i.kind !== 'text').map(bookUrl).filter(Boolean),
+    () =>
+      items
+        .filter((i) => i.kind !== 'text' && !(i.kind === 'video' && !i.previewUrl && !i.fallbackPreview))
+        .map(bookUrl)
+        .filter(Boolean),
     [items],
   );
 
@@ -58,8 +65,13 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
     let alive = true;
     setLeaves(null);
     setPage(0);
-    buildBookLeaves(urls, perPage, title || 'Gallery').then((l) => {
-      if (alive) setLeaves(l);
+    setProgress({ done: 0, total: 0 });
+    setSkipped(0);
+    setSkipDismissed(false);
+    buildBookLeaves(urls, perPage, title || 'Gallery', (loaded, total) => {
+      if (alive) setProgress({ done: loaded, total });
+    }).then(({ leaves: l, skipped: s }) => {
+      if (alive) { setLeaves(l); setSkipped(s); }
     });
     return () => { alive = false; };
   }, [urls, perPage, title]);
@@ -69,10 +81,19 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
   }
 
   if (!leaves) {
+    const { done, total } = progress;
     return (
       <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-slate-500">
         <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-700 rounded-full animate-spin" />
-        <p className="text-sm font-medium">Binding your book…</p>
+        <div className="w-56 h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-slate-700 rounded-full transition-all duration-300"
+            style={{ width: total ? `${(done / total) * 100}%` : '4%' }}
+          />
+        </div>
+        <p className="text-sm font-medium">
+          Binding your book… {total > 0 && `${done} / ${total}`}
+        </p>
       </div>
     );
   }
@@ -81,9 +102,17 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
 
   return (
     <div className="w-full h-full relative">
-      <Canvas shadows camera={{ position: [-0.5, 1, 4], fov: 45 }} className="bg-transparent">
+      <Canvas shadows camera={{ position: [-0.3, 0.8, 2.8], fov: 45 }} className="bg-transparent">
         <BookScene pages={leaves} page={page} setPage={setPage} />
       </Canvas>
+
+      {/* skipped items notice */}
+      {skipped > 0 && !skipDismissed && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 text-white text-xs font-medium rounded-full shadow-lg backdrop-blur">
+          <span>{skipped} item{skipped > 1 ? 's' : ''} couldn't be shown in the book</span>
+          <button onClick={() => setSkipDismissed(true)} className="text-slate-400 hover:text-white ml-1">✕</button>
+        </div>
+      )}
 
       {/* navigation */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4">

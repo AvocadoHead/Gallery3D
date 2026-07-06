@@ -45,8 +45,6 @@ interface BuilderModalProps {
   setMediaScale: (val: number) => void;
   sphereBase: number;
   setSphereBase: (val: number) => void;
-  tileGap: number;
-  setTileGap: (val: number) => void;
   titleFont: string;
   setTitleFont: (val: string) => void;
   titleSize: 'S' | 'M' | 'L' | 'XL';

@@ -96,7 +96,6 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('sphere');
   const [mediaScale, setMediaScale] = useState(0.8);
   const [sphereBase, setSphereBase] = useState(30);
-  const [tileGap, setTileGap] = useState(12);
 
   // --- Data State ---
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
@@ -226,7 +225,6 @@ const App: React.FC = () => {
         if (record.settings.bookPerPage) setBookPerPage(record.settings.bookPerPage);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
-        if (record.settings.tileGap) setTileGap(record.settings.tileGap);
         if (record.settings.titleFont) setTitleFont(record.settings.titleFont);
         if (record.settings.titleSize) setTitleSize(record.settings.titleSize);
         if (record.settings.canvasMode) setCanvasMode(record.settings.canvasMode);
@@ -262,8 +260,10 @@ const App: React.FC = () => {
       if (scale) setMediaScale(Math.min(3, Math.max(0.3, parseInt(scale, 10) / 100)));
       const radius = p.get('radius');
       if (radius) setSphereBase(Math.min(150, Math.max(10, parseInt(radius, 10))));
-      const gap = p.get('gap');
-      if (gap) setTileGap(Math.min(50, Math.max(0, parseInt(gap, 10))));
+      const perpage = parseInt(p.get('perpage') || '', 10);
+      if (perpage === 1 || perpage === 2 || perpage === 4) setBookPerPage(perpage);
+      const mode = p.get('mode');
+      if (mode === 'grid' || mode === 'free') setCanvasMode(mode);
     };
 
     const syncFromQuery = async () => {
@@ -348,6 +348,7 @@ const App: React.FC = () => {
     setCanvasMode('grid');
     setBookPerPage(2);
     setCanvasEdit(false);
+
     window.history.replaceState(null, '', window.location.pathname);
   };
 
@@ -411,7 +412,6 @@ const App: React.FC = () => {
             bookPerPage,
             mediaScale,
             sphereBase,
-            tileGap,
             titleFont,
             titleSize,
           }
@@ -449,10 +449,11 @@ const App: React.FC = () => {
     url.searchParams.set('layout', viewMode);
     url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
     if (viewMode === 'sphere' || viewMode === 'carousel') url.searchParams.set('radius', sphereBase.toString());
-    if (viewMode === 'tile') url.searchParams.set('gap', tileGap.toString());
-    
+    if (viewMode === 'book') url.searchParams.set('perpage', String(bookPerPage));
+    if (viewMode === 'tile') url.searchParams.set('mode', canvasMode);
+
     return url.toString();
-  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap]);
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, bookPerPage, canvasMode]);
 
   const handleCopyLink = async () => {
     // A big unsaved gallery would base64-encode into a multi-10KB URL that
@@ -768,8 +769,6 @@ const App: React.FC = () => {
         setMediaScale={setMediaScale}
         sphereBase={sphereBase}
         setSphereBase={setSphereBase}
-        tileGap={tileGap}
-        setTileGap={setTileGap}
         titleFont={titleFont}
         setTitleFont={setTitleFont}
         titleSize={titleSize}

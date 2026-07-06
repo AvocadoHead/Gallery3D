@@ -184,6 +184,18 @@ interface BookProps {
   [key: string]: any;
 }
 
+const FarPage = ({ number, opened }: { number: number; opened: boolean }) => (
+  <mesh
+    geometry={pageGeometry}
+    material={pageMaterials as any}
+    position-z={-number * PAGE_DEPTH}
+    rotation-y={opened ? -Math.PI / 2 + degToRad(number * 0.8) : Math.PI / 2 + degToRad(number * 0.8)}
+    castShadow
+    receiveShadow
+    frustumCulled={false}
+  />
+);
+
 export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
   const [delayedPage, setDelayedPage] = useState(page);
 
@@ -200,21 +212,31 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
     return () => clearTimeout(timeout);
   }, [page]);
 
+  const window = 5;
+
   return (
     <group {...props} rotation-y={-Math.PI / 2}>
-      {pages.map((leaf, index) => (
-        <Page
-          key={index}
-          page={delayedPage}
-          number={index}
-          front={leaf.front}
-          back={leaf.back}
-          opened={delayedPage > index}
-          bookClosed={delayedPage === 0 || delayedPage === pages.length}
-          totalPages={pages.length}
-          setPage={setPage}
-        />
-      ))}
+      {pages.map((leaf, index) => {
+        const near =
+          Math.abs(index - delayedPage) <= window ||
+          Math.abs(index + 1 - delayedPage) <= window;
+        if (!near) {
+          return <FarPage key={index} number={index} opened={delayedPage > index} />;
+        }
+        return (
+          <Page
+            key={index}
+            page={delayedPage}
+            number={index}
+            front={leaf.front}
+            back={leaf.back}
+            opened={delayedPage > index}
+            bookClosed={delayedPage === 0 || delayedPage === pages.length}
+            totalPages={pages.length}
+            setPage={setPage}
+          />
+        );
+      })}
     </group>
   );
 };

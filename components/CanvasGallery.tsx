@@ -75,6 +75,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
   const seedW = 240 * mediaScale;
   const viewportRef = useRef<HTMLDivElement>(null);
   const session = useRef<any>(null);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [view, setView] = useState({ tx: 80, ty: 80, scale: 0.8 });
@@ -241,8 +242,20 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (mode !== 'free') return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = (e.target as HTMLElement).closest('[data-item]') as HTMLElement | null;
     const handle = (e.target as HTMLElement).dataset.handle;
+
+    // Second pointer on empty space → start pinch zoom
+    if (pointers.current.size === 2 && !el) {
+      const pts = [...pointers.current.values()];
+      const cx = (pts[0].x + pts[1].x) / 2;
+      const cy = (pts[0].y + pts[1].y) / 2;
+      const startDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      session.current = { kind: 'pinch', startDist, startScale: view.scale, cx, cy };
+      viewportRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
 
     if (!editable) {
       if (!el) { session.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty }; viewportRef.current?.setPointerCapture(e.pointerId); }
@@ -288,8 +301,24 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const s = session.current;
     if (!s) return;
+    if (s.kind === 'pinch') {
+      const pts = [...pointers.current.values()];
+      if (pts.length < 2) return;
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const r = viewportRef.current?.getBoundingClientRect();
+      if (!r) return;
+      setView((v) => {
+        const ns = clamp(0.2, 3, s.startScale * dist / s.startDist);
+        const k = ns / v.scale;
+        const cx = s.cx - r.left;
+        const cy = s.cy - r.top;
+        return { scale: ns, tx: cx - (cx - v.tx) * k, ty: cy - (cy - v.ty) * k };
+      });
+      return;
+    }
     if (s.kind === 'pan') { setView((v) => ({ ...v, tx: s.tx + (e.clientX - s.sx), ty: s.ty + (e.clientY - s.sy) })); return; }
     if (s.kind === 'move') {
       const dx = (e.clientX - s.sx) / view.scale;
@@ -322,8 +351,10 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
     }
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
     const s = session.current;
+    if (s?.kind === 'pinch') { session.current = null; return; }
     session.current = null;
     if (!s) return;
     if (s.kind === 'move' && !s.moved) {
@@ -366,8 +397,8 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
         style={{ cursor: spaceDown ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerUp={(e) => onPointerUp(e)}
+        onPointerCancel={(e) => onPointerUp(e)}
         onWheel={onWheel}
       >
         <div className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})` }}>
@@ -378,6 +409,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
               <div
                 key={item.id}
                 data-item={item.id}
+                onClick={() => { if (!editable && item.kind !== 'text') onSelect(item); }}
                 onDoubleClick={() => { if (editable && item.kind === 'text') setEditingText(item.id); }}
                 className={`absolute rounded-2xl bg-white p-2 shadow-lg ${editable ? 'cursor-move' : 'cursor-pointer'} ${isSel ? 'ring-2 ring-blue-500' : ''}`}
                 style={{
