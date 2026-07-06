@@ -72,8 +72,12 @@ const GalleryItem = ({
     !item.fallbackPreview &&
     !videoFailed;
 
+  // C: canvas.w encodes the per-item size set in the Edit tab (S/M/L/XL or masonry resize)
+  const emphasis = Math.max(0.55, Math.min(2.2, (item.canvas?.w ?? 240) / 240));
+  const effectiveScale = scale * emphasis;
+
   const [computedSize, setComputedSize] = useState<{ width: number; height: number }>(() =>
-    normalizeSize(item.aspectRatio, scale),
+    normalizeSize(item.aspectRatio, effectiveScale),
   );
 
   // Ensure no part of the card is ever frustum-culled by the 3D engine.
@@ -107,13 +111,13 @@ const GalleryItem = ({
   useEffect(() => {
     setComputedSize((prev) => {
       const aspect = prev.width && prev.height ? prev.width / prev.height : item.aspectRatio;
-      return normalizeSize(aspect, scale);
+      return normalizeSize(aspect, effectiveScale);
     });
-  }, [scale, item.aspectRatio]);
+  }, [effectiveScale, item.aspectRatio]);
 
   const handleSize = (width: number, height: number) => {
     const aspect = width && height ? width / height : undefined;
-    setComputedSize(normalizeSize(aspect, scale));
+    setComputedSize(normalizeSize(aspect, effectiveScale));
   };
 
   const titleFont = item.titleFont || titleDefaults.font || 'Inter';

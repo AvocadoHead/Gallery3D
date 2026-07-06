@@ -23,8 +23,9 @@ import type { BookLeaf } from './bookTextures';
 
 const easingFactor = 0.5;
 const easingFactorFold = 0.3;
-const insideCurveStrength = 0.18;
-const outsideCurveStrength = 0.05;
+// A6: reduced curve strengths so pages lie flatter at rest
+const insideCurveStrength = 0.10;
+const outsideCurveStrength = 0.03;
 const turningCurveStrength = 0.09;
 const PAGE_WIDTH = 1.28;
 const PAGE_HEIGHT = 1.71;
@@ -55,7 +56,8 @@ const whiteColor = new Color('white');
 const emissiveColor = new Color('orange');
 const pageMaterials = [
   new MeshStandardMaterial({ color: whiteColor }),
-  new MeshStandardMaterial({ color: '#111' }),
+  // A5: was '#111' — white spine eliminates the black gutter stripe
+  new MeshStandardMaterial({ color: whiteColor }),
   new MeshStandardMaterial({ color: whiteColor }),
   new MeshStandardMaterial({ color: whiteColor }),
 ];
@@ -68,11 +70,12 @@ interface PageProps {
   opened: boolean;
   bookClosed: boolean;
   totalPages: number;
+  riffle: boolean;
   setPage: (n: number) => void;
   [key: string]: any;
 }
 
-const Page = ({ number, front, back, page, opened, bookClosed, totalPages, setPage, ...props }: PageProps) => {
+const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, ...props }: PageProps) => {
   const [picture, picture2] = useTexture([front, back]);
   useMemo(() => {
     picture.colorSpace = picture2.colorSpace = SRGBColorSpace;
@@ -139,9 +142,15 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, setPa
     }
     let turningTime = Math.min(400, +new Date() - turnedAt.current) / 400;
     turningTime = Math.sin(turningTime * Math.PI);
+    // A2: on a fast riffle, suppress the S-curve so pages rotate flat
+    if (riffle) turningTime = 0;
 
     let targetRotation = opened ? -Math.PI / 2 : Math.PI / 2;
-    if (!bookClosed) targetRotation += degToRad(number * 0.8);
+    // A1: clamp the fan spread to ±6° regardless of leaf count
+    if (!bookClosed) {
+      const fan = Math.max(-6, Math.min(6, (number - page) * 0.4));
+      targetRotation += degToRad(fan);
+    }
 
     const bones = skinnedMeshRef.current.skeleton.bones;
     for (let i = 0; i < bones.length; i++) {
@@ -184,17 +193,21 @@ interface BookProps {
   [key: string]: any;
 }
 
-const FarPage = ({ number, opened }: { number: number; opened: boolean }) => (
-  <mesh
-    geometry={pageGeometry}
-    material={pageMaterials as any}
-    position-z={-number * PAGE_DEPTH}
-    rotation-y={opened ? -Math.PI / 2 + degToRad(number * 0.8) : Math.PI / 2 + degToRad(number * 0.8)}
-    castShadow
-    receiveShadow
-    frustumCulled={false}
-  />
-);
+// A1: FarPage uses the same clamped fan as Page
+const FarPage = ({ number, opened, page }: { number: number; opened: boolean; page: number }) => {
+  const fan = Math.max(-6, Math.min(6, (number - page) * 0.4));
+  return (
+    <mesh
+      geometry={pageGeometry}
+      material={pageMaterials as any}
+      position-z={-number * PAGE_DEPTH}
+      rotation-y={opened ? -Math.PI / 2 + degToRad(fan) : Math.PI / 2 + degToRad(fan)}
+      castShadow
+      receiveShadow
+      frustumCulled={false}
+    />
+  );
+};
 
 export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
   const [delayedPage, setDelayedPage] = useState(page);
@@ -204,7 +217,9 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
     const goToPage = () => {
       setDelayedPage((dp) => {
         if (page === dp) return dp;
-        timeout = setTimeout(goToPage, Math.abs(page - dp) > 2 ? 50 : 150);
+        // A2: fast riffle (>4 pages away) uses 30ms steps; normal is 150ms
+        const dist = Math.abs(page - dp);
+        timeout = setTimeout(goToPage, dist > 4 ? 30 : dist > 2 ? 50 : 150);
         return page > dp ? dp + 1 : dp - 1;
       });
     };
@@ -212,16 +227,20 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
     return () => clearTimeout(timeout);
   }, [page]);
 
-  const window = 5;
+  // A2: signal to pages that we're riffling fast so they suppress the S-curve
+  const jump = Math.abs(page - delayedPage);
+  const riffle = jump > 4;
+
+  const windowSize = 5;
 
   return (
     <group {...props} rotation-y={-Math.PI / 2}>
       {pages.map((leaf, index) => {
         const near =
-          Math.abs(index - delayedPage) <= window ||
-          Math.abs(index + 1 - delayedPage) <= window;
+          Math.abs(index - delayedPage) <= windowSize ||
+          Math.abs(index + 1 - delayedPage) <= windowSize;
         if (!near) {
-          return <FarPage key={index} number={index} opened={delayedPage > index} />;
+          return <FarPage key={index} number={index} opened={delayedPage > index} page={delayedPage} />;
         }
         return (
           <Page
@@ -233,6 +252,7 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
             opened={delayedPage > index}
             bookClosed={delayedPage === 0 || delayedPage === pages.length}
             totalPages={pages.length}
+            riffle={riffle}
             setPage={setPage}
           />
         );

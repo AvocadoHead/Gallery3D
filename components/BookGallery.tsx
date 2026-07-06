@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment, Float, OrbitControls } from '@react-three/drei';
 import { MediaItem } from '../constants';
@@ -20,14 +20,24 @@ interface BookGalleryProps {
 const bookUrl = (item: MediaItem): string =>
   item.provider === 'gdrive' ? item.originalUrl : item.previewUrl || item.fullUrl || item.originalUrl;
 
+// A3: tighter camera bounds prevent viewing the book from under/behind
 const BookScene: React.FC<{ pages: BookLeaf[]; page: number; setPage: (n: number) => void }> = ({ pages, page, setPage }) => (
   <>
-    <Float rotation-x={-Math.PI / 4} floatIntensity={0.2} speed={1} rotationIntensity={0.4} floatingRange={[-0.02, 0.02]}>
+    {/* A4: rotationIntensity reduced from 0.4 → 0.12 to calm the idle sway */}
+    <Float rotation-x={-Math.PI / 4} floatIntensity={0.2} speed={1} rotationIntensity={0.12} floatingRange={[-0.02, 0.02]}>
       <Suspense fallback={null}>
         <Book pages={pages} page={page} setPage={setPage} />
       </Suspense>
     </Float>
-    <OrbitControls maxPolarAngle={Math.PI / 2} minDistance={1.5} maxDistance={12} enablePan={false} />
+    <OrbitControls
+      minPolarAngle={0.5}
+      maxPolarAngle={Math.PI / 2.4}
+      minDistance={1.8}
+      maxDistance={7}
+      enableDamping
+      dampingFactor={0.08}
+      enablePan={false}
+    />
     <Environment preset="studio" environmentIntensity={0.5} />
     <ambientLight intensity={1.5} />
     <directionalLight
@@ -51,6 +61,11 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [skipped, setSkipped] = useState(0);
   const [skipDismissed, setSkipDismissed] = useState(false);
+  // A7: track an in-progress rebuild without hiding the current book
+  const [rebuilding, setRebuilding] = useState(false);
+  // keep a ref so the effect can read the current leaves without adding it to deps
+  const leavesRef = useRef<BookLeaf[] | null>(null);
+  leavesRef.current = leaves;
 
   const urls = useMemo(
     () =>
@@ -61,25 +76,50 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
     [items],
   );
 
+  // A7: stable key so typing a title doesn't rebuild unless first/last URL changed
+  const urlKey = useMemo(() => urls.join('|'), [urls]);
+
   useEffect(() => {
     let alive = true;
-    setLeaves(null);
-    setPage(0);
-    setProgress({ done: 0, total: 0 });
-    setSkipped(0);
-    setSkipDismissed(false);
-    buildBookLeaves(urls, perPage, title || 'Gallery', (loaded, total) => {
-      if (alive) setProgress({ done: loaded, total });
-    }).then(({ leaves: l, skipped: s }) => {
-      if (alive) { setLeaves(l); setSkipped(s); }
-    });
-    return () => { alive = false; };
-  }, [urls, perPage, title]);
+    const isFirstBuild = leavesRef.current === null;
+
+    if (isFirstBuild) {
+      setPage(0);
+      setProgress({ done: 0, total: 0 });
+      setSkipped(0);
+      setSkipDismissed(false);
+    }
+
+    // A7: absorb rapid edits with a 400ms debounce; first build is immediate
+    const delay = isFirstBuild ? 0 : 400;
+    const debounce = setTimeout(() => {
+      if (!isFirstBuild) setRebuilding(true);
+      setProgress({ done: 0, total: 0 });
+
+      buildBookLeaves(urls, perPage, title || 'Gallery', (loaded, total) => {
+        if (alive) setProgress({ done: loaded, total });
+      }).then(({ leaves: l, skipped: s }) => {
+        if (!alive) return;
+        setLeaves(l);
+        setSkipped(s);
+        setRebuilding(false);
+        // A7: preserve the current spread; only reset on first build
+        if (!isFirstBuild) setPage((p) => Math.min(p, l.length));
+      });
+    }, delay);
+
+    return () => {
+      alive = false;
+      clearTimeout(debounce);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlKey, perPage, title]);
 
   if (!items.length) {
     return <div className="w-full h-full flex items-center justify-center text-slate-400">Add media to build your book.</div>;
   }
 
+  // First build only: show full-screen progress bar
   if (!leaves) {
     const { done, total } = progress;
     return (
@@ -105,6 +145,14 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
       <Canvas shadows camera={{ position: [-0.3, 0.8, 2.8], fov: 45 }} className="bg-transparent">
         <BookScene pages={leaves} page={page} setPage={setPage} />
       </Canvas>
+
+      {/* A7: corner pill shown while a background rebuild is in progress */}
+      {rebuilding && (
+        <div className="absolute bottom-20 left-4 z-10 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 text-white text-xs font-medium rounded-full shadow-lg backdrop-blur">
+          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <span>Updating book… {progress.total > 0 && `${progress.done}/${progress.total}`}</span>
+        </div>
+      )}
 
       {/* skipped items notice */}
       {skipped > 0 && !skipDismissed && (

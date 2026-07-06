@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { GallerySummary, Visibility } from '../supabaseClient';
 import { MediaItem, CURATED_FONTS } from '../constants';
@@ -81,6 +81,28 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
   const updateItem = (id: string, patch: Partial<MediaItem>) => {
     props.setGalleryItems(props.galleryItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+  };
+
+  const dragItemId = useRef<string | null>(null);
+
+  const reorderItems = (overId: string) => {
+    const from = props.galleryItems.findIndex((i) => i.id === dragItemId.current);
+    const to = props.galleryItems.findIndex((i) => i.id === overId);
+    if (from < 0 || to < 0 || from === to) return;
+    const arr = [...props.galleryItems];
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    props.setGalleryItems(arr);
+    props.setInputValue(arr.filter((i) => i.originalUrl).map((i) => i.originalUrl).join('\n'));
+  };
+
+  const moveItem = (index: number, dir: 1 | -1) => {
+    const to = index + dir;
+    if (to < 0 || to >= props.galleryItems.length) return;
+    const arr = [...props.galleryItems];
+    [arr[index], arr[to]] = [arr[to], arr[index]];
+    props.setGalleryItems(arr);
+    props.setInputValue(arr.filter((i) => i.originalUrl).map((i) => i.originalUrl).join('\n'));
   };
 
   useEffect(() => {
@@ -307,27 +329,68 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     Item Details · {props.galleryItems.length}
                   </label>
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                    {props.galleryItems.map((item) => {
+                    {props.galleryItems.map((item, itemIndex) => {
                       const expanded = expandedItemId === item.id;
+                      const isFirst = itemIndex === 0;
+                      const isLast = itemIndex === props.galleryItems.length - 1;
+                      const showCovers = props.viewMode === 'book' && props.galleryItems.length >= 3;
                       return (
-                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedItemId(expanded ? null : item.id)}
-                            className="w-full flex items-center gap-3 p-2 text-left hover:bg-slate-50 transition"
-                          >
-                            <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
-                              {item.previewUrl || item.fallbackPreview ? (
-                                <img src={item.fallbackPreview || item.previewUrl} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="text-slate-400 text-sm">{item.kind === 'video' ? '▶' : '◈'}</span>
-                              )}
+                        <div
+                          key={item.id}
+                          className="bg-white border border-slate-200 rounded-xl overflow-hidden"
+                          draggable={expandedItemId !== item.id}
+                          onDragStart={() => { dragItemId.current = item.id; }}
+                          onDragOver={(e) => { if (dragItemId.current) { e.preventDefault(); reorderItems(item.id); } }}
+                          onDragEnd={() => { dragItemId.current = null; }}
+                        >
+                          <div className="flex items-center gap-1 p-2">
+                            {/* drag grip */}
+                            <span className="text-slate-300 cursor-grab select-none text-lg shrink-0 px-1">⠿</span>
+
+                            {/* expand button */}
+                            <button
+                              type="button"
+                              onClick={() => setExpandedItemId(expanded ? null : item.id)}
+                              className="flex-1 flex items-center gap-2 text-left hover:bg-slate-50 transition rounded-lg min-w-0"
+                            >
+                              <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
+                                {item.previewUrl || item.fallbackPreview ? (
+                                  <img src={item.fallbackPreview || item.previewUrl} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="text-slate-400 text-sm">{item.kind === 'video' ? '▶' : '◈'}</span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="block text-sm text-slate-700 truncate">
+                                  {item.title || <span className="text-slate-400 italic">Untitled</span>}
+                                </span>
+                                {showCovers && isFirst && (
+                                  <span className="text-[9px] font-bold uppercase text-amber-600 bg-amber-50 rounded px-1">Front cover</span>
+                                )}
+                                {showCovers && isLast && (
+                                  <span className="text-[9px] font-bold uppercase text-amber-600 bg-amber-50 rounded px-1">Back cover</span>
+                                )}
+                              </div>
+                              <svg className={`w-4 h-4 text-slate-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+
+                            {/* ▲▼ reorder buttons (mobile-friendly fallback) */}
+                            <div className="flex flex-col gap-0.5 shrink-0">
+                              <button
+                                type="button"
+                                disabled={isFirst}
+                                onClick={() => moveItem(itemIndex, -1)}
+                                className="w-6 h-5 flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-20 text-xs"
+                              >▲</button>
+                              <button
+                                type="button"
+                                disabled={isLast}
+                                onClick={() => moveItem(itemIndex, 1)}
+                                className="w-6 h-5 flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-20 text-xs"
+                              >▼</button>
                             </div>
-                            <span className="flex-1 text-sm text-slate-700 truncate">
-                              {item.title || <span className="text-slate-400 italic">Untitled</span>}
-                            </span>
-                            <svg className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                          </button>
+                          </div>
+
                           {expanded && (
                             <div className="p-3 pt-0 space-y-2 border-t border-slate-100">
                               <input
@@ -365,6 +428,30 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                   ))}
                                 </select>
                               </div>
+                              {/* C: per-item size emphasis (applies to sphere, carousel & masonry) */}
+                              {item.kind !== 'text' && (() => {
+                                const SIZES: [string, number][] = [['S', 150], ['M', 240], ['L', 340], ['XL', 460]];
+                                const currentW = item.canvas?.w ?? 240;
+                                const activeLabel = SIZES.reduce<[string, number]>(
+                                  (best, opt) => Math.abs(opt[1] - currentW) < Math.abs(best[1] - currentW) ? opt : best,
+                                  ['M', 240]
+                                )[0];
+                                return (
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Size (all layouts)</label>
+                                    <div className="inline-flex rounded-lg bg-slate-100 p-0.5 gap-0.5">
+                                      {SIZES.map(([label, w]) => (
+                                        <button
+                                          key={label}
+                                          type="button"
+                                          onClick={() => updateItem(item.id, { canvas: { x: 0, y: 0, ...item.canvas, w } })}
+                                          className={`px-2.5 py-1 rounded-md text-xs font-bold transition ${activeLabel === label ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                                        >{label}</button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>
