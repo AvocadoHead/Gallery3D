@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState, Suspense, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { easing } from 'maath';
 import GalleryScene from './components/FloatingGallery';
 import Overlay from './components/Overlay';
 import CanvasGallery from './components/CanvasGallery';
-import BookGallery from './components/BookGallery';
+import BookGallery, { BookScene } from './components/BookGallery';
+import type { BookLeaf } from './components/book/bookTextures';
 import BuilderModal from './components/BuilderModal';
 import Landing from './components/Landing';
 import Explore from './components/Explore';
@@ -56,6 +58,20 @@ const Loader = () => (
     </p>
   </div>
 );
+
+// R6: eases camera between sphere [0,0,65] and book [0,1.7,3.1] within the shared Canvas
+const CameraRig = ({ isBook }: { isBook: boolean }) => {
+  const { camera, gl } = useThree();
+  useFrame((_, delta) => {
+    easing.damp3(camera.position, isBook ? [0, 1.7, 3.1] : [0, 0, 65], 0.4, delta);
+    easing.damp(camera as any, 'fov', isBook ? 45 : 50, 0.4, delta);
+    (camera as any).updateProjectionMatrix();
+  });
+  useEffect(() => {
+    gl.shadowMap.enabled = isBook;
+  }, [isBook, gl]);
+  return null;
+};
 
 const App: React.FC = () => {
   const shareBase = useMemo(
@@ -114,9 +130,19 @@ const App: React.FC = () => {
   // Book layout: items per page (Phase 7).
   const [bookPerPage, setBookPerPage] = useState<1 | 2 | 4>(2);
 
+  // R6: book scene state lifted here so BookScene can live in the shared Canvas
+  const [bookLeaves, setBookLeaves] = useState<BookLeaf[] | null>(null);
+  const [bookPage, setBookPage] = useState(0);
+  const [bookFirstFrameReady, setBookFirstFrameReady] = useState(false);
+
   // Arrange mode only makes sense in the editable (Masonry) layout.
   useEffect(() => {
     if (viewMode !== 'tile') setCanvasEdit(false);
+  }, [viewMode]);
+
+  // Reset book readiness when leaving book mode so the overlay re-appears on return
+  useEffect(() => {
+    if (viewMode !== 'book') setBookFirstFrameReady(false);
   }, [viewMode]);
 
   // Helpers to move between the builder tabs and open the modal.
@@ -539,33 +565,53 @@ const App: React.FC = () => {
             mediaScale={mediaScale}
             titleDefaults={{ font: titleFont, size: titleSize }}
           />
-        ) : viewMode === 'book' ? (
-          <BookGallery
-            items={galleryItems}
-            onSelect={setSelectedItem}
-            perPage={bookPerPage}
-            title={displayName}
-            titleDefaults={{ font: titleFont, size: titleSize }}
-          />
         ) : (
-          <Suspense fallback={<Loader />}>
-            <Canvas
+          // R6: one Canvas for sphere / carousel / book — no context churn on layout switch
+          <>
+            {viewMode === 'book' && (
+              <BookGallery
+                items={galleryItems}
+                onSelect={setSelectedItem}
+                perPage={bookPerPage}
+                title={displayName}
+                titleDefaults={{ font: titleFont, size: titleSize }}
+                bookLeaves={bookLeaves}
+                setBookLeaves={setBookLeaves}
+                bookPage={bookPage}
+                setBookPage={setBookPage}
+                firstFrameReady={bookFirstFrameReady}
+              />
+            )}
+            <Suspense fallback={<Loader />}>
+              <Canvas
+                shadows
                 camera={{ position: [0, 0, 65], fov: 50 }}
                 dpr={[1, 1.5]}
                 gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
                 className="bg-transparent"
-            >
-              <GalleryScene
-                onSelect={setSelectedItem}
-                items={galleryItems}
-                clearing={isClearing}
-                cardScale={mediaScale}
-                radiusBase={sphereBase}
-                layout={viewMode}
-                titleDefaults={{ font: titleFont, size: titleSize }}
-              />
-            </Canvas>
-          </Suspense>
+              >
+                {viewMode === 'book' && bookLeaves ? (
+                  <BookScene
+                    pages={bookLeaves}
+                    page={bookPage}
+                    setPage={setBookPage}
+                    onReady={() => setBookFirstFrameReady(true)}
+                  />
+                ) : (
+                  <GalleryScene
+                    onSelect={setSelectedItem}
+                    items={galleryItems}
+                    clearing={isClearing}
+                    cardScale={mediaScale}
+                    radiusBase={sphereBase}
+                    layout={viewMode as 'sphere' | 'carousel'}
+                    titleDefaults={{ font: titleFont, size: titleSize }}
+                  />
+                )}
+                <CameraRig isBook={viewMode === 'book' && !!bookLeaves} />
+              </Canvas>
+            </Suspense>
+          </>
         )}
         {loadingRemote && <Loader />}
       </div>

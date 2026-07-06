@@ -23,7 +23,6 @@ import type { BookLeaf } from './bookTextures';
 
 const easingFactor = 0.5;
 const easingFactorFold = 0.3;
-// A6: reduced curve strengths so pages lie flatter at rest
 const insideCurveStrength = 0.10;
 const outsideCurveStrength = 0.03;
 const turningCurveStrength = 0.09;
@@ -56,8 +55,7 @@ const whiteColor = new Color('white');
 const emissiveColor = new Color('orange');
 const pageMaterials = [
   new MeshStandardMaterial({ color: whiteColor }),
-  // A5: was '#111' — white spine eliminates the black gutter stripe
-  new MeshStandardMaterial({ color: whiteColor }),
+  new MeshStandardMaterial({ color: whiteColor }), // white spine — no gutter stripe
   new MeshStandardMaterial({ color: whiteColor }),
   new MeshStandardMaterial({ color: whiteColor }),
 ];
@@ -87,6 +85,9 @@ const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, 
   const skinnedMeshRef = useRef<any>(null);
   const [highlighted, setHighlighted] = useState(false);
   useCursor(highlighted);
+
+  // R1: only the two pages adjacent to the current spread are interactive
+  const clickable = number === page || number === page - 1;
 
   const manualSkinnedMesh = useMemo(() => {
     const bones: Bone[] = [];
@@ -142,13 +143,12 @@ const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, 
     }
     let turningTime = Math.min(400, +new Date() - turnedAt.current) / 400;
     turningTime = Math.sin(turningTime * Math.PI);
-    // A2: on a fast riffle, suppress the S-curve so pages rotate flat
     if (riffle) turningTime = 0;
 
     let targetRotation = opened ? -Math.PI / 2 : Math.PI / 2;
-    // A1: clamp the fan spread to ±6° regardless of leaf count
+    // R3: tighter fan — 0.15/±3° makes stacks read as a solid book block
     if (!bookClosed) {
-      const fan = Math.max(-6, Math.min(6, (number - page) * 0.4));
+      const fan = Math.max(-3, Math.min(3, (number - page) * 0.15));
       targetRotation += degToRad(fan);
     }
 
@@ -177,9 +177,15 @@ const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, 
     <group
       {...props}
       ref={group}
-      onPointerEnter={(e: any) => { e.stopPropagation(); setHighlighted(true); }}
+      // R1: only highlight/click pages adjacent to the current spread
+      onPointerEnter={(e: any) => { e.stopPropagation(); if (clickable) setHighlighted(true); }}
       onPointerLeave={(e: any) => { e.stopPropagation(); setHighlighted(false); }}
-      onClick={(e: any) => { e.stopPropagation(); setPage(opened ? number : number + 1); setHighlighted(false); }}
+      onClick={(e: any) => {
+        e.stopPropagation();
+        if (!clickable) return;
+        setPage(opened ? number : number + 1);
+        setHighlighted(false);
+      }}
     >
       <primitive object={manualSkinnedMesh} ref={skinnedMeshRef} position-z={-number * PAGE_DEPTH + page * PAGE_DEPTH} />
     </group>
@@ -193,13 +199,15 @@ interface BookProps {
   [key: string]: any;
 }
 
-// A1: FarPage uses the same clamped fan as Page
+// R2: stubs scaled down and given a tighter fan so their tips can't protrude
 const FarPage = ({ number, opened, page }: { number: number; opened: boolean; page: number }) => {
-  const fan = Math.max(-6, Math.min(6, (number - page) * 0.4));
+  // R2: tighter fan than real pages (0.15/±2°)
+  const fan = Math.max(-2, Math.min(2, (number - page) * 0.15));
   return (
     <mesh
       geometry={pageGeometry}
       material={pageMaterials as any}
+      scale={[0.965, 0.985, 1]}
       position-z={-number * PAGE_DEPTH}
       rotation-y={opened ? -Math.PI / 2 + degToRad(fan) : Math.PI / 2 + degToRad(fan)}
       castShadow
@@ -211,14 +219,20 @@ const FarPage = ({ number, opened, page }: { number: number; opened: boolean; pa
 
 export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
   const [delayedPage, setDelayedPage] = useState(page);
+  // R4: tilt group — eases between closed (cover) and open (spread) angles
+  const tiltRef = useRef<any>(null);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     const goToPage = () => {
       setDelayedPage((dp) => {
         if (page === dp) return dp;
-        // A2: fast riffle (>4 pages away) uses 30ms steps; normal is 150ms
         const dist = Math.abs(page - dp);
+        // R7: large jumps (>6 leaves) snap most of the distance in one step
+        if (dist > 6) {
+          timeout = setTimeout(goToPage, 0);
+          return page > dp ? page - 3 : page + 3;
+        }
         timeout = setTimeout(goToPage, dist > 4 ? 30 : dist > 2 ? 50 : 150);
         return page > dp ? dp + 1 : dp - 1;
       });
@@ -227,36 +241,46 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
     return () => clearTimeout(timeout);
   }, [page]);
 
-  // A2: signal to pages that we're riffling fast so they suppress the S-curve
   const jump = Math.abs(page - delayedPage);
   const riffle = jump > 4;
+  const bookClosed = delayedPage === 0 || delayedPage === pages.length;
+
+  // R4: animate tilt — closed cover sits more upright, open spread faces viewer
+  useFrame((_, delta) => {
+    if (!tiltRef.current) return;
+    const targetTilt = bookClosed ? -Math.PI / 5 : -Math.PI / 2.6;
+    easing.dampAngle(tiltRef.current.rotation, 'x', targetTilt, 0.4, delta);
+  });
 
   const windowSize = 5;
 
   return (
     <group {...props} rotation-y={-Math.PI / 2}>
-      {pages.map((leaf, index) => {
-        const near =
-          Math.abs(index - delayedPage) <= windowSize ||
-          Math.abs(index + 1 - delayedPage) <= windowSize;
-        if (!near) {
-          return <FarPage key={index} number={index} opened={delayedPage > index} page={delayedPage} />;
-        }
-        return (
-          <Page
-            key={index}
-            page={delayedPage}
-            number={index}
-            front={leaf.front}
-            back={leaf.back}
-            opened={delayedPage > index}
-            bookClosed={delayedPage === 0 || delayedPage === pages.length}
-            totalPages={pages.length}
-            riffle={riffle}
-            setPage={setPage}
-          />
-        );
-      })}
+      {/* R4: tilt group eases between cover angle and open-spread angle */}
+      <group ref={tiltRef}>
+        {pages.map((leaf, index) => {
+          const near =
+            Math.abs(index - delayedPage) <= windowSize ||
+            Math.abs(index + 1 - delayedPage) <= windowSize;
+          if (!near) {
+            return <FarPage key={index} number={index} opened={delayedPage > index} page={delayedPage} />;
+          }
+          return (
+            <Page
+              key={index}
+              page={delayedPage}
+              number={index}
+              front={leaf.front}
+              back={leaf.back}
+              opened={delayedPage > index}
+              bookClosed={bookClosed}
+              totalPages={pages.length}
+              riffle={riffle}
+              setPage={setPage}
+            />
+          );
+        })}
+      </group>
     </group>
   );
 };
