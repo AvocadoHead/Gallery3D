@@ -1,6 +1,19 @@
-/* Ported from the 3D-book prototype (Wawa-Sensei-style skinned-mesh book).
-   The bone-flip math is kept verbatim; jotai atoms are replaced with props so
-   it drops into the gallery without a global store. */
+/* Ported from the 3D-book prototype (AvocadoHead/the-3d-book, Wawa-Sensei-style
+   skinned-mesh book). The flip math below is kept IDENTICAL to the prototype,
+   which is the proven-good reference. The only deliberate deviations, each for
+   gallery scale (70+ leaves vs the prototype's ~15):
+   1. The per-leaf fan angle shrinks with book size (static, prototype formula
+      at small counts) — NEVER make the fan depend on the current page: a
+      page-relative fan re-targets every leaf on every turn, which made leaves
+      ease through each other (flicker) and the stacks lean (imbalance).
+   2. Leaves far from the spread render as untextured FarPage stubs (memory).
+      Stubs MUST use the exact same z-offset and fan formulas as real pages —
+      a mismatched z-offset made the stub stack float behind the book as
+      "frame lines".
+   3. Pages snap to their pose on mount (no ease-in sweep) so stub↔real
+      window transitions are invisible.
+   4. Large jumps snap most of the distance (R7) and flatten the turn curve
+      (riffle) instead of animating 30 mid-air turns. */
 import { useCursor, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { easing } from 'maath';
@@ -21,16 +34,21 @@ import {
 import { degToRad } from 'three/src/math/MathUtils.js';
 import type { BookLeaf } from './bookTextures';
 
+// Prototype-identical constants
 const easingFactor = 0.5;
 const easingFactorFold = 0.3;
-const insideCurveStrength = 0.10;
-const outsideCurveStrength = 0.03;
+const insideCurveStrength = 0.18;
+const outsideCurveStrength = 0.05;
 const turningCurveStrength = 0.09;
 const PAGE_WIDTH = 1.28;
 const PAGE_HEIGHT = 1.71;
 const PAGE_DEPTH = 0.003;
 const PAGE_SEGMENTS = 30;
 const SEGMENT_WIDTH = PAGE_WIDTH / PAGE_SEGMENTS;
+
+/* Static per-leaf fan: identical to the prototype (0.8°/leaf) for small books,
+   scaled down so a 70-leaf book fans ~12° in total instead of 57°. */
+const fanDegPerLeaf = (totalPages: number) => Math.min(0.8, 12 / Math.max(1, totalPages));
 
 const pageGeometry = new BoxGeometry(PAGE_WIDTH, PAGE_HEIGHT, PAGE_DEPTH, PAGE_SEGMENTS, 2);
 pageGeometry.translate(PAGE_WIDTH / 2, 0, 0);
@@ -73,7 +91,7 @@ interface PageProps {
   [key: string]: any;
 }
 
-const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, ...props }: PageProps) => {
+const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffle, setPage, ...props }: PageProps) => {
   const [picture, picture2] = useTexture([front, back]);
   useMemo(() => {
     picture.colorSpace = picture2.colorSpace = SRGBColorSpace;
@@ -83,6 +101,7 @@ const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, 
   const turnedAt = useRef(0);
   const lastOpened = useRef(opened);
   const skinnedMeshRef = useRef<any>(null);
+  const firstFrame = useRef(true);
   const [highlighted, setHighlighted] = useState(false);
   useCursor(highlighted);
 
@@ -145,11 +164,10 @@ const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, 
     turningTime = Math.sin(turningTime * Math.PI);
     if (riffle) turningTime = 0;
 
+    // Prototype-identical: STATIC fan by absolute leaf index (scaled for size).
     let targetRotation = opened ? -Math.PI / 2 : Math.PI / 2;
-    // R3: tighter fan — 0.15/±3° makes stacks read as a solid book block
     if (!bookClosed) {
-      const fan = Math.max(-3, Math.min(3, (number - page) * 0.15));
-      targetRotation += degToRad(fan);
+      targetRotation += degToRad(number * fanDegPerLeaf(totalPages));
     }
 
     const bones = skinnedMeshRef.current.skeleton.bones;
@@ -167,10 +185,19 @@ const Page = ({ number, front, back, page, opened, bookClosed, riffle, setPage, 
         if (i === 0) { rotationAngle = targetRotation; foldRotationAngle = 0; }
         else { rotationAngle = 0; foldRotationAngle = 0; }
       }
-      easing.dampAngle(target.rotation, 'y', rotationAngle, easingFactor, delta);
       const foldIntensity = i > 8 ? Math.sin(i * Math.PI * (1 / bones.length) - 0.5) * turningTime : 0;
-      easing.dampAngle(target.rotation, 'x', foldRotationAngle * foldIntensity, easingFactorFold, delta);
+
+      if (firstFrame.current) {
+        // Snap to pose on mount — no ease-in sweep when a stub is promoted to
+        // a real page (or on initial build).
+        target.rotation.y = rotationAngle;
+        target.rotation.x = foldRotationAngle * foldIntensity;
+      } else {
+        easing.dampAngle(target.rotation, 'y', rotationAngle, easingFactor, delta);
+        easing.dampAngle(target.rotation, 'x', foldRotationAngle * foldIntensity, easingFactorFold, delta);
+      }
     }
+    firstFrame.current = false;
   });
 
   return (
@@ -199,28 +226,93 @@ interface BookProps {
   [key: string]: any;
 }
 
-// R2: stubs scaled down and given a tighter fan so their tips can't protrude
-const FarPage = ({ number, opened, page }: { number: number; opened: boolean; page: number }) => {
-  // R2: tighter fan than real pages (0.15/±2°)
-  const fan = Math.max(-2, Math.min(2, (number - page) * 0.15));
+/* ---------- FarPage: untextured stand-in for leaves far from the spread ----------
+   A real resting page is NOT flat: its ±90° target is distributed along the
+   bone chain by the inside/outside curve strengths, so the page curls. A flat
+   plane rotated ±90° therefore protrudes from the curved stack — that (plus a
+   missing `+ page * PAGE_DEPTH` z term) was the "frame lines floating behind
+   the book" bug. Fix: bake the exact rest-pose curl into a static geometry
+   once (linear blend skinning applied on the CPU with the same formulas). */
+const bakeRestGeometry = (T: number) => {
+  // Per-level local rotations at rest (turningTime = 0, fold = 0) — the same
+  // formula Page uses in useFrame.
+  const rot: number[] = [];
+  for (let i = 0; i <= PAGE_SEGMENTS; i++) {
+    const inside = i < 8 ? Math.sin(i * 0.2 + 0.25) : 0;
+    const outside = i >= 8 ? Math.cos(i * 0.3 + 0.09) : 0;
+    rot.push(insideCurveStrength * inside * T - outsideCurveStrength * outside * T);
+  }
+  // Accumulate the bone chain: world origin + accumulated Y-angle per bone.
+  const angles: number[] = [];
+  const origins: { x: number; z: number }[] = [];
+  let acc = 0;
+  for (let i = 0; i <= PAGE_SEGMENTS; i++) {
+    acc += rot[i];
+    angles.push(acc);
+    if (i === 0) origins.push({ x: 0, z: 0 });
+    else {
+      const p = origins[i - 1];
+      const a = angles[i - 1];
+      origins.push({ x: p.x + Math.cos(a) * SEGMENT_WIDTH, z: p.z - Math.sin(a) * SEGMENT_WIDTH });
+    }
+  }
+  const geo = pageGeometry.clone();
+  const pos = geo.attributes.position;
+  const skinIdx = geo.attributes.skinIndex;
+  const skinW = geo.attributes.skinWeight;
+  const transformBy = (j: number, x: number, z: number) => {
+    const lx = x - j * SEGMENT_WIDTH; // local offset in bind space
+    const a = angles[j];
+    return {
+      x: origins[j].x + Math.cos(a) * lx + Math.sin(a) * z,
+      z: origins[j].z - Math.sin(a) * lx + Math.cos(a) * z,
+    };
+  };
+  for (let v = 0; v < pos.count; v++) {
+    const x = pos.getX(v);
+    const z = pos.getZ(v);
+    const j0 = Math.min(PAGE_SEGMENTS, skinIdx.getX(v));
+    const j1 = Math.min(PAGE_SEGMENTS, skinIdx.getY(v));
+    const w0 = skinW.getX(v);
+    const w1 = skinW.getY(v);
+    const p0 = transformBy(j0, x, z);
+    const p1 = transformBy(j1, x, z);
+    pos.setX(v, p0.x * w0 + p1.x * w1);
+    pos.setZ(v, p0.z * w0 + p1.z * w1);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+};
+
+// Baked once at module load: rest curl for unopened (+90°) and opened (−90°).
+const closedRestGeometry = bakeRestGeometry(Math.PI / 2);
+const openedRestGeometry = bakeRestGeometry(-Math.PI / 2);
+
+const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
+  number: number; opened: boolean; page: number; totalPages: number; bookClosed: boolean;
+}) => {
+  // When the book is closed, real pages go FLAT (i=0 takes the full rotation);
+  // otherwise they rest in the baked curl, fanned by their static leaf angle.
+  const geometry = bookClosed ? pageGeometry : opened ? openedRestGeometry : closedRestGeometry;
+  const rotation = bookClosed
+    ? (opened ? -Math.PI / 2 : Math.PI / 2)
+    : degToRad(number * fanDegPerLeaf(totalPages));
   return (
-    <mesh
-      geometry={pageGeometry}
-      material={pageMaterials as any}
-      scale={[0.965, 0.985, 1]}
-      position-z={-number * PAGE_DEPTH}
-      rotation-y={opened ? -Math.PI / 2 + degToRad(fan) : Math.PI / 2 + degToRad(fan)}
-      castShadow
-      receiveShadow
-      frustumCulled={false}
-    />
+    <group rotation-y={rotation}>
+      <mesh
+        geometry={geometry}
+        material={pageMaterials as any}
+        scale={[0.998, 0.998, 1]}
+        position-z={-number * PAGE_DEPTH + page * PAGE_DEPTH}
+        frustumCulled={false}
+      />
+    </group>
   );
 };
 
 export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
   const [delayedPage, setDelayedPage] = useState(page);
-  // R4: tilt group — eases between closed (cover) and open (spread) angles
-  const tiltRef = useRef<any>(null);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
@@ -245,42 +337,42 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
   const riffle = jump > 4;
   const bookClosed = delayedPage === 0 || delayedPage === pages.length;
 
-  // R4: animate tilt — closed cover sits more upright, open spread faces viewer
-  useFrame((_, delta) => {
-    if (!tiltRef.current) return;
-    const targetTilt = bookClosed ? -Math.PI / 5 : -Math.PI / 2.6;
-    easing.dampAngle(tiltRef.current.rotation, 'x', targetTilt, 0.4, delta);
-  });
-
-  const windowSize = 5;
+  // Books up to prototype scale render every leaf for real — zero stubs.
+  const windowSize = pages.length <= 24 ? pages.length : 5;
 
   return (
     <group {...props} rotation-y={-Math.PI / 2}>
-      {/* R4: tilt group eases between cover angle and open-spread angle */}
-      <group ref={tiltRef}>
-        {pages.map((leaf, index) => {
-          const near =
-            Math.abs(index - delayedPage) <= windowSize ||
-            Math.abs(index + 1 - delayedPage) <= windowSize;
-          if (!near) {
-            return <FarPage key={index} number={index} opened={delayedPage > index} page={delayedPage} />;
-          }
+      {pages.map((leaf, index) => {
+        const near =
+          Math.abs(index - delayedPage) <= windowSize ||
+          Math.abs(index + 1 - delayedPage) <= windowSize;
+        if (!near) {
           return (
-            <Page
+            <FarPage
               key={index}
-              page={delayedPage}
               number={index}
-              front={leaf.front}
-              back={leaf.back}
               opened={delayedPage > index}
-              bookClosed={bookClosed}
+              page={delayedPage}
               totalPages={pages.length}
-              riffle={riffle}
-              setPage={setPage}
+              bookClosed={bookClosed}
             />
           );
-        })}
-      </group>
+        }
+        return (
+          <Page
+            key={index}
+            page={delayedPage}
+            number={index}
+            front={leaf.front}
+            back={leaf.back}
+            opened={delayedPage > index}
+            bookClosed={bookClosed}
+            totalPages={pages.length}
+            riffle={riffle}
+            setPage={setPage}
+          />
+        );
+      })}
     </group>
   );
 };

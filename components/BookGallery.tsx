@@ -27,9 +27,10 @@ const ResponsiveCamera = ({ controlsRef }: { controlsRef: React.RefObject<any> }
   const { size, camera } = useThree();
   useEffect(() => {
     const aspect = size.width / size.height;
-    const dist = aspect >= 1 ? 3.1 : Math.min(7, 3.4 / aspect);
-    camera.position.set(0, aspect >= 1 ? 1.7 : 2.1, dist);
-    camera.lookAt(0, 0.2, 0);
+    // Prototype default [-0.3, 0.8, 2.8]; portrait pulls back so the book fits.
+    const dist = aspect >= 1 ? 2.8 : Math.min(8, 3.1 / aspect);
+    camera.position.set(-0.3, 0.8, dist);
+    camera.lookAt(0, 0, 0);
     controlsRef.current?.update();
   }, [size.width, size.height, camera, controlsRef]);
   return null;
@@ -44,20 +45,23 @@ const BookScene: React.FC<{
   const controlsRef = useRef<any>(null);
   return (
     <>
-      <Float floatIntensity={0.2} speed={1} rotationIntensity={0.12} floatingRange={[-0.02, 0.02]}>
+      {/* Prototype-identical framing: fixed −45° tilt, gentle float */}
+      <Float
+        rotation-x={-Math.PI / 4}
+        floatIntensity={0.1}
+        speed={1}
+        rotationIntensity={0.2}
+        floatingRange={[-0.02, 0.02]}
+      >
         <Suspense fallback={null}>
           <Book pages={pages} page={page} setPage={setPage} />
         </Suspense>
       </Float>
       <OrbitControls
         ref={controlsRef}
-        target={[0, 0.2, 0]}
-        minPolarAngle={0.4}
-        maxPolarAngle={Math.PI / 2.4}
-        minDistance={1.8}
-        maxDistance={7}
-        enableDamping
-        dampingFactor={0.08}
+        maxPolarAngle={Math.PI / 2}
+        minDistance={1.5}
+        maxDistance={12}
         enablePan={false}
       />
       <ResponsiveCamera controlsRef={controlsRef} />
@@ -163,7 +167,7 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
   return (
     <div className="w-full h-full relative">
       {leaves && (
-        <Canvas shadows camera={{ position: [0, 1.7, 3.1], fov: 45 }} className="bg-transparent">
+        <Canvas shadows camera={{ position: [-0.3, 0.8, 2.8], fov: 45 }} className="bg-transparent">
           <BookScene
             pages={leaves}
             page={page}
