@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { Environment, Float, OrbitControls, useProgress } from '@react-three/drei';
 import { MediaItem } from '../constants';
 import type { TitleStyle } from './FloatingGallery';
@@ -19,46 +20,65 @@ const Ready = ({ onReady }: { onReady: () => void }) => {
   return null;
 };
 
-// Exported so App.tsx can render it inside the shared Canvas
-export const BookScene: React.FC<{
+/* Responsive framing: on narrow (portrait/phone) viewports the book must sit
+   further back or it overflows the screen. Runs on mount + resize only, then
+   OrbitControls resumes full ownership of the camera. */
+const ResponsiveCamera = ({ controlsRef }: { controlsRef: React.RefObject<any> }) => {
+  const { size, camera } = useThree();
+  useEffect(() => {
+    const aspect = size.width / size.height;
+    const dist = aspect >= 1 ? 3.1 : Math.min(7, 3.4 / aspect);
+    camera.position.set(0, aspect >= 1 ? 1.7 : 2.1, dist);
+    camera.lookAt(0, 0.2, 0);
+    controlsRef.current?.update();
+  }, [size.width, size.height, camera, controlsRef]);
+  return null;
+};
+
+const BookScene: React.FC<{
   pages: BookLeaf[];
   page: number;
   setPage: (n: number) => void;
   onReady: () => void;
-}> = ({ pages, page, setPage, onReady }) => (
-  <>
-    <Float floatIntensity={0.2} speed={1} rotationIntensity={0.12} floatingRange={[-0.02, 0.02]}>
-      <Suspense fallback={null}>
-        <Book pages={pages} page={page} setPage={setPage} />
-      </Suspense>
-    </Float>
-    <OrbitControls
-      target={[0, 0.2, 0]}
-      minPolarAngle={0.4}
-      maxPolarAngle={Math.PI / 2.4}
-      minDistance={1.8}
-      maxDistance={7}
-      enableDamping
-      dampingFactor={0.08}
-      enablePan={false}
-    />
-    <Environment preset="studio" environmentIntensity={0.5} />
-    <ambientLight intensity={1.5} />
-    <directionalLight
-      position={[2, 5, 2]}
-      intensity={1}
-      castShadow
-      shadow-mapSize-width={2048}
-      shadow-mapSize-height={2048}
-      shadow-bias={-0.0001}
-    />
-    <mesh position-y={-1.5} rotation-x={-Math.PI / 2} receiveShadow>
-      <planeGeometry args={[100, 100]} />
-      <shadowMaterial transparent opacity={0.2} />
-    </mesh>
-    <Ready onReady={onReady} />
-  </>
-);
+}> = ({ pages, page, setPage, onReady }) => {
+  const controlsRef = useRef<any>(null);
+  return (
+    <>
+      <Float floatIntensity={0.2} speed={1} rotationIntensity={0.12} floatingRange={[-0.02, 0.02]}>
+        <Suspense fallback={null}>
+          <Book pages={pages} page={page} setPage={setPage} />
+        </Suspense>
+      </Float>
+      <OrbitControls
+        ref={controlsRef}
+        target={[0, 0.2, 0]}
+        minPolarAngle={0.4}
+        maxPolarAngle={Math.PI / 2.4}
+        minDistance={1.8}
+        maxDistance={7}
+        enableDamping
+        dampingFactor={0.08}
+        enablePan={false}
+      />
+      <ResponsiveCamera controlsRef={controlsRef} />
+      <Environment preset="studio" environmentIntensity={0.5} />
+      <ambientLight intensity={1.5} />
+      <directionalLight
+        position={[2, 5, 2]}
+        intensity={1}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.0001}
+      />
+      <mesh position-y={-1.5} rotation-x={-Math.PI / 2} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <shadowMaterial transparent opacity={0.2} />
+      </mesh>
+      <Ready onReady={onReady} />
+    </>
+  );
+};
 
 interface BookGalleryProps {
   items: MediaItem[];
@@ -66,30 +86,24 @@ interface BookGalleryProps {
   perPage: BookPerPage;
   title?: string;
   titleDefaults: TitleStyle;
-  // R6: book state is lifted to App.tsx so BookScene can live in the shared Canvas
-  bookLeaves: BookLeaf[] | null;
-  setBookLeaves: (leaves: BookLeaf[] | null) => void;
-  bookPage: number;
-  setBookPage: React.Dispatch<React.SetStateAction<number>>;
-  firstFrameReady: boolean;
 }
 
-// DOM-only wrapper: manages the build state machine + renders progress overlay and nav.
-// The 3D BookScene is rendered in App.tsx's shared Canvas (R6).
-const BookGallery: React.FC<BookGalleryProps> = ({
-  items,
-  perPage,
-  title,
-  bookLeaves: leaves,
-  setBookLeaves: setLeaves,
-  bookPage: page,
-  setBookPage: setPage,
-  firstFrameReady,
-}) => {
+/* Self-contained book view: own Canvas (and WebGL context), own build state.
+   NOTE (post-mortem of the R6 regression): the book briefly shared one Canvas
+   with the sphere/carousel via a per-frame CameraRig. That rig fought
+   OrbitControls every frame — dragging the sphere "magnetized" back in a
+   glitchy wobble. A separate Canvas costs one context switch (a harmless
+   "Context Lost" console log) and keeps every layout's controls untouched.
+   Do NOT re-merge the canvases unless the camera handoff is solved without
+   any per-frame camera writes. */
+const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
+  const [leaves, setLeaves] = useState<BookLeaf[] | null>(null);
+  const [page, setPage] = useState(0);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [skipped, setSkipped] = useState(0);
   const [skipDismissed, setSkipDismissed] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [firstFrameReady, setFirstFrameReady] = useState(false);
   const leavesRef = useRef<BookLeaf[] | null>(null);
   leavesRef.current = leaves;
 
@@ -147,9 +161,20 @@ const BookGallery: React.FC<BookGalleryProps> = ({
   const showOverlay = !leaves || !firstFrameReady;
 
   return (
-    <div className="absolute inset-0 pointer-events-none">
+    <div className="w-full h-full relative">
+      {leaves && (
+        <Canvas shadows camera={{ position: [0, 1.7, 3.1], fov: 45 }} className="bg-transparent">
+          <BookScene
+            pages={leaves}
+            page={page}
+            setPage={setPage}
+            onReady={() => setFirstFrameReady(true)}
+          />
+        </Canvas>
+      )}
+
       {showOverlay && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-500 bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] pointer-events-auto">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-500 bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0]">
           <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-700 rounded-full animate-spin" />
           <div className="w-56 h-2 bg-slate-200 rounded-full overflow-hidden">
             <div
@@ -166,20 +191,20 @@ const BookGallery: React.FC<BookGalleryProps> = ({
       {!showOverlay && (
         <>
           {rebuilding && (
-            <div className="absolute bottom-20 left-4 z-10 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 text-white text-xs font-medium rounded-full shadow-lg backdrop-blur pointer-events-auto">
+            <div className="absolute bottom-20 left-4 z-10 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 text-white text-xs font-medium rounded-full shadow-lg backdrop-blur">
               <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               <span>Updating book… {progress.total > 0 && `${progress.done}/${progress.total}`}</span>
             </div>
           )}
 
           {skipped > 0 && !skipDismissed && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 text-white text-xs font-medium rounded-full shadow-lg backdrop-blur pointer-events-auto">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 text-white text-xs font-medium rounded-full shadow-lg backdrop-blur">
               <span>{skipped} item{skipped > 1 ? 's' : ''} couldn't be shown in the book</span>
               <button onClick={() => setSkipDismissed(true)} className="text-slate-400 hover:text-white ml-1">✕</button>
             </div>
           )}
 
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 pointer-events-auto">
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page <= 0}
