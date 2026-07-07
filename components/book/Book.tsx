@@ -17,7 +17,7 @@
 import { useCursor, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { easing } from 'maath';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bone,
   BoxGeometry,
@@ -214,7 +214,7 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
         setHighlighted(false);
       }}
     >
-      <primitive object={manualSkinnedMesh} ref={skinnedMeshRef} position-z={-number * PAGE_DEPTH + page * PAGE_DEPTH} />
+      <primitive object={manualSkinnedMesh} ref={skinnedMeshRef} position-z={leafZ(number, page)} />
     </group>
   );
 };
@@ -233,14 +233,15 @@ interface BookProps {
    missing `+ page * PAGE_DEPTH` z term) was the "frame lines floating behind
    the book" bug. Fix: bake the exact rest-pose curl into a static geometry
    once (linear blend skinning applied on the CPU with the same formulas). */
-const bakeRestGeometry = (T: number) => {
+const bakeRestGeometry = (T: number, amp = 1) => {
   // Per-level local rotations at rest (turningTime = 0, fold = 0) — the same
-  // formula Page uses in useFrame.
+  // formula Page uses in useFrame. `amp < 1` bakes a slightly FLATTER curl so
+  // stubs sit strictly inside the bow of the real pages above them.
   const rot: number[] = [];
   for (let i = 0; i <= PAGE_SEGMENTS; i++) {
     const inside = i < 8 ? Math.sin(i * 0.2 + 0.25) : 0;
     const outside = i >= 8 ? Math.cos(i * 0.3 + 0.09) : 0;
-    rot.push(insideCurveStrength * inside * T - outsideCurveStrength * outside * T);
+    rot.push((insideCurveStrength * inside * T - outsideCurveStrength * outside * T) * amp);
   }
   // Accumulate the bone chain: world origin + accumulated Y-angle per bone.
   const angles: number[] = [];
@@ -286,8 +287,21 @@ const bakeRestGeometry = (T: number) => {
 };
 
 // Baked once at module load: rest curl for unopened (+90°) and opened (−90°).
-const closedRestGeometry = bakeRestGeometry(Math.PI / 2);
-const openedRestGeometry = bakeRestGeometry(-Math.PI / 2);
+// Stubs are baked 10% flatter so they tuck inside the real pages' bow.
+const closedRestGeometry = bakeRestGeometry(Math.PI / 2, 0.9);
+const openedRestGeometry = bakeRestGeometry(-Math.PI / 2, 0.9);
+
+/* Stack position of a leaf. The base formula is the prototype's; the cushion
+   adds extra clearance for the top few leaves of each stack so the textured
+   pages right beneath the open spread can never intersect it (the "stripes"
+   artifact on thick books). Applied directly as a prop — no easing — so it
+   can never cause transient crossings. */
+const leafZ = (number: number, page: number) => {
+  const stackZ = (page - number) * PAGE_DEPTH;
+  const sideIdx = number >= page ? number - page : page - 1 - number; // 0 = top of its side
+  const cushion = Math.min(3, sideIdx) * PAGE_DEPTH;
+  return number >= page ? stackZ - cushion : stackZ + cushion;
+};
 
 const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
   number: number; opened: boolean; page: number; totalPages: number; bookClosed: boolean;
@@ -304,7 +318,7 @@ const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
         geometry={geometry}
         material={pageMaterials as any}
         scale={[0.998, 0.998, 1]}
-        position-z={-number * PAGE_DEPTH + page * PAGE_DEPTH}
+        position-z={leafZ(number, page)}
         frustumCulled={false}
       />
     </group>
@@ -338,7 +352,9 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
   const bookClosed = delayedPage === 0 || delayedPage === pages.length;
 
   // Books up to prototype scale render every leaf for real — zero stubs.
-  const windowSize = pages.length <= 24 ? pages.length : 5;
+  // Big books keep a tight ±2 window: only the leaves at the spread carry
+  // textures (deeper textured leaves were the source of the "stripes").
+  const windowSize = pages.length <= 24 ? pages.length : 2;
 
   return (
     <group {...props} rotation-y={-Math.PI / 2}>
@@ -346,31 +362,33 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
         const near =
           Math.abs(index - delayedPage) <= windowSize ||
           Math.abs(index + 1 - delayedPage) <= windowSize;
-        if (!near) {
-          return (
-            <FarPage
-              key={index}
-              number={index}
-              opened={delayedPage > index}
-              page={delayedPage}
-              totalPages={pages.length}
-              bookClosed={bookClosed}
-            />
-          );
-        }
-        return (
-          <Page
-            key={index}
-            page={delayedPage}
+        const stub = (
+          <FarPage
             number={index}
-            front={leaf.front}
-            back={leaf.back}
             opened={delayedPage > index}
-            bookClosed={bookClosed}
+            page={delayedPage}
             totalPages={pages.length}
-            riffle={riffle}
-            setPage={setPage}
+            bookClosed={bookClosed}
           />
+        );
+        if (!near) return <React.Fragment key={index}>{stub}</React.Fragment>;
+        // Per-page Suspense: while a newly-promoted page decodes its textures
+        // it renders as its own stub. A single book-wide boundary here used to
+        // blank the ENTIRE book for a frame on every page turn.
+        return (
+          <Suspense key={index} fallback={stub}>
+            <Page
+              page={delayedPage}
+              number={index}
+              front={leaf.front}
+              back={leaf.back}
+              opened={delayedPage > index}
+              bookClosed={bookClosed}
+              totalPages={pages.length}
+              riffle={riffle}
+              setPage={setPage}
+            />
+          </Suspense>
         );
       })}
     </group>
