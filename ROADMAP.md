@@ -1,72 +1,91 @@
-# Aether Gallery — Book, Round 2
+# Aether Gallery — Launch Sprint
 
-*Fable, 2026-07-06 (late). I browsed the DEPLOYED book firsthand (demo gallery, 290 items → 72 leaves, layout switching, page jumps, orbiting). The One-Fell-Swoop sprint (`25b984c`) is live and helped — cover shows item 1 with the title, progress bar works, gutter is white — but four real defects remain. Every one is reproduced and root-caused below. Previous guardrails still apply (see git history of this file).*
+*Fable, 2026-07-07. Four phases to public launch, ordered so each is shippable alone. P1/P2 are minutes, P3 is an hour, P4 is the real feature. Standing guardrails from git history still apply (no per-frame camera writes, galleryItems is the save source of truth, book flip math is prototype-locked — tune only constants).*
 
-## What I reproduced on gallery3-d.vercel.app
-
-1. **Click-teleport:** I clicked ~4px off the "next" arrow, hit a background page mesh, and the book jumped Cover → 14/72. Any page anywhere on screen is clickable and teleports to its own position. With 72 fanned leaves, stray clicks are constant.
-2. **The "thin pixel-wide frame floating behind the book"** (Eyal's report — confirmed): the `FarPage` placeholder stubs are FLAT rotated planes, while the real near pages are bone-CURVED. Flat stubs are effectively longer than their curved neighbours, so their tips stick out past the curved stack and read as detached pixel-thin blades/frames floating behind and beside the book. Zoomed screenshots show the stub tips protruding well past the textured pages.
-3. **Stacks read as venetian blinds, not a book block:** turned/unturned stacks show visible air between leaves (fan is 0.4°/leaf, clamp ±6°) — at grazing angles that's a striped slab hovering in space.
-4. **Open-book framing is wrong:** the default camera + fixed −45° tilt look great for the CLOSED cover, but an open spread presents as a steep "V" seen at a grazing angle — pages look like waving flags and half the composition is off-screen. (This, not page curvature, is why art looks warped at rest.)
-5. **Post-build blank:** after the progress bar finishes, leaves exist but texture decode/upload leaves an EMPTY scene for several seconds (nav says "Cover", no book). The progress overlay unmounts too early.
-6. **Console: `THREE.WebGLRenderer: Context Lost`** when switching Sphere→Book — two separate `<Canvas>` instances churn WebGL contexts. Risky (some browsers never restore) and it's the likely source of occasional all-white scenes.
+**Known issue accepted for launch:** occasional page intersection in very thick books. Covered by the Beta badge (P1); revisit post-launch (next lever: raise the `leafZ` cushion from 3→5 leaves, or bump `fanDegPerLeaf` total cap 12°→16°).
 
 ---
 
-## R1 — Only the current spread is clickable *(XS, `components/book/Book.tsx`)*
+## P1 — "Beta" tag on the Book toggle *(XS)*
 
-In `Page`'s `onClick` (and the hover-highlight handlers): ignore unless the page is adjacent to the current spread:
+Both places the Book layout is offered:
+1. `App.tsx` header pill (the `onClick={() => setViewMode('book')}` button): render `Book` plus a tiny superscript chip inside the button:
+   ```jsx
+   Book <span className="ml-0.5 text-[8px] font-black uppercase tracking-wide text-amber-500 align-super">beta</span>
+   ```
+   (When the button is active/dark, amber-400 stays legible — verify contrast in both states.)
+2. `components/BuilderModal.tsx` Look tab — the Book layout card gets the same chip next to its label.
 
+Accept: both Book buttons show a small "beta" that doesn't change button height; screenshot both states.
+
+## P2 — Demo gallery carries Eyal's contact *(XS)*
+
+In `App.tsx` → `syncFromQuery`, the no-param fallback branch (`setGalleryItems(buildDefaultMediaItems())`) additionally sets:
 ```ts
-const clickable = number === page || number === page - 1; // forward flip or back flip
+setContactWhatsapp('97236030603');
+setContactEmail('eyalizenman@gmail.com');
 ```
+ONLY in that branch — `handleStartNew` and loaded galleries must stay untouched (verify: Start New clears both; loading a saved gallery shows its own contacts). The existing Contact bubble (bottom-right) then offers WhatsApp + Email on the demo.
 
-`onClick`: `if (!clickable) return;` before the existing `setPage(...)`. `onPointerEnter`: only `setHighlighted(true)` when `clickable`.
-**Accept:** clicking any distant stack/leaf does nothing; clicking the right page turns forward, left page turns back; cursor only becomes pointer over the current spread.
+Accept: fresh visit → demo gallery → Contact shows both channels; Start New → contact empty.
 
-## R2 — Kill the floating thin frames *(S, `components/book/Book.tsx`)*
+## P3 — Terms of Service + Accessibility Statement *(S)*
 
-`FarPage` stubs must never protrude past curved real pages:
-1. Scale stubs down slightly and tuck them: on the `<mesh>` add `scale={[0.965, 0.985, 1]}` (x shrink hides the tip behind curved neighbours; the bone curve shortens a real page's projected length by ~2–3%).
-2. Give stubs a tighter fan than real pages: `const fan = Math.max(-2, Math.min(2, (number - page) * 0.15));`
-3. Stubs already use the plain white materials — keep that.
+**Content note for Eyal: these are drafts, not legal advice — have a lawyer glance before launch (and consider a Hebrew version; Israeli regulations expect an accessibility statement for local service sites).**
 
-**Accept:** orbit all around a 72-leaf book at any page — no white blade/outline extends past the textured page edges; the stack silhouette is a clean block.
+1. New `components/LegalModal.tsx`: a modal with two tabs ("Terms", "Accessibility"), scrollable prose, opened via `?page=terms` / `?page=accessibility` deep links AND footer links. Add links in: `Landing.tsx` footer (small, under the how-it-works strip) and BuilderModal Support tab.
+2. **Terms draft — key clauses** (write as readable prose, not legalese):
+   - Aether Gallery displays media from links users paste; it does not host, copy, or store the media itself — galleries are collections of references, like sharing a playlist.
+   - Users are solely responsible for content they link and share, must hold the rights to it, and must not link unlawful, infringing, or harmful material.
+   - We do not pre-screen or monitor linked content and are not responsible for it (analogous to any platform displaying user-shared URLs); we may remove galleries or accounts on notice of abuse, at our discretion.
+   - Takedown/abuse contact: eyalizenman@gmail.com — include what to send (gallery link + reason).
+   - Service is provided "as is", no warranty; features may change; accounts violating the terms may be removed.
+   - Privacy line: we store your email (login), profile, and galleries in Supabase (EU region); no ads, no selling data; view counters are anonymous.
+3. **Accessibility statement draft**: commitment to WCAG 2.1 AA where feasible; honest statement that the 3D layouts (sphere/carousel/book) are visual experiences not fully screen-reader accessible, and that **Masonry is the accessible alternative** (semantic DOM, keyboard scrolling, alt text from item titles); lightbox reachable by click; known gaps (keyboard navigation of 3D scenes) and the contact for accessibility issues (same email). While in there: give the lightbox close button an `aria-label`, the layout pills `aria-pressed`, and item titles as `alt` (mostly already done).
 
-## R3 — Tighten the leaf fan globally *(XS, `components/book/Book.tsx`)*
+Accept: `?page=terms` opens the modal directly; both texts render on mobile; links visible on Landing without scrolling past the fold on desktop.
 
-In `Page` (line ~151): `(number - page) * 0.4` clamp ±6 → `(number - page) * 0.15` clamp **±3**. (R2 already sets stubs to 0.15/±2.) The stacks should read as one solid book block with a whisper of separation, not blinds.
+## P4 — Gallery feedback: a quiet communication hub *(M — the real feature)*
 
-## R4 — Frame the open book properly *(M, `components/BookGallery.tsx` + `Book.tsx`)*
+Design goals from Eyal, translated: logged-in users can leave thoughts on any **saved** gallery; messages are **private to the gallery owner by default**; a message appears publicly only when BOTH the author allowed it and the owner chose to display it; **no emails ever**; it should feel like a guestbook, not a comment section.
 
-The fixed `−45°` Float tilt suits a closed cover (poster look) but presents an open spread edge-on.
-1. Replace the static tilt with a state-driven one: in `Book`, wrap everything in an inner `<group ref={tiltRef}>`; each frame `easing.dampAngle(tiltRef.current.rotation, 'x', bookClosed ? -Math.PI / 5 : -Math.PI / 2.6, 0.4, delta)` — closed ≈ −36° (upright cover), open ≈ −69° (album lying toward the viewer). Remove `rotation-x` from the `<Float>` in `BookGallery`.
-2. Camera & controls (`BookGallery`): `camera={{ position: [0, 1.7, 3.1], fov: 45 }}`; OrbitControls `target={[0, 0.2, 0]}` `minPolarAngle={0.4}` `maxPolarAngle={Math.PI / 2.4}` `minDistance={1.8}` `maxDistance={7}`.
-3. These numbers are starting points — tune by eye in `npm run dev`. **Accept:** at default view, BOTH pages of an open spread face the viewer (no grazing angle, art clearly readable); the closed cover still presents nicely; you can never orbit under the book.
+### P4a — Schema + RLS (migration on the Aether Supabase project, `ojdskkpiwwvdzmtkoxvv`)
+```sql
+create table public.gallery_feedback (
+  id uuid primary key default gen_random_uuid(),
+  gallery_id uuid not null references public.galleries(id) on delete cascade,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(body) between 1 and 2000),
+  author_allows_public boolean not null default false, -- author: "owner may display this"
+  owner_published boolean not null default false,      -- owner: "display on my gallery"
+  created_at timestamptz not null default now()
+);
+alter table public.gallery_feedback enable row level security;
+```
+Policies (write them exactly; then run `get_advisors` security):
+- INSERT: `auth.uid() = author_id` (authenticated role only).
+- SELECT: `auth.uid() = author_id` OR `auth.uid() = (select owner_id from galleries g where g.id = gallery_id)` OR `(author_allows_public and owner_published)`.
+- UPDATE (owner flips `owner_published` only — enforce via a column-limited policy or a `security definer` RPC `set_feedback_published(feedback_id, published)` that checks gallery ownership; the RPC is simpler and safer): owner of the gallery.
+- UPDATE (author edits `body`/`author_allows_public` on own message within… keep simple: author can update own rows).
+- DELETE: author OR gallery owner.
+- Regenerate `types/supabase.ts` via MCP `generate_typescript_types`.
 
-## R5 — No blank between progress bar and first frame *(S, `components/BookGallery.tsx`)*
+### P4b — Client API (`supabaseClient.ts`)
+`listPublicFeedback(galleryId)` (public rows, with author profile join), `listFeedbackForOwner(galleryId)`, `sendFeedback(galleryId, body, allowsPublic)`, `setFeedbackPublished(id, published)` (RPC), `deleteFeedback(id)`. Follow the existing function style; every function guards `if (!supabase) …`.
 
-Textures decode AFTER `leaves` resolves, so the overlay unmounts while the scene is still empty.
-1. Create a tiny bridge inside the Canvas: `const Ready = ({ onReady }: { onReady: () => void }) => { const { active } = useProgress(); useEffect(() => { if (!active) onReady(); }, [active, onReady]); return null; };` (`useProgress` from drei tracks texture loading.)
-2. `const [firstFrameReady, setFirstFrameReady] = useState(false);` — mount `<Ready onReady={() => setFirstFrameReady(true)} />` in the scene; keep the full-screen progress overlay rendered (absolutely positioned OVER the Canvas, don't unmount the Canvas) until `leaves && firstFrameReady`. Show the bar at 100% with "Opening…" during the gap.
-**Accept:** from clicking "Book" to seeing the cover there is never an empty scene; the overlay dissolves straight into the rendered book.
+### P4c — Viewer side: "Leave a note" drawer
+- In the gallery header (App.tsx), next to Explore, show a small "Notes" button only when `savedGalleryId` exists.
+- Drawer (right side, like the builder's visual language): top = published notes (author name + text, newest first, empty-state: "No public notes yet"); bottom = compose box for signed-in users with a checkbox **"Allow the owner to share this note publicly"** (default OFF) and copy above it: *"Your note goes privately to the gallery owner."* Signed-out users see a sign-in nudge instead of the composer.
+- After send: clear box, toast "Sent to the gallery owner". No other notification of any kind.
 
-## R6 — One WebGL context for all 3D layouts *(M, structural — do last)*
+### P4d — Owner side: inbox in the builder
+- New "Notes" tab in BuilderModal (only when signed in): list of the CURRENT gallery's feedback — private ones marked 🔒, each with: publish toggle (disabled with tooltip "Author kept this private" unless `author_allows_public`), delete.
+- Small unread affordance: show count of notes newer than `localStorage['notesSeen:<galleryId>']`; update on open. (localStorage is fine here — it's a nicety, not state of record.)
 
-`App.tsx` unmounts the sphere/carousel `<Canvas>` and `BookGallery` mounts its own → `THREE.WebGLRenderer: Context Lost` in console (reproduced by switching Sphere→Book). Move the book INTO the main Canvas:
-1. In `App.tsx`, render one `<Canvas>` for `viewMode !== 'tile'`; inside it: `viewMode === 'book' ? <BookScene …/> : <GalleryScene …/>`.
-2. `BookGallery` becomes a thin DOM wrapper: build-leaves state machine + progress overlay + nav buttons + skipped pill (all already DOM), passing `leaves/page/setPage` down; export `BookScene` from it.
-3. Book needs `shadows` and its own camera position — set camera via a small `CameraRig` component that eases `camera.position` between the sphere default `[0,0,65]` and the book default `[0,1.7,3.1]` on mode change (`easing.damp3`), and toggle `gl.shadowMap.enabled` accordingly. Lights/Environment: render the book's studio lights only in book mode.
-**Accept:** switching Sphere↔Carousel↔Book repeatedly logs zero `Context Lost`, book shadows still render, sphere unchanged.
-
-## R7 — Long jumps: snap, don't riffle 30 leaves *(S, `components/book/Book.tsx`)*
-
-Even flat riffles look chaotic beyond ~10 leaves (reproduced: Cover→14 fills the screen with mid-air pages). In the `goToPage` walker: when `Math.abs(page - dp) > 6`, return `page > dp ? page - 3 : page + 3` in ONE step (instant, no timeout), then let the existing 30/150ms walk animate only the last 3 turns.
-**Accept:** pager jump Cover→End animates ~3 clean turns; nothing fans mid-air.
+Accept (full flow, two accounts): user B leaves a private note on A's gallery → B sees it in their own view only, A sees it in the inbox, anonymous visitors see nothing; B leaves a second note with "allow public" → A publishes it → visible to signed-out visitors in the drawer; A cannot publish the first note; deletes work both sides; `get_advisors` shows no new security findings; no email is sent anywhere.
 
 ---
 
 ## Order & verification
 
-`R1 → R3 → R2 → R7 → R5 → R4 → R6` (R6 last — it moves code the others touch).
-Every task: `npx tsc --noEmit`, `npx vite build`, then in `npm run dev` check the demo gallery (~290 items, perPage 4) AND a 6-item gallery: cover → jump to middle → orbit fully around → jump to End → back to Cover. Zero console errors, no blades/frames outside the book silhouette, no blank scenes. R4/R6 additionally: switch all four layouts back and forth five times.
+P1 → P2 → P3 → P4 (a→d strictly). Each phase: `npx tsc --noEmit` + `npx vite build` green, then manual check of that phase's Accept line. P4a additionally: `get_advisors` (security) before and after. Ship P1–P3 immediately; P4 behind a normal deploy when the full Accept flow passes.
