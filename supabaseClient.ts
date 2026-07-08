@@ -239,3 +239,71 @@ export const incrementViews = async (slug: string) => {
     /* view counting is best-effort — never block the UI */
   }
 };
+
+/* ============================================================
+   🔹 GALLERY NOTES (P4 — visitor feedback hub)
+   ============================================================ */
+
+export interface GalleryNote {
+  id: string;
+  gallery_id: string;
+  author_id: string | null;
+  author_name: string | null;
+  body: string;
+  allow_share: boolean;
+  published: boolean;
+  read_by_owner: boolean;
+  created_at: string;
+}
+
+const notes = () => (supabase as any).from('gallery_notes');
+
+export const postGalleryNote = async (
+  galleryId: string,
+  note: { author_name?: string; body: string; allow_share: boolean },
+  session: Session | null,
+) => {
+  if (!supabase) throw new Error('Supabase not configured.');
+  const { error } = await notes().insert({
+    gallery_id: galleryId,
+    author_id: session?.user?.id ?? null,
+    author_name: note.author_name ?? null,
+    body: note.body,
+    allow_share: note.allow_share,
+  });
+  if (error) throw error;
+};
+
+export const listGalleryNotes = async (galleryId: string): Promise<GalleryNote[]> => {
+  if (!supabase) return [];
+  const { data, error } = await notes()
+    .select('*')
+    .eq('gallery_id', galleryId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []) as GalleryNote[];
+};
+
+export const countUnreadNotes = async (galleryId: string): Promise<number> => {
+  if (!supabase) return 0;
+  const { count, error } = await notes()
+    .select('*', { count: 'exact', head: true })
+    .eq('gallery_id', galleryId)
+    .eq('read_by_owner', false);
+  if (error) return 0;
+  return count ?? 0;
+};
+
+export const markNotesRead = async (galleryId: string) => {
+  if (!supabase) return;
+  await notes()
+    .update({ read_by_owner: true })
+    .eq('gallery_id', galleryId)
+    .eq('read_by_owner', false);
+};
+
+export const publishNote = async (noteId: string, published: boolean) => {
+  if (!supabase) return;
+  const { error } = await notes().update({ published }).eq('id', noteId);
+  if (error) throw error;
+};

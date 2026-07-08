@@ -8,6 +8,8 @@ import BookGallery from './components/BookGallery';
 import BuilderModal from './components/BuilderModal';
 import Landing from './components/Landing';
 import Explore from './components/Explore';
+import TermsModal from './components/TermsModal';
+import NoteForm from './components/NoteForm';
 import {
   GalleryRecord,
   GallerySummary,
@@ -31,6 +33,8 @@ import {
   encodeGalleryParam,
   sanitizeWhatsapp,
   SHARE_INLINE_ITEM_LIMIT,
+  DEMO_CONTACT_EMAIL,
+  DEMO_CONTACT_WHATSAPP,
   MediaItem,
 } from './constants';
 
@@ -86,6 +90,11 @@ const App: React.FC = () => {
   // Phase 6.2: canvas "arrange" mode (drag/resize items). Kept separate from
   // the builder modal, which would otherwise cover the canvas and block drags.
   const [canvasEdit, setCanvasEdit] = useState(false);
+
+  const [termsOpen, setTermsOpen] = useState(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('page') === 'terms',
+  );
+  const [noteFormOpen, setNoteFormOpen] = useState(false);
 
   const flashInfo = useCallback((msg: string) => {
     setInfoToast(msg);
@@ -306,6 +315,8 @@ const App: React.FC = () => {
       }
 
       setGalleryItems(buildDefaultMediaItems());
+      setContactWhatsapp(DEMO_CONTACT_WHATSAPP);
+      setContactEmail(DEMO_CONTACT_EMAIL);
     };
 
     syncFromQuery();
@@ -634,7 +645,7 @@ const App: React.FC = () => {
                 }`}
                 onClick={() => setViewMode('book')}
               >
-                Book
+                Book<sup className="ml-0.5 text-[8px] font-bold text-amber-500">beta</sup>
               </button>
           </div>
           <button
@@ -662,6 +673,34 @@ const App: React.FC = () => {
              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
              Link Copied!
           </div>
+        )}
+      </div>
+
+      {/* Footer left — Terms + Accessibility + Note */}
+      <div className={`fixed bottom-8 left-8 z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <button
+          onClick={() => setTermsOpen(true)}
+          className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition"
+        >
+          Terms
+        </button>
+        <span className="text-slate-300 text-[10px]">·</span>
+        <button
+          onClick={() => setTermsOpen(true)}
+          className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition"
+        >
+          Accessibility
+        </button>
+        {galleryDbId && !selectedItem && (
+          <>
+            <span className="text-slate-300 text-[10px]">·</span>
+            <button
+              onClick={() => setNoteFormOpen(true)}
+              className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition"
+            >
+              Leave a note
+            </button>
+          </>
         )}
       </div>
 
@@ -742,6 +781,11 @@ const App: React.FC = () => {
         />
       )}
 
+      {termsOpen && <TermsModal onClose={() => setTermsOpen(false)} />}
+      {noteFormOpen && galleryDbId && (
+        <NoteForm galleryId={galleryDbId} session={session} onClose={() => setNoteFormOpen(false)} />
+      )}
+
       <BuilderModal
         isOpen={builderOpen}
         onClose={() => setBuilderOpen(false)}
@@ -778,6 +822,7 @@ const App: React.FC = () => {
         myGalleries={myGalleries}
         isLoadingMyGalleries={isLoadingMyGalleries}
         savedGalleryId={savedGalleryId}
+        galleryDbId={galleryDbId}
         isSupabaseConfigured={isSupabaseConfigured}
         isSaving={isSaving}
         loadError={loadError}

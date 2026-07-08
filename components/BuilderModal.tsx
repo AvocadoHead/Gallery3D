@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { GallerySummary, Visibility } from '../supabaseClient';
+import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, countUnreadNotes, markNotesRead, publishNote } from '../supabaseClient';
 import { MediaItem, CURATED_FONTS } from '../constants';
 
 const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
@@ -52,6 +52,7 @@ interface BuilderModalProps {
   myGalleries: GallerySummary[];
   isLoadingMyGalleries: boolean;
   savedGalleryId: string;
+  galleryDbId: string | null;
   isSupabaseConfigured: boolean;
   isSaving: boolean;
   loadError: string;
@@ -78,6 +79,12 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [visMenuOpen, setVisMenuOpen] = useState<string | null>(null);
+
+  // P4 — visitor notes
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notes, setNotes] = useState<GalleryNote[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotes, setLoadingNotes] = useState(false);
 
   const updateItem = (id: string, patch: Partial<MediaItem>) => {
     props.setGalleryItems(props.galleryItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -110,6 +117,30 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
         setActiveTab(props.initialTab);
     }
   }, [props.isOpen, props.initialTab]);
+
+  useEffect(() => {
+    if (!props.isOpen || !props.galleryDbId || !props.session) return;
+    countUnreadNotes(props.galleryDbId).then(setUnreadCount);
+  }, [props.isOpen, props.galleryDbId, props.session]);
+
+  const openNotes = async () => {
+    setNotesOpen(true);
+    if (!props.galleryDbId) return;
+    setLoadingNotes(true);
+    try {
+      const data = await listGalleryNotes(props.galleryDbId);
+      setNotes(data);
+      await markNotesRead(props.galleryDbId);
+      setUnreadCount(0);
+    } finally {
+      setLoadingNotes(false);
+    }
+  };
+
+  const togglePublish = async (note: GalleryNote) => {
+    await publishNote(note.id, !note.published);
+    setNotes((prev) => prev.map((n) => n.id === note.id ? { ...n, published: !n.published } : n));
+  };
 
   if (!props.isOpen) return null;
 
@@ -461,6 +492,51 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                 </div>
               )}
 
+              {/* P4: Visitor notes panel (owner only, when a gallery is loaded) */}
+              {props.session && props.galleryDbId && (
+                <div className="pt-4 border-t border-slate-200">
+                  <button
+                    onClick={notesOpen ? () => setNotesOpen(false) : openNotes}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                      Visitor Notes
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full">{unreadCount}</span>
+                      )}
+                      <svg className={`w-4 h-4 text-slate-400 transition-transform ${notesOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </span>
+                  </button>
+                  {notesOpen && (
+                    <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                      {loadingNotes ? (
+                        <p className="text-xs text-slate-400 text-center py-4">Loading…</p>
+                      ) : notes.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic text-center py-4">No notes yet.</p>
+                      ) : notes.map((note) => (
+                        <div key={note.id} className="bg-white border border-slate-100 rounded-xl p-3 space-y-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-bold text-slate-700">{note.author_name || 'Anonymous'}</p>
+                            <span className="text-[10px] text-slate-400">{new Date(note.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed">{note.body}</p>
+                          {note.allow_share && (
+                            <button
+                              onClick={() => togglePublish(note)}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition ${note.published ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                            >
+                              {note.published ? 'Published' : 'Publish'}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Visibility (Phase 2.1) — segmented, defaults to unlisted so links work */}
               <div className="pt-4 border-t border-slate-200">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Visibility</label>
@@ -508,7 +584,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <button onClick={() => props.setViewMode('sphere')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">◍</span>Sphere</button>
                   <button onClick={() => props.setViewMode('carousel')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'carousel' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">⟳</span>Carousel</button>
                   <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▦</span>Masonry</button>
-                  <button onClick={() => props.setViewMode('book')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'book' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">📖</span>Book</button>
+                  <button onClick={() => props.setViewMode('book')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'book' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">📖</span><span>Book<sup className="ml-0.5 text-[8px] font-bold text-amber-500">beta</sup></span></button>
                 </div>
               </div>
 
