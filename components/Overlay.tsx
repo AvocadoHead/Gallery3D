@@ -8,6 +8,8 @@ interface OverlayProps {
   artwork: MediaItem | null;
   onClose: () => void;
   titleDefaults?: { font?: string; size?: 'S' | 'M' | 'L' | 'XL'; color?: string };
+  galleryId?: string | null;
+  onCommentItem?: (item: MediaItem) => void;
 }
 
 // Helper to reliably extract Drive File ID
@@ -22,7 +24,7 @@ const extractDriveId = (url: string): string | null => {
   return null;
 };
 
-const Overlay: React.FC<OverlayProps> = ({ artwork, onClose, titleDefaults = {} }) => {
+const Overlay: React.FC<OverlayProps> = ({ artwork, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
   const [visible, setVisible] = useState(false);
   
   // 'loading' | 'image' | 'iframe'
@@ -231,6 +233,17 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose, titleDefaults = {} 
              )}
              {artwork.description && <p className="text-xs text-slate-300 mt-0.5">{artwork.description}</p>}
           </div>
+        )}
+
+        {/* Comment on this piece */}
+        {galleryId && onCommentItem && (
+          <button
+            onClick={() => onCommentItem(artwork)}
+            className="mt-3 pointer-events-auto flex items-center gap-1.5 px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white text-xs font-semibold border border-white/20 transition animate-in slide-in-from-bottom-4 duration-700"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            Comment on this piece
+          </button>
         )}
       </div>
     </div>

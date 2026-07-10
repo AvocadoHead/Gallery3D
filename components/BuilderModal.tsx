@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, countUnreadNotes, markNotesRead, publishNote } from '../supabaseClient';
+import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote } from '../supabaseClient';
 import { MediaItem, CURATED_FONTS } from '../constants';
 
 const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
@@ -53,6 +53,8 @@ interface BuilderModalProps {
   isLoadingMyGalleries: boolean;
   savedGalleryId: string;
   galleryDbId: string | null;
+  unreadByGallery: Record<string, number>;
+  onNotesRead: () => void;
   isSupabaseConfigured: boolean;
   isSaving: boolean;
   loadError: string;
@@ -119,9 +121,9 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   }, [props.isOpen, props.initialTab]);
 
   useEffect(() => {
-    if (!props.isOpen || !props.galleryDbId || !props.session) return;
-    countUnreadNotes(props.galleryDbId).then(setUnreadCount);
-  }, [props.isOpen, props.galleryDbId, props.session]);
+    if (!props.galleryDbId) return;
+    setUnreadCount(props.unreadByGallery[props.galleryDbId] ?? 0);
+  }, [props.unreadByGallery, props.galleryDbId]);
 
   const openNotes = async () => {
     setNotesOpen(true);
@@ -132,6 +134,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
       setNotes(data);
       await markNotesRead(props.galleryDbId);
       setUnreadCount(0);
+      props.onNotesRead();
     } finally {
       setLoadingNotes(false);
     }
@@ -265,6 +268,11 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                       <div className="space-y-3 pb-4">
                          {props.myGalleries.map((g) => (
                             <div key={g.id} className="bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:shadow-md transition relative">
+                               {(props.unreadByGallery[g.id] ?? 0) > 0 && (
+                                 <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center z-10">
+                                   {props.unreadByGallery[g.id]}
+                                 </span>
+                               )}
                                <div className="flex justify-between items-start mb-3">
                                   <div>
                                      <h4 className="text-sm font-bold text-slate-800 truncate max-w-[150px]">{g.display_name || 'Untitled'}</h4>
@@ -500,7 +508,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     className="flex items-center justify-between w-full text-left"
                   >
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                      Visitor Notes
+                      Visitor Comments
                     </span>
                     <span className="flex items-center gap-2">
                       {unreadCount > 0 && (
@@ -510,28 +518,53 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     </span>
                   </button>
                   {notesOpen && (
-                    <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                    <div className="mt-3 space-y-4 max-h-72 overflow-y-auto">
                       {loadingNotes ? (
                         <p className="text-xs text-slate-400 text-center py-4">Loading…</p>
                       ) : notes.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic text-center py-4">No notes yet.</p>
-                      ) : notes.map((note) => (
-                        <div key={note.id} className="bg-white border border-slate-100 rounded-xl p-3 space-y-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs font-bold text-slate-700">{note.author_name || 'Anonymous'}</p>
-                            <span className="text-[10px] text-slate-400">{new Date(note.created_at).toLocaleDateString()}</span>
+                        <p className="text-xs text-slate-400 italic text-center py-4">No comments yet.</p>
+                      ) : (() => {
+                        const galleryComments = notes.filter((n) => !n.item_id);
+                        const pieceComments = notes.filter((n) => n.item_id);
+                        const NoteCard = ({ note }: { note: typeof notes[0] }) => (
+                          <div key={note.id} className="bg-white border border-slate-100 rounded-xl p-3 space-y-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-bold text-slate-700">{note.author_name || 'Anonymous'}</p>
+                              <span className="text-[10px] text-slate-400">{new Date(note.created_at).toLocaleDateString()}</span>
+                            </div>
+                            {note.item_id && (
+                              <p className="text-[10px] text-blue-500 font-semibold">
+                                on: {props.galleryItems.find((i) => i.id === note.item_id)?.title || 'a piece'}
+                              </p>
+                            )}
+                            <p className="text-xs text-slate-600 leading-relaxed">{note.body}</p>
+                            {note.allow_share && (
+                              <button
+                                onClick={() => togglePublish(note)}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition ${note.published ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                              >
+                                {note.published ? 'Published' : 'Publish'}
+                              </button>
+                            )}
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed">{note.body}</p>
-                          {note.allow_share && (
-                            <button
-                              onClick={() => togglePublish(note)}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition ${note.published ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                            >
-                              {note.published ? 'Published' : 'Publish'}
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                        );
+                        return (
+                          <>
+                            {galleryComments.length > 0 && (
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Gallery comments ({galleryComments.length})</p>
+                                <div className="space-y-2">{galleryComments.map((n) => <NoteCard key={n.id} note={n} />)}</div>
+                              </div>
+                            )}
+                            {pieceComments.length > 0 && (
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Piece comments ({pieceComments.length})</p>
+                                <div className="space-y-2">{pieceComments.map((n) => <NoteCard key={n.id} note={n} />)}</div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

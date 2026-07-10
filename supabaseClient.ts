@@ -247,6 +247,7 @@ export const incrementViews = async (slug: string) => {
 export interface GalleryNote {
   id: string;
   gallery_id: string;
+  item_id: string | null;
   author_id: string | null;
   author_name: string | null;
   body: string;
@@ -260,12 +261,13 @@ const notes = () => (supabase as any).from('gallery_notes');
 
 export const postGalleryNote = async (
   galleryId: string,
-  note: { author_name?: string; body: string; allow_share: boolean },
+  note: { author_name?: string; body: string; allow_share: boolean; item_id?: string },
   session: Session | null,
 ) => {
   if (!supabase) throw new Error('Supabase not configured.');
   const { error } = await notes().insert({
     gallery_id: galleryId,
+    item_id: note.item_id ?? null,
     author_id: session?.user?.id ?? null,
     author_name: note.author_name ?? null,
     body: note.body,
@@ -284,16 +286,6 @@ export const listGalleryNotes = async (galleryId: string): Promise<GalleryNote[]
   return (data || []) as GalleryNote[];
 };
 
-export const countUnreadNotes = async (galleryId: string): Promise<number> => {
-  if (!supabase) return 0;
-  const { count, error } = await notes()
-    .select('*', { count: 'exact', head: true })
-    .eq('gallery_id', galleryId)
-    .eq('read_by_owner', false);
-  if (error) return 0;
-  return count ?? 0;
-};
-
 export const markNotesRead = async (galleryId: string) => {
   if (!supabase) return;
   await notes()
@@ -306,4 +298,19 @@ export const publishNote = async (noteId: string, published: boolean) => {
   if (!supabase) return;
   const { error } = await notes().update({ published }).eq('id', noteId);
   if (error) throw error;
+};
+
+/** Returns a map of galleryId → unread count for all galleries the signed-in
+ *  user owns. RLS enforces the ownership filter server-side. */
+export const getUnreadByGallery = async (): Promise<Record<string, number>> => {
+  if (!supabase) return {};
+  const { data, error } = await notes()
+    .select('gallery_id')
+    .eq('read_by_owner', false);
+  if (error) return {};
+  const result: Record<string, number> = {};
+  for (const row of (data || [])) {
+    result[row.gallery_id] = (result[row.gallery_id] || 0) + 1;
+  }
+  return result;
 };

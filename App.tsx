@@ -24,6 +24,7 @@ import {
   signInWithGoogle,
   signOut,
   supabase,
+  getUnreadByGallery,
 } from './supabaseClient';
 import {
   buildDefaultMediaItems,
@@ -96,6 +97,9 @@ const App: React.FC = () => {
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('page') === 'terms',
   );
   const [noteFormOpen, setNoteFormOpen] = useState(false);
+  const [noteFormItemId, setNoteFormItemId] = useState<string | undefined>(undefined);
+  const [noteFormItemTitle, setNoteFormItemTitle] = useState<string | undefined>(undefined);
+  const [unreadByGallery, setUnreadByGallery] = useState<Record<string, number>>({});
 
   const flashInfo = useCallback((msg: string) => {
     setInfoToast(msg);
@@ -205,6 +209,12 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const refreshUnread = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    const counts = await getUnreadByGallery();
+    setUnreadByGallery(counts);
+  }, [isSupabaseConfigured]);
+
   const refreshMyGalleries = useCallback(async (userId?: string) => {
     const uid = userId || session?.user?.id;
     if (!uid || !isSupabaseConfigured) return;
@@ -217,7 +227,8 @@ const App: React.FC = () => {
     } finally {
       setIsLoadingMyGalleries(false);
     }
-  }, [session, isSupabaseConfigured]);
+    refreshUnread();
+  }, [session, isSupabaseConfigured, refreshUnread]);
 
   // --- URL PARSING & LOADING ---
   const applyLoadedRecord = useCallback(
@@ -585,7 +596,17 @@ const App: React.FC = () => {
         {loadingRemote && <Loader />}
       </div>
 
-      <Overlay artwork={selectedItem} onClose={() => setSelectedItem(null)} titleDefaults={{ font: titleFont, size: titleSize }} />
+      <Overlay
+        artwork={selectedItem}
+        onClose={() => setSelectedItem(null)}
+        titleDefaults={{ font: titleFont, size: titleSize }}
+        galleryId={galleryDbId}
+        onCommentItem={(item) => {
+          setNoteFormItemId(item.id);
+          setNoteFormItemTitle(item.title);
+          setNoteFormOpen(true);
+        }}
+      />
 
       {/* Lightweight info toast (sign-out, share nudges, errors) */}
       {infoToast && (
@@ -599,12 +620,17 @@ const App: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => openBuilder('galleries')}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md"
+            className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors shadow-sm bg-white/50 backdrop-blur-md"
             aria-label="Open menu"
           >
             <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
+            {Object.values(unreadByGallery).reduce((a, b) => a + b, 0) > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                {Math.min(Object.values(unreadByGallery).reduce((a, b) => a + b, 0), 99)}
+              </span>
+            )}
           </button>
           
           <div className="cursor-pointer" onClick={() => window.location.href = window.location.origin}>
@@ -678,36 +704,24 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Footer left — Terms + Accessibility + Note */}
+      {/* Footer left — Terms + Accessibility */}
       <div className={`fixed bottom-8 left-8 z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        <button
-          onClick={() => setTermsOpen(true)}
-          className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition"
-        >
-          Terms
-        </button>
+        <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Terms</button>
         <span className="text-slate-300 text-[10px]">·</span>
-        <button
-          onClick={() => setTermsOpen(true)}
-          className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition"
-        >
-          Accessibility
-        </button>
-        {galleryDbId && !selectedItem && (
-          <>
-            <span className="text-slate-300 text-[10px]">·</span>
-            <button
-              onClick={() => setNoteFormOpen(true)}
-              className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition"
-            >
-              Leave a note
-            </button>
-          </>
-        )}
+        <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Accessibility</button>
       </div>
 
-      {/* Footer Contact */}
-      <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      {/* Footer right — Comment + Contact */}
+      <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        {galleryDbId && (
+          <button
+            onClick={() => { setNoteFormItemId(undefined); setNoteFormItemTitle(undefined); setNoteFormOpen(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition text-slate-600 text-sm font-medium border border-white"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            Comment
+          </button>
+        )}
         <div className="relative">
           <button
             onClick={() => setContactMenuOpen(!contactMenuOpen)}
@@ -785,7 +799,13 @@ const App: React.FC = () => {
 
       {termsOpen && <TermsModal onClose={() => setTermsOpen(false)} />}
       {noteFormOpen && galleryDbId && (
-        <NoteForm galleryId={galleryDbId} session={session} onClose={() => setNoteFormOpen(false)} />
+        <NoteForm
+          galleryId={galleryDbId}
+          itemId={noteFormItemId}
+          itemTitle={noteFormItemTitle}
+          session={session}
+          onClose={() => { setNoteFormOpen(false); setNoteFormItemId(undefined); setNoteFormItemTitle(undefined); }}
+        />
       )}
 
       <BuilderModal
@@ -825,6 +845,8 @@ const App: React.FC = () => {
         isLoadingMyGalleries={isLoadingMyGalleries}
         savedGalleryId={savedGalleryId}
         galleryDbId={galleryDbId}
+        unreadByGallery={unreadByGallery}
+        onNotesRead={refreshUnread}
         isSupabaseConfigured={isSupabaseConfigured}
         isSaving={isSaving}
         loadError={loadError}
