@@ -7,6 +7,8 @@ const MAX_SCALE = 8;
 
 interface OverlayProps {
   artwork: MediaItem | null;
+  items?: MediaItem[];
+  onNavigate?: (item: MediaItem) => void;
   onClose: () => void;
   titleDefaults?: { font?: string; size?: 'S' | 'M' | 'L' | 'XL'; color?: string };
   galleryId?: string | null;
@@ -24,7 +26,7 @@ const extractDriveId = (url: string): string | null => {
   return null;
 };
 
-const Overlay: React.FC<OverlayProps> = ({ artwork, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
+const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
   const [visible, setVisible] = useState(false);
   const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'iframe'>('loading');
 
@@ -41,6 +43,24 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose, titleDefaults = {},
 
   // Reset when artwork changes
   useEffect(() => { resetZoom(); }, [artwork, resetZoom]);
+
+  // Prev / next navigation
+  const currentIndex = artwork ? items.findIndex((i) => i.id === artwork.id) : -1;
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex >= 0 && currentIndex < items.length - 1;
+  const goTo = useCallback((index: number) => {
+    if (items[index] && onNavigate) onNavigate(items[index]);
+  }, [items, onNavigate]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' && hasPrev) goTo(currentIndex - 1);
+      if (e.key === 'ArrowRight' && hasNext) goTo(currentIndex + 1);
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [hasPrev, hasNext, currentIndex, goTo, onClose]);
 
   // Drive type detection
   useEffect(() => {
@@ -192,6 +212,30 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, onClose, titleDefaults = {},
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+
+        {/* Prev / Next chevrons */}
+        {hasPrev && (
+          <button
+            onClick={() => goTo(currentIndex - 1)}
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-auto p-3 rounded-full bg-white/10 text-white hover:bg-white/25 active:scale-95 transition z-50 backdrop-blur-md shadow-lg"
+            aria-label="Previous"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+        {hasNext && (
+          <button
+            onClick={() => goTo(currentIndex + 1)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-auto p-3 rounded-full bg-white/10 text-white hover:bg-white/25 active:scale-95 transition z-50 backdrop-blur-md shadow-lg"
+            aria-label="Next"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
 
         {/* Zoom hint */}
         {isZoomed && (

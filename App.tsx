@@ -599,6 +599,8 @@ const App: React.FC = () => {
 
       <Overlay
         artwork={selectedItem}
+        items={galleryItems}
+        onNavigate={setSelectedItem}
         onClose={() => setSelectedItem(null)}
         titleDefaults={{ font: titleFont, size: titleSize }}
         galleryId={galleryDbId}
