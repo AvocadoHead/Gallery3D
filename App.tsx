@@ -752,9 +752,11 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* DONATION TOAST */}
-      {donationToast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-500">
+      {/* DONATION TOAST — sits below the header/toast row, clear of the bottom
+          Terms/Contact pills and the builder modal's own footer buttons
+          (both of which live at bottom-8 and used to collide with this). */}
+      {donationToast && view === 'gallery' && !builderOpen && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-in slide-in-from-top-4 fade-in duration-500">
            <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-white/10">
               <div className="text-sm">
                  <span className="block font-bold mb-0.5">Enjoying Aether? ⚡</span>

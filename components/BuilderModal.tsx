@@ -93,13 +93,20 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const driveItems = props.galleryItems
     .map((item) => ({ item, driveId: getDriveId(item.originalUrl) }))
     .filter((x): x is { item: MediaItem; driveId: string } => Boolean(x.driveId));
+  const uniqueDriveIds = Array.from(new Set(driveItems.map((d) => d.driveId)));
 
   const runSharingCheck = async () => {
-    if (driveItems.length === 0) return;
+    if (uniqueDriveIds.length === 0) return;
     setSharingCheck({ checking: true, results: {} });
-    const results = await checkMediaVisibility(driveItems.map((d) => d.driveId));
+    const results = await checkMediaVisibility(uniqueDriveIds);
     setSharingCheck({ checking: false, results });
   };
+
+  // Only ids that actually came back in the response were verified — a large
+  // gallery may exceed the function's per-request batch size, and those
+  // items should read as "not checked yet", never as silently fine.
+  const checkedIds = sharingCheck ? Object.keys(sharingCheck.results) : [];
+  const uncheckedCount = uniqueDriveIds.length - checkedIds.length;
 
   const privateDriveItems = sharingCheck
     ? driveItems.filter((d) => sharingCheck.results[d.driveId] === false)
@@ -413,20 +420,27 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     </button>
 
                     {sharingCheck && !sharingCheck.checking && (
-                      privateDriveItems.length > 0 ? (
-                        <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[13px] text-amber-900 leading-relaxed">
-                          <span className="font-bold">
-                            {privateDriveItems.length} of {driveItems.length} Drive link{driveItems.length === 1 ? '' : 's'} look{privateDriveItems.length === 1 ? 's' : ''} private —
-                          </span>{' '}
-                          visitors will see a broken image even though it may look fine to you, since
-                          you're signed into Google. In Google Drive, right-click each file →{' '}
-                          <b>Share → General access → Anyone with the link</b>, then check again.
-                        </div>
-                      ) : (
-                        <div className="mt-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[13px] text-emerald-900">
-                          All {driveItems.length} Drive link{driveItems.length === 1 ? '' : 's'} look publicly viewable. ✓
-                        </div>
-                      )
+                      <>
+                        {privateDriveItems.length > 0 ? (
+                          <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[13px] text-amber-900 leading-relaxed">
+                            <span className="font-bold">
+                              {privateDriveItems.length} of {checkedIds.length} checked Drive link{checkedIds.length === 1 ? '' : 's'} look{privateDriveItems.length === 1 ? 's' : ''} private —
+                            </span>{' '}
+                            visitors will see a broken image even though it may look fine to you, since
+                            you're signed into Google. In Google Drive, right-click each file →{' '}
+                            <b>Share → General access → Anyone with the link</b>, then check again.
+                          </div>
+                        ) : (
+                          <div className="mt-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[13px] text-emerald-900">
+                            All {checkedIds.length} checked Drive link{checkedIds.length === 1 ? '' : 's'} look publicly viewable. ✓
+                          </div>
+                        )}
+                        {uncheckedCount > 0 && (
+                          <div className="mt-2 text-[12px] text-slate-400">
+                            {uncheckedCount} link{uncheckedCount === 1 ? '' : 's'} not checked yet (large galleries are checked in batches) — run the check again to cover the rest.
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -682,8 +696,13 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                 </p>
               </div>
               {props.session && (
-                 <div className="pt-4 border-t border-slate-100">
-                    <button onClick={() => props.onSave({ asNew: true })} disabled={props.isSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition disabled:opacity-50">
+                 <div className="pt-4 border-t border-slate-100 space-y-2">
+                    {props.savedGalleryId && (
+                       <button onClick={() => props.onSave({ asNew: false })} disabled={props.isSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition disabled:opacity-50">
+                           {props.isSaving ? 'Updating...' : 'Update Current Gallery'}
+                       </button>
+                    )}
+                    <button onClick={() => props.onSave({ asNew: true })} disabled={props.isSaving} className="w-full py-3 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl font-bold text-sm shadow-sm transition disabled:opacity-50">
                         {props.isSaving ? 'Saving...' : 'Save as New Gallery'}
                     </button>
                  </div>
@@ -853,11 +872,6 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
         {/* Footer Actions (Editor/Look) */}
         {(activeTab === 'content' || activeTab === 'appearance') && (
             <div className="p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 z-10">
-                {props.session && props.savedGalleryId && activeTab === 'content' && (
-                    <button onClick={() => props.onSave({ asNew: false })} disabled={props.isSaving} className="w-full mb-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-100 transition shadow-sm">
-                        {props.isSaving ? 'Updating...' : 'Update Current Gallery'}
-                    </button>
-                )}
                 <button
                     onClick={handleShareFooterClick}
                     className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-lg hover:bg-slate-800 transition"
