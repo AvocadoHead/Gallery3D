@@ -196,13 +196,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     setShareMenuOpen(null);
   };
 
-  const handleShareFooterClick = async () => {
-    try {
-        props.onCopyLink(); 
-        setShareMenuOpen('footer');
-    } catch (err) {
-        setShareMenuOpen('footer');
-    }
+  const handleShareFooterClick = () => {
+    setShareMenuOpen(shareMenuOpen === 'footer' ? null : 'footer');
   };
 
   const handleCreateNew = () => {
@@ -814,18 +809,34 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                         {props.isSaving ? 'Updating...' : 'Update Current Gallery'}
                     </button>
                 )}
-                <div className="relative">
-                    <button onClick={handleShareFooterClick} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-lg hover:bg-slate-800 transition">
-                        <IconShare /> Share Gallery
-                    </button>
-                    {shareMenuOpen === 'footer' && (
-                        <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
-                            <button onClick={() => { const link = props.getShareLink(); window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100"><span className="text-[#25D366] text-lg">📱</span> WhatsApp</button>
-                            <button onClick={() => { const link = props.getShareLink(); window.location.href = `mailto:?subject=Gallery&body=${encodeURIComponent(link)}`; setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3"><span className="text-blue-600 text-lg">✉️</span> Email</button>
-                        </div>
-                    )}
-                </div>
+                <button
+                    onClick={handleShareFooterClick}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-lg hover:bg-slate-800 transition"
+                >
+                    <IconShare /> Share Gallery
+                </button>
             </div>
+        )}
+
+        {/* Share menu — rendered outside the footer so it floats freely without obscuring anything */}
+        {shareMenuOpen === 'footer' && (
+            <>
+                <div className="fixed inset-0 z-40" onClick={() => setShareMenuOpen(null)} />
+                <div className="absolute bottom-20 left-4 right-4 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 fade-in">
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Share via</span>
+                        <button onClick={() => setShareMenuOpen(null)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <button onClick={() => { const link = props.getShareLink(); window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100">
+                        <span className="text-[#25D366] text-lg">📱</span> WhatsApp
+                    </button>
+                    <button onClick={() => { const link = props.getShareLink(); window.location.href = `mailto:?subject=Gallery&body=${encodeURIComponent(link)}`; setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3">
+                        <span className="text-blue-600 text-lg">✉️</span> Email
+                    </button>
+                </div>
+            </>
         )}
       </div>
     </div>
