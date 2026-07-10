@@ -4,10 +4,9 @@
    🔹 DEMO GALLERY CONTACT INFO
    ============================================================ */
 
-/** Shown in the Contact menu when a visitor is viewing the default demo gallery. */
+export const DEMO_DISPLAY_NAME = 'The Watercolor Series | En Masse';
 export const DEMO_CONTACT_EMAIL = 'eyalizenman@gmail.com';
-/** Fill in your WhatsApp number (digits only, with country code, e.g. '9725012345'). */
-export const DEMO_CONTACT_WHATSAPP = '';
+export const DEMO_CONTACT_WHATSAPP = '97236030603';
 
 /* ============================================================
    🔹 DEFAULT LINKS (PASTE YOUR OWN HERE)

@@ -33,6 +33,7 @@ import {
   encodeGalleryParam,
   sanitizeWhatsapp,
   SHARE_INLINE_ITEM_LIMIT,
+  DEMO_DISPLAY_NAME,
   DEMO_CONTACT_EMAIL,
   DEMO_CONTACT_WHATSAPP,
   MediaItem,
@@ -315,6 +316,7 @@ const App: React.FC = () => {
       }
 
       setGalleryItems(buildDefaultMediaItems());
+      setDisplayName(DEMO_DISPLAY_NAME);
       setContactWhatsapp(DEMO_CONTACT_WHATSAPP);
       setContactEmail(DEMO_CONTACT_EMAIL);
     };
