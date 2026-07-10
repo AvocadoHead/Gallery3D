@@ -100,6 +100,7 @@ const App: React.FC = () => {
   const [noteFormItemId, setNoteFormItemId] = useState<string | undefined>(undefined);
   const [noteFormItemTitle, setNoteFormItemTitle] = useState<string | undefined>(undefined);
   const [unreadByGallery, setUnreadByGallery] = useState<Record<string, number>>({});
+  const [autoOpenNotes, setAutoOpenNotes] = useState(false);
 
   const flashInfo = useCallback((msg: string) => {
     setInfoToast(msg);
@@ -627,9 +628,12 @@ const App: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
             {Object.values(unreadByGallery).reduce((a, b) => a + b, 0) > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              <button
+                onClick={(e) => { e.stopPropagation(); setAutoOpenNotes(true); openBuilder('content'); }}
+                className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 hover:bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center"
+              >
                 {Math.min(Object.values(unreadByGallery).reduce((a, b) => a + b, 0), 99)}
-              </span>
+              </button>
             )}
           </button>
           
@@ -810,8 +814,9 @@ const App: React.FC = () => {
 
       <BuilderModal
         isOpen={builderOpen}
-        onClose={() => setBuilderOpen(false)}
+        onClose={() => { setBuilderOpen(false); setAutoOpenNotes(false); }}
         initialTab={initialTab}
+        autoOpenNotes={autoOpenNotes}
         session={session}
         galleryItems={galleryItems}
         setGalleryItems={setGalleryItems}

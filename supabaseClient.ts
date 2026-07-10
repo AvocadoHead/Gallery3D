@@ -300,6 +300,12 @@ export const publishNote = async (noteId: string, published: boolean) => {
   if (error) throw error;
 };
 
+export const deleteGalleryNote = async (noteId: string) => {
+  if (!supabase) return;
+  const { error } = await notes().delete().eq('id', noteId);
+  if (error) throw error;
+};
+
 /** Returns a map of galleryId → unread count for all galleries the signed-in
  *  user owns. RLS enforces the ownership filter server-side. */
 export const getUnreadByGallery = async (): Promise<Record<string, number>> => {

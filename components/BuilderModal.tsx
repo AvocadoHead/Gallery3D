@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote } from '../supabaseClient';
+import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote, deleteGalleryNote } from '../supabaseClient';
 import { MediaItem, CURATED_FONTS } from '../constants';
 
 const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
@@ -55,6 +55,7 @@ interface BuilderModalProps {
   galleryDbId: string | null;
   unreadByGallery: Record<string, number>;
   onNotesRead: () => void;
+  autoOpenNotes?: boolean;
   isSupabaseConfigured: boolean;
   isSaving: boolean;
   loadError: string;
@@ -87,6 +88,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [notes, setNotes] = useState<GalleryNote[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [pendingNotesForGallery, setPendingNotesForGallery] = useState<string | null>(null);
 
   const updateItem = (id: string, patch: Partial<MediaItem>) => {
     props.setGalleryItems(props.galleryItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -125,6 +127,25 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     setUnreadCount(props.unreadByGallery[props.galleryDbId] ?? 0);
   }, [props.unreadByGallery, props.galleryDbId]);
 
+  // Auto-open notes when triggered via badge click (hamburger or gallery card).
+  // If no gallery is loaded yet, bounce to My Galleries so the user can see the badges.
+  useEffect(() => {
+    if (!props.isOpen) return;
+    if (props.autoOpenNotes && !props.galleryDbId) {
+      setActiveTab('galleries');
+      return;
+    }
+    const shouldOpen =
+      props.galleryDbId &&
+      !notesOpen &&
+      (props.autoOpenNotes || props.galleryDbId === pendingNotesForGallery);
+    if (shouldOpen) {
+      setPendingNotesForGallery(null);
+      setActiveTab('content');
+      openNotes();
+    }
+  }, [props.isOpen, props.autoOpenNotes, props.galleryDbId, pendingNotesForGallery]);
+
   const openNotes = async () => {
     setNotesOpen(true);
     if (!props.galleryDbId) return;
@@ -143,6 +164,12 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const togglePublish = async (note: GalleryNote) => {
     await publishNote(note.id, !note.published);
     setNotes((prev) => prev.map((n) => n.id === note.id ? { ...n, published: !n.published } : n));
+  };
+
+  const deleteNote = async (note: GalleryNote) => {
+    if (!window.confirm('Delete this comment?')) return;
+    await deleteGalleryNote(note.id);
+    setNotes((prev) => prev.filter((n) => n.id !== note.id));
   };
 
   if (!props.isOpen) return null;
@@ -269,9 +296,17 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                          {props.myGalleries.map((g) => (
                             <div key={g.id} className="bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:shadow-md transition relative">
                                {(props.unreadByGallery[g.id] ?? 0) > 0 && (
-                                 <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center z-10">
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     setPendingNotesForGallery(g.id);
+                                     props.onLoadGallery(g.slug || g.id);
+                                     setActiveTab('content');
+                                   }}
+                                   className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 hover:bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center z-10"
+                                 >
                                    {props.unreadByGallery[g.id]}
-                                 </span>
+                                 </button>
                                )}
                                <div className="flex justify-between items-start mb-3">
                                   <div>
@@ -527,25 +562,35 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                         const galleryComments = notes.filter((n) => !n.item_id);
                         const pieceComments = notes.filter((n) => n.item_id);
                         const NoteCard = ({ note }: { note: typeof notes[0] }) => (
-                          <div key={note.id} className="bg-white border border-slate-100 rounded-xl p-3 space-y-1">
+                          <div key={note.id} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
                             <div className="flex items-start justify-between gap-2">
-                              <p className="text-xs font-bold text-slate-700">{note.author_name || 'Anonymous'}</p>
-                              <span className="text-[10px] text-slate-400">{new Date(note.created_at).toLocaleDateString()}</span>
+                              <div>
+                                <p className="text-xs font-bold text-slate-700">{note.author_name || 'Anonymous'}</p>
+                                {note.item_id && (
+                                  <p className="text-[10px] text-blue-500 font-semibold">
+                                    on: {props.galleryItems.find((i) => i.id === note.item_id)?.title || 'a piece'}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 shrink-0">{new Date(note.created_at).toLocaleDateString()}</span>
                             </div>
-                            {note.item_id && (
-                              <p className="text-[10px] text-blue-500 font-semibold">
-                                on: {props.galleryItems.find((i) => i.id === note.item_id)?.title || 'a piece'}
-                              </p>
-                            )}
                             <p className="text-xs text-slate-600 leading-relaxed">{note.body}</p>
-                            {note.allow_share && (
+                            <div className="flex items-center gap-2 pt-1">
+                              {note.allow_share && (
+                                <button
+                                  onClick={() => togglePublish(note)}
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition ${note.published ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                >
+                                  {note.published ? '✓ Published' : 'Publish'}
+                                </button>
+                              )}
                               <button
-                                onClick={() => togglePublish(note)}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition ${note.published ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                onClick={() => deleteNote(note)}
+                                className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition"
                               >
-                                {note.published ? 'Published' : 'Publish'}
+                                Delete
                               </button>
-                            )}
+                            </div>
                           </div>
                         );
                         return (
