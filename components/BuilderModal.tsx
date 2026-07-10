@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote, deleteGalleryNote } from '../supabaseClient';
-import { MediaItem, CURATED_FONTS } from '../constants';
+import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote, deleteGalleryNote, checkMediaVisibility } from '../supabaseClient';
+import { MediaItem, CURATED_FONTS, getDriveId } from '../constants';
 
 const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
   { value: 'private', label: 'Private', icon: '🔒', hint: 'Only you can open it.' },
@@ -82,6 +82,28 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [visMenuOpen, setVisMenuOpen] = useState<string | null>(null);
+
+  // Sharing check — flags Google Drive items that look private (see
+  // supabaseClient.checkMediaVisibility for why this can't run client-only).
+  const [sharingCheck, setSharingCheck] = useState<{
+    checking: boolean;
+    results: Record<string, boolean | null>;
+  } | null>(null);
+
+  const driveItems = props.galleryItems
+    .map((item) => ({ item, driveId: getDriveId(item.originalUrl) }))
+    .filter((x): x is { item: MediaItem; driveId: string } => Boolean(x.driveId));
+
+  const runSharingCheck = async () => {
+    if (driveItems.length === 0) return;
+    setSharingCheck({ checking: true, results: {} });
+    const results = await checkMediaVisibility(driveItems.map((d) => d.driveId));
+    setSharingCheck({ checking: false, results });
+  };
+
+  const privateDriveItems = sharingCheck
+    ? driveItems.filter((d) => sharingCheck.results[d.driveId] === false)
+    : [];
 
   // P4 — visitor notes
   const [notesOpen, setNotesOpen] = useState(false);
@@ -379,6 +401,35 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   <button onClick={props.onAddMedia} className="flex-1 bg-slate-900 text-white py-2 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm hover:bg-black transition">Update ({props.galleryItemsCount})</button>
                   <button onClick={props.onClear} className="px-4 py-2 border border-slate-200 bg-white text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-50">Clear</button>
                 </div>
+
+                {driveItems.length > 0 && (
+                  <div className="mt-3">
+                    <button
+                      onClick={runSharingCheck}
+                      disabled={sharingCheck?.checking}
+                      className="w-full py-2 border border-slate-200 bg-white text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-50 disabled:opacity-50 transition"
+                    >
+                      {sharingCheck?.checking ? 'Checking sharing…' : 'Check that links are visible to others'}
+                    </button>
+
+                    {sharingCheck && !sharingCheck.checking && (
+                      privateDriveItems.length > 0 ? (
+                        <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[13px] text-amber-900 leading-relaxed">
+                          <span className="font-bold">
+                            {privateDriveItems.length} of {driveItems.length} Drive link{driveItems.length === 1 ? '' : 's'} look{privateDriveItems.length === 1 ? 's' : ''} private —
+                          </span>{' '}
+                          visitors will see a broken image even though it may look fine to you, since
+                          you're signed into Google. In Google Drive, right-click each file →{' '}
+                          <b>Share → General access → Anyone with the link</b>, then check again.
+                        </div>
+                      ) : (
+                        <div className="mt-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[13px] text-emerald-900">
+                          All {driveItems.length} Drive link{driveItems.length === 1 ? '' : 's'} look publicly viewable. ✓
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
               <div className="pt-4 border-t border-slate-200">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Gallery Info</label>

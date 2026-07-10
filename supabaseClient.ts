@@ -306,6 +306,34 @@ export const deleteGalleryNote = async (noteId: string) => {
   if (error) throw error;
 };
 
+/* ============================================================
+   🔹 SHARING / VISIBILITY CHECK
+   ============================================================ */
+
+/**
+ * Checks whether pasted Google Drive files will actually be visible to
+ * gallery visitors. This has to run server-side (no cookies) — if it ran
+ * from the owner's own browser, a private file the owner is logged into
+ * Google for would appear to load fine, hiding the exact problem this is
+ * meant to catch. Returns null per-id if the check itself couldn't be made
+ * (e.g. offline) rather than guessing.
+ */
+export const checkMediaVisibility = async (
+  driveIds: string[],
+): Promise<Record<string, boolean | null>> => {
+  if (!supabase || driveIds.length === 0) return {};
+  try {
+    const { data, error } = await supabase.functions.invoke('check-media-visibility', {
+      body: { driveIds },
+    });
+    if (error) throw error;
+    return (data?.results as Record<string, boolean | null>) || {};
+  } catch (err) {
+    console.warn('Visibility check failed', err);
+    return {};
+  }
+};
+
 /** Returns a map of galleryId → unread count for all galleries the signed-in
  *  user owns. RLS enforces the ownership filter server-side. */
 export const getUnreadByGallery = async (): Promise<Record<string, number>> => {
