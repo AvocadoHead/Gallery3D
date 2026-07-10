@@ -632,7 +632,7 @@ const App: React.FC = () => {
             {Object.values(unreadByGallery).reduce((a, b) => a + b, 0) > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); setAutoOpenNotes(true); openBuilder('content'); }}
-                className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 hover:bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center"
+                className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-violet-500 hover:bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center"
               >
                 {Math.min(Object.values(unreadByGallery).reduce((a, b) => a + b, 0), 99)}
               </button>

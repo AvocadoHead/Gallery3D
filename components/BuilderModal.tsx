@@ -135,12 +135,10 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
       setActiveTab('galleries');
       return;
     }
-    const shouldOpen =
-      props.galleryDbId &&
-      !notesOpen &&
-      (props.autoOpenNotes || props.galleryDbId === pendingNotesForGallery);
-    if (shouldOpen) {
+    const triggered = props.autoOpenNotes || props.galleryDbId === pendingNotesForGallery;
+    if (triggered && props.galleryDbId) {
       setPendingNotesForGallery(null);
+      setNotesOpen(false); // force re-open even if already open
       setActiveTab('content');
       openNotes();
     }
@@ -298,7 +296,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                      props.onLoadGallery(g.slug || g.id);
                                      setActiveTab('content');
                                    }}
-                                   className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 hover:bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center z-10"
+                                   className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-violet-500 hover:bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center z-10"
                                  >
                                    {props.unreadByGallery[g.id]}
                                  </button>
