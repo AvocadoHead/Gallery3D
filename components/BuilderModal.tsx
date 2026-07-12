@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote, deleteGalleryNote, checkMediaVisibility } from '../supabaseClient';
 import { MediaItem, CURATED_FONTS, getDriveId } from '../constants';
@@ -118,6 +118,20 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [pendingNotesForGallery, setPendingNotesForGallery] = useState<string | null>(null);
+  // When the owner clicks a per-item comment badge in the Edit list, we scroll
+  // the panel into view and highlight that piece's comments.
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
+  const notesRef = useRef<HTMLDivElement>(null);
+
+  // Unread comment count per piece, so the Item Details list can show a
+  // "new comment" badge next to the exact piece someone commented on.
+  const unreadByItem = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const n of notes) {
+      if (n.item_id && !n.read_by_owner) map[n.item_id] = (map[n.item_id] || 0) + 1;
+    }
+    return map;
+  }, [notes]);
 
   const updateItem = (id: string, patch: Partial<MediaItem>) => {
     props.setGalleryItems(props.galleryItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -173,20 +187,44 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     }
   }, [props.isOpen, props.autoOpenNotes, props.galleryDbId, pendingNotesForGallery]);
 
-  const openNotes = async () => {
-    setNotesOpen(true);
+  // Fetch comments for the loaded gallery WITHOUT marking them read — lets the
+  // Item Details list show per-piece "new comment" badges before the owner
+  // opens the panel.
+  const loadNotes = useCallback(async () => {
     if (!props.galleryDbId) return;
     setLoadingNotes(true);
     try {
-      const data = await listGalleryNotes(props.galleryDbId);
-      setNotes(data);
-      await markNotesRead(props.galleryDbId);
-      setUnreadCount(0);
-      props.onNotesRead();
+      setNotes(await listGalleryNotes(props.galleryDbId));
     } finally {
       setLoadingNotes(false);
     }
+  }, [props.galleryDbId]);
+
+  // Silently keep comments in sync whenever the owner has a gallery open, so the
+  // per-piece badges are accurate the moment they land on the Edit tab.
+  useEffect(() => {
+    if (props.isOpen && props.session && props.galleryDbId) loadNotes();
+  }, [props.isOpen, props.session, props.galleryDbId, loadNotes]);
+
+  // Opening the panel counts as "reviewed" → clear unread. An optional itemId
+  // scrolls to and highlights that piece's comments (badge → comment jump).
+  const openNotes = async (itemId?: string) => {
+    setNotesOpen(true);
+    setFocusItemId(itemId ?? null);
+    if (!props.galleryDbId) return;
+    await loadNotes();
+    await markNotesRead(props.galleryDbId);
+    setNotes((prev) => prev.map((n) => ({ ...n, read_by_owner: true })));
+    setUnreadCount(0);
+    props.onNotesRead();
   };
+
+  // Scroll the panel into view once it's open and a piece was targeted.
+  useEffect(() => {
+    if (notesOpen && focusItemId && !loadingNotes) {
+      notesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [notesOpen, focusItemId, loadingNotes]);
 
   const togglePublish = async (note: GalleryNote) => {
     await publishNote(note.id, !note.published);
@@ -506,6 +544,19 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                               <svg className={`w-4 h-4 text-slate-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                             </button>
 
+                            {/* New-comment badge → jumps to this piece's comments */}
+                            {(unreadByItem[item.id] ?? 0) > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openNotes(item.id); }}
+                                title="New comment — click to review"
+                                className="shrink-0 flex items-center gap-1 pl-1.5 pr-2 h-6 bg-violet-500 hover:bg-violet-600 text-white text-[10px] font-bold rounded-full transition animate-in zoom-in-95"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                                {unreadByItem[item.id]}
+                              </button>
+                            )}
+
                             {/* ▲▼ reorder buttons (mobile-friendly fallback) */}
                             <div className="flex flex-col gap-0.5 shrink-0">
                               <button
@@ -595,9 +646,9 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
 
               {/* P4: Visitor notes panel (owner only, when a gallery is loaded) */}
               {props.session && props.galleryDbId && (
-                <div className="pt-4 border-t border-slate-200">
+                <div ref={notesRef} className="pt-4 border-t border-slate-200">
                   <button
-                    onClick={notesOpen ? () => setNotesOpen(false) : openNotes}
+                    onClick={notesOpen ? () => setNotesOpen(false) : () => openNotes()}
                     className="flex items-center justify-between w-full text-left"
                   >
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
@@ -620,7 +671,14 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                         const galleryComments = notes.filter((n) => !n.item_id);
                         const pieceComments = notes.filter((n) => n.item_id);
                         const NoteCard = ({ note }: { note: typeof notes[0] }) => (
-                          <div key={note.id} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+                          <div
+                            key={note.id}
+                            className={`bg-white border rounded-xl p-3 space-y-2 transition ${
+                              note.item_id && note.item_id === focusItemId
+                                ? 'border-violet-400 ring-2 ring-violet-200'
+                                : 'border-slate-100'
+                            }`}
+                          >
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <p className="text-xs font-bold text-slate-700">{note.author_name || 'Anonymous'}</p>
