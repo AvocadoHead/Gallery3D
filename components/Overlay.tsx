@@ -28,7 +28,7 @@ const extractDriveId = (url: string): string | null => {
 
 const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
   const [visible, setVisible] = useState(false);
-  const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'iframe'>('loading');
+  const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'video' | 'iframe'>('loading');
   const [mediaReady, setMediaReady] = useState(false);
 
   // --- Zoom / pan state ---
@@ -79,8 +79,13 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     if (!GOOGLE_API_KEY) { setDriveMode('image'); return; }
 
     fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=mimeType&key=${GOOGLE_API_KEY}`)
-      .then((r) => r.json())
-      .then((d) => setDriveMode(d.mimeType?.startsWith('image/') ? 'image' : 'iframe'))
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`Drive mime probe failed: ${r.status}`)))
+      .then((d) => {
+        const mime = typeof d.mimeType === 'string' ? d.mimeType : '';
+        if (mime.startsWith('image/')) setDriveMode('image');
+        else if (mime.startsWith('video/')) setDriveMode('video');
+        else setDriveMode('iframe');
+      })
       .catch(() => setDriveMode('iframe'));
   }, [artwork]);
 
@@ -174,11 +179,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
       const id = extractDriveId(url) || extractDriveId((artwork as any).embedUrl);
       if (id) {
         if (driveMode === 'loading') return { type: 'loading' };
-        if (driveMode === 'image') {
+        if (driveMode === 'image' || driveMode === 'video') {
             const src = GOOGLE_API_KEY
               ? `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${GOOGLE_API_KEY}`
               : `https://drive.google.com/uc?export=view&id=${id}`;
-            return { type: 'image', src };
+            return driveMode === 'video' ? { type: 'video', src } : { type: 'image', src };
           }
         return { type: 'iframe', src: `https://drive.google.com/file/d/${id}/preview`, ratio: 'flexible' };
       }
@@ -298,6 +303,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
               style={mediaRevealStyle}
               onLoadedData={() => setMediaReady(true)}
               onCanPlay={() => setMediaReady(true)}
+              onError={() => { setMediaReady(false); if ((artwork as any).provider === 'gdrive') setDriveMode('iframe'); }}
             />
           ) : (
             /* Zoomable image */
