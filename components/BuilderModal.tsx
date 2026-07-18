@@ -5,11 +5,24 @@ import { MediaItem, CURATED_FONTS, getDriveId } from '../constants';
 
 const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
   { value: 'private', label: 'Private', icon: '🔒', hint: 'Only you can open it.' },
-  { value: 'unlisted', label: 'Unlisted', icon: '🔗', hint: 'Anyone with the link can view — not listed publicly.' },
+  { value: 'unlisted', label: 'Unlisted', icon: '🔗', hint: 'Anyone with the link can view. It is not listed publicly.' },
   { value: 'public', label: 'Public', icon: '🌐', hint: 'Shown on the public Explore page.' },
 ];
 
 const SIZE_OPTIONS: Array<'S' | 'M' | 'L' | 'XL'> = ['S', 'M', 'L', 'XL'];
+const COMMENTING_ENABLED = false;
+
+const LAYOUT_OPTIONS: Array<{
+  value: 'sphere' | 'carousel' | 'tile' | 'book';
+  icon: string;
+  label: string;
+  hint: string;
+}> = [
+  { value: 'sphere', icon: '◍', label: 'Sphere', hint: 'Floating cloud for immersive browsing.' },
+  { value: 'carousel', icon: '⟳', label: 'Carousel', hint: 'Clean sequence for small and medium sets.' },
+  { value: 'tile', icon: '▦', label: 'Masonry', hint: 'Flexible grid with resize and arrange tools.' },
+  { value: 'book', icon: '▱', label: 'Book', hint: 'Page-like presentation for curated series.' },
+];
 
 const IconGoogle = () => <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.64 2 12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c5.19 0 9.49-3.73 9.49-10c0-1.3-.15-2.29-.14-2.9z" /></svg>;
 const IconShare = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>;
@@ -45,6 +58,8 @@ interface BuilderModalProps {
   setMediaScale: (val: number) => void;
   sphereBase: number;
   setSphereBase: (val: number) => void;
+  tileGap: number;
+  setTileGap: (val: number) => void;
   titleFont: string;
   setTitleFont: (val: string) => void;
   titleSize: 'S' | 'M' | 'L' | 'XL';
@@ -173,6 +188,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   // Auto-open notes when triggered via badge click (hamburger or gallery card).
   // If no gallery is loaded yet, bounce to My Galleries so the user can see the badges.
   useEffect(() => {
+    if (!COMMENTING_ENABLED) return;
     if (!props.isOpen) return;
     if (props.autoOpenNotes && !props.galleryDbId) {
       setActiveTab('galleries');
@@ -191,7 +207,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   // Item Details list show per-piece "new comment" badges before the owner
   // opens the panel.
   const loadNotes = useCallback(async () => {
-    if (!props.galleryDbId) return;
+    if (!COMMENTING_ENABLED || !props.galleryDbId) return;
     setLoadingNotes(true);
     try {
       setNotes(await listGalleryNotes(props.galleryDbId));
@@ -203,7 +219,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   // Silently keep comments in sync whenever the owner has a gallery open, so the
   // per-piece badges are accurate the moment they land on the Edit tab.
   useEffect(() => {
-    if (props.isOpen && props.session && props.galleryDbId) loadNotes();
+    if (COMMENTING_ENABLED && props.isOpen && props.session && props.galleryDbId) loadNotes();
   }, [props.isOpen, props.session, props.galleryDbId, loadNotes]);
 
   // Opening the panel counts as "reviewed" → clear unread. An optional itemId
@@ -430,7 +446,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
             <div className="space-y-6">
               {/* Noob-friendly explainer */}
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-[13px] text-blue-900 leading-relaxed">
-                <span className="font-bold">New here?</span> Paste one link per line below — Google Drive
+                <span className="font-bold">New here?</span> Paste one link per line below. Google Drive
                 images, YouTube or Vimeo videos, or any direct image URL. Hit <b>Update</b> to see them
                 arrange into your 3D gallery, then <b>Share</b> to send it to anyone.
               </div>
@@ -462,7 +478,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                         {privateDriveItems.length > 0 ? (
                           <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[13px] text-amber-900 leading-relaxed">
                             <span className="font-bold">
-                              {privateDriveItems.length} of {checkedIds.length} checked Drive link{checkedIds.length === 1 ? '' : 's'} look{privateDriveItems.length === 1 ? 's' : ''} private —
+                              {privateDriveItems.length} of {checkedIds.length} checked Drive link{checkedIds.length === 1 ? '' : 's'} look{privateDriveItems.length === 1 ? 's' : ''} private.
                             </span>{' '}
                             visitors will see a broken image even though it may look fine to you, since
                             you're signed into Google. In Google Drive, right-click each file →{' '}
@@ -475,7 +491,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                         )}
                         {uncheckedCount > 0 && (
                           <div className="mt-2 text-[12px] text-slate-400">
-                            {uncheckedCount} link{uncheckedCount === 1 ? '' : 's'} not checked yet (large galleries are checked in batches) — run the check again to cover the rest.
+                            {uncheckedCount} link{uncheckedCount === 1 ? '' : 's'} not checked yet (large galleries are checked in batches). Run the check again to cover the rest.
                           </div>
                         )}
                       </>
@@ -545,7 +561,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                             </button>
 
                             {/* New-comment badge → jumps to this piece's comments */}
-                            {(unreadByItem[item.id] ?? 0) > 0 && (
+                            {COMMENTING_ENABLED && (unreadByItem[item.id] ?? 0) > 0 && (
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); openNotes(item.id); }}
@@ -645,7 +661,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               )}
 
               {/* P4: Visitor notes panel (owner only, when a gallery is loaded) */}
-              {props.session && props.galleryDbId && (
+              {COMMENTING_ENABLED && props.session && props.galleryDbId && (
                 <div ref={notesRef} className="pt-4 border-t border-slate-200">
                   <button
                     onClick={notesOpen ? () => setNotesOpen(false) : () => openNotes()}
@@ -779,11 +795,29 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Layout</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => props.setViewMode('sphere')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'sphere' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">◍</span>Sphere</button>
-                  <button onClick={() => props.setViewMode('carousel')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'carousel' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">⟳</span>Carousel</button>
-                  <button onClick={() => props.setViewMode('tile')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'tile' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">▦</span>Masonry</button>
-                  <button onClick={() => props.setViewMode('book')} className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 ${props.viewMode === 'book' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><span className="text-base">📖</span><span>Book<sup className="ml-0.5 text-[8px] font-bold text-amber-500">beta</sup></span></button>
+                <div className="grid grid-cols-1 gap-2">
+                  {LAYOUT_OPTIONS.map((opt) => {
+                    const active = props.viewMode === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => props.setViewMode(opt.value)}
+                        className={`group p-3 rounded-2xl text-left transition flex items-center gap-3 ${
+                          active
+                            ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/15 ring-1 ring-slate-900'
+                            : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 ${active ? 'bg-white/12' : 'bg-slate-100'}`}>{opt.icon}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-bold">
+                            {opt.label}{opt.value === 'book' && <sup className="ml-1 text-[8px] font-bold text-amber-400">beta</sup>}
+                          </span>
+                          <span className={`block mt-0.5 text-[11px] leading-5 ${active ? 'text-white/60' : 'text-slate-500'}`}>{opt.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -798,7 +832,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    <b>Grid</b> reflows items like a masonry — drag to reorder, resize each one.
+                    <b>Grid</b> reflows items like a masonry. Drag to reorder and resize each one.
                     <b> Free</b> lets you place, overlap, and group items anywhere, and add text.
                   </p>
                   {props.session ? (
@@ -823,7 +857,7 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    The book paginates your items in order. To reorder or resize them, arrange them in <b>Masonry</b> — the book follows that order.
+                    The book paginates your items in order. To reorder or resize them, arrange them in <b>Masonry</b>. The book follows that order.
                   </p>
                   {props.session && (
                     <button onClick={props.onEditLayout} className="w-full py-2.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-100/50 rounded-lg font-bold text-sm shadow-sm transition">
@@ -832,15 +866,35 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                   )}
                 </div>
               )}
-              <div className="space-y-6">
+              <div className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200 shadow-sm">
                  <div>
-                    <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Size</span><span className="text-xs text-slate-400">{Math.round(props.mediaScale * 100)}%</span></div>
-                    <input type="range" min="0.3" max="3.0" step="0.1" value={props.mediaScale} onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
+                    <div className="flex justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-700">Artwork size</span>
+                      <span className="text-xs font-semibold text-slate-400">{Math.round(props.mediaScale * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.35" max="2.6" step="0.05" value={props.mediaScale} onChange={(e) => props.setMediaScale(parseFloat(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
+                    <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                      Affects every layout. Per-piece S, M, L and XL overrides in Edit still add emphasis.
+                    </p>
                  </div>
                  {(props.viewMode === 'sphere' || props.viewMode === 'carousel') && (
                     <div>
-                        <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-700">Radius</span><span className="text-xs text-slate-400">{props.sphereBase}</span></div>
-                        <input type="range" min="10" max="150" step="5" value={props.sphereBase} onChange={(e) => props.setSphereBase(parseInt(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
+                        <div className="flex justify-between mb-2">
+                          <span className="text-xs font-bold text-slate-700">Spread</span>
+                          <span className="text-xs font-semibold text-slate-400">{props.sphereBase}</span>
+                        </div>
+                        <input type="range" min="12" max="120" step="2" value={props.sphereBase} onChange={(e) => props.setSphereBase(parseInt(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
+                        <p className="mt-2 text-[11px] leading-5 text-slate-500">Use more spread when cards feel crowded after increasing size.</p>
+                    </div>
+                 )}
+                 {props.viewMode === 'tile' && (
+                    <div>
+                        <div className="flex justify-between mb-2">
+                          <span className="text-xs font-bold text-slate-700">Grid gap</span>
+                          <span className="text-xs font-semibold text-slate-400">{props.tileGap}px</span>
+                        </div>
+                        <input type="range" min="0" max="80" step="2" value={props.tileGap} onChange={(e) => props.setTileGap(parseInt(e.target.value))} className="w-full accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
+                        <p className="mt-2 text-[11px] leading-5 text-slate-500">Tighter gaps feel editorial. Wider gaps keep mixed image and video sizes readable.</p>
                     </div>
                  )}
               </div>

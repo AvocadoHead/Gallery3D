@@ -46,6 +46,10 @@ const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
   return { width, height };
 };
 
+const loopVideoFirstSecond = (video: HTMLVideoElement) => {
+  if (video.currentTime > 1.1) video.currentTime = 0.1;
+};
+
 const GalleryItem = ({
   item,
   position,
@@ -138,18 +142,22 @@ const GalleryItem = ({
     if (showVideoFrame) {
       return (
         <video
-          // #t=0.1 nudges browsers (esp. Safari) to paint the first frame
-          // without ever starting playback.
+          // Direct videos animate only their first second in card space, like a
+          // lightweight GIF preview. Full playback still belongs to the lightbox.
           src={`${item.videoUrl}#t=0.1`}
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
           playsInline
           muted
+          autoPlay
           preload="metadata"
           onLoadedMetadata={(e) => {
             const v = e.target as HTMLVideoElement;
             handleSize(v.videoWidth, v.videoHeight);
+            v.muted = true;
+            void v.play().catch(() => undefined);
             setLoaded(true);
           }}
+          onTimeUpdate={(e) => loopVideoFirstSecond(e.currentTarget)}
           onError={() => setVideoFailed(true)}
         />
       );

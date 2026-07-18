@@ -46,6 +46,7 @@ type AppView = 'landing' | 'gallery' | 'explore';
 // layout was merged into it.
 type ViewMode = 'sphere' | 'tile' | 'carousel' | 'book';
 type BuilderTab = 'content' | 'appearance' | 'galleries' | 'support';
+const COMMENTING_ENABLED = false;
 
 // --- NEW PATIENCE LOADER ---
 const Loader = () => (
@@ -111,6 +112,7 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('sphere');
   const [mediaScale, setMediaScale] = useState(0.8);
   const [sphereBase, setSphereBase] = useState(30);
+  const [tileGap, setTileGap] = useState(18);
 
   // --- Data State ---
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
@@ -247,6 +249,7 @@ const App: React.FC = () => {
         if (record.settings.bookPerPage) setBookPerPage(record.settings.bookPerPage);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
+        if (record.settings.tileGap != null) setTileGap(record.settings.tileGap);
         if (record.settings.titleFont) setTitleFont(record.settings.titleFont);
         if (record.settings.titleSize) setTitleSize(record.settings.titleSize);
         if (record.settings.canvasMode) setCanvasMode(record.settings.canvasMode);
@@ -282,6 +285,8 @@ const App: React.FC = () => {
       if (scale) setMediaScale(Math.min(3, Math.max(0.3, parseInt(scale, 10) / 100)));
       const radius = p.get('radius');
       if (radius) setSphereBase(Math.min(150, Math.max(10, parseInt(radius, 10))));
+      const gap = p.get('gap');
+      if (gap) setTileGap(Math.min(80, Math.max(0, parseInt(gap, 10))));
       const perpage = parseInt(p.get('perpage') || '', 10);
       if (perpage === 1 || perpage === 2 || perpage === 4) setBookPerPage(perpage);
       const mode = p.get('mode');
@@ -368,6 +373,7 @@ const App: React.FC = () => {
     setGalleryDbId(null);
     setViewMode('sphere');
     setMediaScale(0.8); // match the app-wide default (Phase 5)
+    setTileGap(18);
     setTitleFont('Inter');
     setTitleSize('M');
     setCanvasMode('grid');
@@ -437,6 +443,7 @@ const App: React.FC = () => {
             bookPerPage,
             mediaScale,
             sphereBase,
+            tileGap,
             titleFont,
             titleSize,
           }
@@ -475,10 +482,13 @@ const App: React.FC = () => {
     url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
     if (viewMode === 'sphere' || viewMode === 'carousel') url.searchParams.set('radius', sphereBase.toString());
     if (viewMode === 'book') url.searchParams.set('perpage', String(bookPerPage));
-    if (viewMode === 'tile') url.searchParams.set('mode', canvasMode);
+    if (viewMode === 'tile') {
+      url.searchParams.set('mode', canvasMode);
+      url.searchParams.set('gap', String(tileGap));
+    }
 
     return url.toString();
-  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, bookPerPage, canvasMode]);
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap, bookPerPage, canvasMode]);
 
   const handleCopyLink = async () => {
     // A big unsaved gallery would base64-encode into a multi-10KB URL that
@@ -562,6 +572,7 @@ const App: React.FC = () => {
             onChangeItems={setGalleryItems}
             onExitEdit={() => setCanvasEdit(false)}
             mediaScale={mediaScale}
+            tileGap={tileGap}
             titleDefaults={{ font: titleFont, size: titleSize }}
           />
         ) : viewMode === 'book' ? (
@@ -603,12 +614,12 @@ const App: React.FC = () => {
         onNavigate={setSelectedItem}
         onClose={() => setSelectedItem(null)}
         titleDefaults={{ font: titleFont, size: titleSize }}
-        galleryId={galleryDbId}
-        onCommentItem={(item) => {
+        galleryId={COMMENTING_ENABLED ? galleryDbId : null}
+        onCommentItem={COMMENTING_ENABLED ? (item) => {
           setNoteFormItemId(item.id);
           setNoteFormItemTitle(item.title);
           setNoteFormOpen(true);
-        }}
+        } : undefined}
       />
 
       {/* Lightweight info toast (sign-out, share nudges, errors) */}
@@ -629,7 +640,7 @@ const App: React.FC = () => {
             <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            {Object.values(unreadByGallery).reduce((a, b) => a + b, 0) > 0 && (
+            {COMMENTING_ENABLED && Object.values(unreadByGallery).reduce((a, b) => a + b, 0) > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); setAutoOpenNotes(true); openBuilder('content'); }}
                 className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-violet-500 hover:bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center"
@@ -719,7 +730,7 @@ const App: React.FC = () => {
 
       {/* Footer right — Comment + Contact */}
       <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        {galleryDbId && (
+        {COMMENTING_ENABLED && galleryDbId && (
           <button
             onClick={() => { setNoteFormItemId(undefined); setNoteFormItemTitle(undefined); setNoteFormOpen(true); }}
             className="flex items-center gap-2 px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition text-slate-600 text-sm font-medium border border-white"
@@ -806,7 +817,7 @@ const App: React.FC = () => {
       )}
 
       {termsOpen && <TermsModal onClose={() => setTermsOpen(false)} />}
-      {noteFormOpen && galleryDbId && (
+      {COMMENTING_ENABLED && noteFormOpen && galleryDbId && (
         <NoteForm
           galleryId={galleryDbId}
           itemId={noteFormItemId}
@@ -846,6 +857,8 @@ const App: React.FC = () => {
         setMediaScale={setMediaScale}
         sphereBase={sphereBase}
         setSphereBase={setSphereBase}
+        tileGap={tileGap}
+        setTileGap={setTileGap}
         titleFont={titleFont}
         setTitleFont={setTitleFont}
         titleSize={titleSize}

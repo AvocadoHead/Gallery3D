@@ -13,6 +13,7 @@ interface CanvasGalleryProps {
   onChangeItems: (items: MediaItem[]) => void;
   onExitEdit: () => void;
   mediaScale: number;
+  tileGap: number;
   titleDefaults: TitleStyle;
 }
 
@@ -21,6 +22,26 @@ type Box = { x: number; y: number; w: number; h: number };
 const clamp = (min: number, max: number, v: number) => Math.min(max, Math.max(min, v));
 
 /* ---------- media thumb (shared by both modes) ---------- */
+const AnimatedVideoThumb: React.FC<{ item: MediaItem; className?: string }> = ({ item, className = '' }) => (
+  <video
+    src={`${item.videoUrl || item.fullUrl}#t=0.1`}
+    className={className}
+    muted
+    playsInline
+    autoPlay
+    preload="metadata"
+    onLoadedMetadata={(e) => {
+      const v = e.currentTarget;
+      v.muted = true;
+      void v.play().catch(() => undefined);
+    }}
+    onTimeUpdate={(e) => {
+      const v = e.currentTarget;
+      if (v.currentTime > 1.1) v.currentTime = 0.1;
+    }}
+  />
+);
+
 const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ item, titleDefaults }) => {
   if (item.kind === 'text') {
     const font = item.titleFont || titleDefaults.font || 'Inter';
@@ -35,18 +56,23 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ i
       </div>
     );
   }
+  const showVideoPreview = item.kind === 'video' && !!item.videoUrl && !item.previewUrl && !item.fallbackPreview;
   const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
   return (
     <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
-      <img
-        src={thumb}
-        alt={item.title || 'art'}
-        className="w-full h-full object-cover"
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        draggable={false}
-      />
+      {showVideoPreview ? (
+        <AnimatedVideoThumb item={item} className="w-full h-full object-cover" />
+      ) : (
+        <img
+          src={thumb}
+          alt={item.title || 'art'}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          draggable={false}
+        />
+      )}
       {item.kind === 'video' && (
         <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full backdrop-blur-sm pointer-events-none">
           <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
@@ -70,9 +96,11 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
   onChangeItems,
   onExitEdit,
   mediaScale,
+  tileGap,
   titleDefaults,
 }) => {
   const seedW = 240 * mediaScale;
+  const gap = Math.max(0, tileGap);
   const viewportRef = useRef<HTMLDivElement>(null);
   const session = useRef<any>(null);
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -86,11 +114,11 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
   /* auto grid seed for items without explicit free placement */
   const seedMap = useMemo(() => {
     const cols = Math.max(1, Math.min(6, Math.round(Math.sqrt(items.length || 1))));
-    const stride = seedW + 40;
+    const stride = seedW + gap;
     const m = new Map<string, { x: number; y: number }>();
     items.forEach((it, i) => m.set(it.id, { x: (i % cols) * stride, y: Math.floor(i / cols) * stride }));
     return m;
-  }, [items, seedW]);
+  }, [items, seedW, gap]);
 
   const box = (it: MediaItem): Box => {
     const s = seedMap.get(it.id) || { x: 0, y: 0 };
@@ -193,7 +221,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
 
   const renderGrid = () => (
     <div className="w-full h-full overflow-y-auto no-scrollbar px-4 pt-28 pb-28">
-      <div className="flex flex-wrap justify-center items-start gap-3 max-w-6xl mx-auto">
+      <div className="flex flex-wrap justify-center items-start max-w-6xl mx-auto" style={{ gap }}>
         {items.map((item) => {
           const w = box(item).w;
           const isSel = selected.has(item.id);
@@ -476,7 +504,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
 
   const arrangeGrid = () => {
     const cols = Math.max(1, Math.min(6, Math.round(Math.sqrt(items.length || 1))));
-    const stride = seedW + 40;
+    const stride = seedW + gap;
     setItems((arr) => arr.map((it, i) => writeCanvas(it, { ...box(it), x: (i % cols) * stride, y: Math.floor(i / cols) * stride })));
   };
 
