@@ -23,10 +23,10 @@ type Box = { x: number; y: number; w: number; h: number };
 const clamp = (min: number, max: number, v: number) => Math.min(max, Math.max(min, v));
 
 /* ---------- media thumb (shared by both modes) ---------- */
-const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ item, titleDefaults }) => {
+const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewActive?: boolean }> = ({ item, titleDefaults, previewActive = false }) => {
   const [videoFailed, setVideoFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const videoPreviewSource = useAnimatedVideoPreviewSource(item, hovered);
+  const videoPreviewSource = useAnimatedVideoPreviewSource(item, previewActive || hovered);
 
   useEffect(() => {
     setVideoFailed(false);
@@ -216,7 +216,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
   const renderGrid = () => (
     <div className="w-full h-full overflow-y-auto no-scrollbar px-4 pt-28 pb-28">
       <div className="flex flex-wrap justify-center items-start max-w-6xl mx-auto" style={{ gap }}>
-        {items.map((item) => {
+        {items.map((item, i) => {
           const w = box(item).w;
           const isSel = selected.has(item.id);
           return (
@@ -238,7 +238,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
               {editingText === item.id ? (
                 <TextEditor item={item} onCommit={(t) => { setItems((arr) => arr.map((it) => it.id === item.id ? { ...it, text: t } : it)); setEditingText(null); }} />
               ) : (
-                <ItemMedia item={item} titleDefaults={titleDefaults} />
+                <ItemMedia item={item} titleDefaults={titleDefaults} previewActive={i < 16} />
               )}
               {editable && (
                 <div
@@ -424,7 +424,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
         onWheel={onWheel}
       >
         <div className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})` }}>
-          {items.map((item) => {
+          {items.map((item, i) => {
             const b = box(item);
             const isSel = selected.has(item.id);
             return (
@@ -443,7 +443,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
                 {editingText === item.id ? (
                   <TextEditor item={item} onCommit={(t) => { setItems((arr) => arr.map((it) => it.id === item.id ? { ...it, text: t } : it)); setEditingText(null); }} />
                 ) : (
-                  <ItemMedia item={item} titleDefaults={titleDefaults} />
+                  <ItemMedia item={item} titleDefaults={titleDefaults} previewActive={i < 16} />
                 )}
               </div>
             );
