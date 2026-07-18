@@ -62,7 +62,7 @@ const GalleryItem = ({
   const [loaded, setLoaded] = useState(item.kind === 'text');
   const [mounted, setMounted] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
-  const videoPreviewSource = useAnimatedVideoPreviewSource(item);
+  const videoPreviewSource = useAnimatedVideoPreviewSource(item, hovered);
 
   // Direct videos and detected Google Drive videos render as a short muted
   // loop in card space, like a lightweight GIF preview. Full playback still

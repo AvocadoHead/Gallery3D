@@ -29,6 +29,7 @@ const extractDriveId = (url: string): string | null => {
 const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
   const [visible, setVisible] = useState(false);
   const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'iframe'>('loading');
+  const [mediaReady, setMediaReady] = useState(false);
 
   // --- Zoom / pan state ---
   const [scale, setScale] = useState(1);
@@ -42,7 +43,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
   const resetZoom = useCallback(() => { setScale(1); setPanX(0); setPanY(0); }, []);
 
   // Reset when artwork changes
-  useEffect(() => { resetZoom(); }, [artwork, resetZoom]);
+  useEffect(() => { resetZoom(); setMediaReady(false); }, [artwork, resetZoom]);
 
   // Prev / next navigation
   const currentIndex = artwork ? items.findIndex((i) => i.id === artwork.id) : -1;
@@ -187,9 +188,28 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     return { type: 'image', src: url };
   }, [artwork, driveMode]);
 
+  useEffect(() => {
+    setMediaReady(config?.type === 'loading');
+  }, [config?.type, config?.src]);
+
   if (!artwork || !config) return null;
 
   const isZoomed = scale > MIN_SCALE;
+  const mediaRevealStyle: React.CSSProperties = {
+    opacity: mediaReady ? 1 : 0,
+    transform: mediaReady ? 'scale(1)' : 'scale(0.65)',
+    filter: mediaReady ? 'blur(0px)' : 'blur(18px)',
+    transition: 'opacity 650ms cubic-bezier(0.16, 1, 0.3, 1), transform 650ms cubic-bezier(0.16, 1, 0.3, 1), filter 650ms cubic-bezier(0.16, 1, 0.3, 1)',
+    willChange: 'opacity, transform, filter',
+  };
+  const LoadingSpinner = () => (
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 text-white/82 pointer-events-none">
+      <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+      <div className="w-48 h-1.5 bg-white/15 rounded-full overflow-hidden">
+        <div className="h-full w-1/3 bg-white/70 rounded-full animate-pulse" />
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
@@ -252,20 +272,33 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
 
         {/* Media container */}
         <div
-          className="pointer-events-auto flex items-center justify-center"
+          className="pointer-events-auto relative flex items-center justify-center"
           style={{ maxWidth: '95vw', maxHeight: '85vh' }}
           onClick={(e) => e.stopPropagation()}
         >
+          {config.type !== 'loading' && !mediaReady && <LoadingSpinner />}
           {config.type === 'loading' ? (
-            <div className="flex items-center justify-center text-white/80">
-              <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            <div className="relative flex h-40 w-64 items-center justify-center text-white/80">
+              <LoadingSpinner />
             </div>
           ) : config.type === 'iframe' ? (
-            <div className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-[90vw] max-w-7xl aspect-video max-h-[80vh]' : 'w-[90vw] h-[80vh] max-w-7xl'}`}>
-              <iframe src={config.src} title="Content" className="w-full h-full border-0" allow="autoplay; encrypted-media; fullscreen" allowFullScreen />
+            <div
+              className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-[90vw] max-w-7xl aspect-video max-h-[80vh]' : 'w-[90vw] h-[80vh] max-w-7xl'}`}
+              style={mediaRevealStyle}
+            >
+              <iframe src={config.src} title="Content" className="w-full h-full border-0" allow="autoplay; encrypted-media; fullscreen" allowFullScreen onLoad={() => setMediaReady(true)} />
             </div>
           ) : config.type === 'video' ? (
-            <video src={config.src} controls autoPlay playsInline className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl" />
+            <video
+              src={config.src}
+              controls
+              autoPlay
+              playsInline
+              className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+              style={mediaRevealStyle}
+              onLoadedData={() => setMediaReady(true)}
+              onCanPlay={() => setMediaReady(true)}
+            />
           ) : (
             /* Zoomable image */
             <div
@@ -276,6 +309,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               style={{
+                ...mediaRevealStyle,
                 cursor: isZoomed ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
                 touchAction: 'none',
                 userSelect: 'none',
@@ -291,7 +325,8 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
                   transition: isDragging ? 'none' : 'transform 0.12s ease-out',
                 }}
                 draggable={false}
-                onError={() => setDriveMode('iframe')}
+                onLoad={() => setMediaReady(true)}
+                onError={() => { setMediaReady(false); setDriveMode('iframe'); }}
               />
             </div>
           )}

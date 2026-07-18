@@ -20,7 +20,7 @@ export const loopVideoFirstSecond = (video: HTMLVideoElement) => {
   if (video.currentTime > 1.35) video.currentTime = 0.1;
 };
 
-export const useAnimatedVideoPreviewSource = (item: MediaItem) => {
+export const useAnimatedVideoPreviewSource = (item: MediaItem, enabled = true) => {
   const directSource = useMemo(() => {
     if (item.videoUrl && isDirectVideoUrl(item.videoUrl)) return item.videoUrl;
     if (item.kind === 'video' && isDirectVideoUrl(item.fullUrl)) return item.fullUrl;
@@ -39,7 +39,7 @@ export const useAnimatedVideoPreviewSource = (item: MediaItem) => {
     let alive = true;
     setDriveSource('');
 
-    if (directSource || !isDrive || !driveId || !GOOGLE_API_KEY) return;
+    if (!enabled || directSource || !isDrive || !driveId || !GOOGLE_API_KEY) return;
 
     fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=mimeType&key=${GOOGLE_API_KEY}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Drive mime probe failed: ${r.status}`))))
@@ -55,9 +55,9 @@ export const useAnimatedVideoPreviewSource = (item: MediaItem) => {
     return () => {
       alive = false;
     };
-  }, [directSource, driveId, isDrive]);
+  }, [directSource, driveId, enabled, isDrive]);
 
-  return directSource || driveSource;
+  return enabled ? directSource || driveSource : '';
 };
 
 interface AnimatedVideoThumbnailProps {
@@ -65,6 +65,7 @@ interface AnimatedVideoThumbnailProps {
   className?: string;
   onLoadedMetadata?: (video: HTMLVideoElement) => void;
   onError?: () => void;
+  active?: boolean;
   sourceOverride?: string;
 }
 
@@ -73,9 +74,10 @@ const AnimatedVideoThumbnail: React.FC<AnimatedVideoThumbnailProps> = ({
   className = '',
   onLoadedMetadata,
   onError,
+  active = true,
   sourceOverride,
 }) => {
-  const detectedSource = useAnimatedVideoPreviewSource(item);
+  const detectedSource = useAnimatedVideoPreviewSource(item, active);
   const source = sourceOverride || detectedSource;
   if (!source) return null;
 

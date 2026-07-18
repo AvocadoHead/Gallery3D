@@ -25,7 +25,8 @@ const clamp = (min: number, max: number, v: number) => Math.min(max, Math.max(mi
 /* ---------- media thumb (shared by both modes) ---------- */
 const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ item, titleDefaults }) => {
   const [videoFailed, setVideoFailed] = useState(false);
-  const videoPreviewSource = useAnimatedVideoPreviewSource(item);
+  const [hovered, setHovered] = useState(false);
+  const videoPreviewSource = useAnimatedVideoPreviewSource(item, hovered);
 
   useEffect(() => {
     setVideoFailed(false);
@@ -46,7 +47,13 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ i
   const showVideoPreview = !!videoPreviewSource && !videoFailed;
   const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
   return (
-    <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
+    <div
+      className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative"
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
+    >
       {showVideoPreview ? (
         <AnimatedVideoThumbnail item={item} sourceOverride={videoPreviewSource} className="w-full h-full object-cover" onError={() => setVideoFailed(true)} />
       ) : (
