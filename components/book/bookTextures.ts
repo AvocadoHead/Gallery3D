@@ -34,6 +34,7 @@ export const normalizeImageUrl = (input?: string): string | null => {
   if (!input) return null;
   const clean = input.trim();
   if (!clean) return null;
+  if (/drive\.google\.com\/thumbnail\?/i.test(clean)) return clean;
   const id = extractDriveId(clean);
   if (id) return `https://lh3.googleusercontent.com/d/${id}`;
   if (/^[a-zA-Z0-9_-]{25,}$/.test(clean)) return `https://lh3.googleusercontent.com/d/${clean}`;

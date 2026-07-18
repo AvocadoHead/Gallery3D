@@ -9,7 +9,9 @@ import { buildBookLeaves, BookLeaf } from './book/bookTextures';
 export type BookPerPage = 1 | 2 | 4;
 
 const bookUrl = (item: MediaItem): string =>
-  item.provider === 'gdrive' ? item.originalUrl : item.previewUrl || item.fullUrl || item.originalUrl;
+  item.provider === 'gdrive'
+    ? item.fallbackPreview || item.previewUrl || item.fullUrl || item.originalUrl
+    : item.previewUrl || item.fullUrl || item.originalUrl;
 
 // Bridge: signals when drei has finished uploading all textures to GPU
 const Ready = ({ onReady }: { onReady: () => void }) => {
