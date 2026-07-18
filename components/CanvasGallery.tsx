@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MediaItem, TITLE_SIZE_PX, createTextItem } from '../constants';
 import type { TitleStyle } from './FloatingGallery';
+import AnimatedVideoThumbnail, { useAnimatedVideoPreviewSource } from './VideoThumbnail';
 
 export type CanvasMode = 'grid' | 'free';
 
@@ -22,27 +23,13 @@ type Box = { x: number; y: number; w: number; h: number };
 const clamp = (min: number, max: number, v: number) => Math.min(max, Math.max(min, v));
 
 /* ---------- media thumb (shared by both modes) ---------- */
-const AnimatedVideoThumb: React.FC<{ item: MediaItem; className?: string }> = ({ item, className = '' }) => (
-  <video
-    src={`${item.videoUrl || item.fullUrl}#t=0.1`}
-    className={className}
-    muted
-    playsInline
-    autoPlay
-    preload="metadata"
-    onLoadedMetadata={(e) => {
-      const v = e.currentTarget;
-      v.muted = true;
-      void v.play().catch(() => undefined);
-    }}
-    onTimeUpdate={(e) => {
-      const v = e.currentTarget;
-      if (v.currentTime > 1.1) v.currentTime = 0.1;
-    }}
-  />
-);
-
 const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ item, titleDefaults }) => {
+  const [videoFailed, setVideoFailed] = useState(false);
+  const videoPreviewSource = useAnimatedVideoPreviewSource(item);
+
+  useEffect(() => {
+    setVideoFailed(false);
+  }, [item.id, videoPreviewSource]);
   if (item.kind === 'text') {
     const font = item.titleFont || titleDefaults.font || 'Inter';
     const size = TITLE_SIZE_PX[item.titleSize || titleDefaults.size || 'L'];
@@ -56,12 +43,12 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ i
       </div>
     );
   }
-  const showVideoPreview = item.kind === 'video' && !!item.videoUrl && !item.previewUrl && !item.fallbackPreview;
+  const showVideoPreview = !!videoPreviewSource && !videoFailed;
   const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
   return (
     <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
       {showVideoPreview ? (
-        <AnimatedVideoThumb item={item} className="w-full h-full object-cover" />
+        <AnimatedVideoThumbnail item={item} sourceOverride={videoPreviewSource} className="w-full h-full object-cover" onError={() => setVideoFailed(true)} />
       ) : (
         <img
           src={thumb}
@@ -73,7 +60,7 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle }> = ({ i
           draggable={false}
         />
       )}
-      {item.kind === 'video' && (
+      {showVideoPreview && (
         <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full backdrop-blur-sm pointer-events-none">
           <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
         </div>

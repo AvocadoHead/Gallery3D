@@ -8,6 +8,7 @@ import {
   MediaItem,
   TITLE_SIZE_PX,
 } from '../constants';
+import { loopVideoFirstSecond, useAnimatedVideoPreviewSource } from './VideoThumbnail';
 
 export interface TitleStyle {
   font?: string;
@@ -46,10 +47,6 @@ const normalizeSize = (aspectRatio: number | undefined, scale: number) => {
   return { width, height };
 };
 
-const loopVideoFirstSecond = (video: HTMLVideoElement) => {
-  if (video.currentTime > 1.1) video.currentTime = 0.1;
-};
-
 const GalleryItem = ({
   item,
   position,
@@ -65,16 +62,17 @@ const GalleryItem = ({
   const [loaded, setLoaded] = useState(item.kind === 'text');
   const [mounted, setMounted] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const videoPreviewSource = useAnimatedVideoPreviewSource(item);
 
-  // Direct .mp4/.webm items with no thumbnail render as a STATIC video
-  // element (first frame only — no in-card playback). Full playback happens
-  // in the lightbox. Items with a preview image always use the image.
-  const showVideoFrame =
-    item.kind === 'video' &&
-    !!item.videoUrl &&
-    !item.previewUrl &&
-    !item.fallbackPreview &&
-    !videoFailed;
+  // Direct videos and detected Google Drive videos render as a short muted
+  // loop in card space, like a lightweight GIF preview. Full playback still
+  // belongs to the lightbox. If the video probe/player fails, fall back to the
+  // saved still thumbnail.
+  const showVideoFrame = !!videoPreviewSource && !videoFailed;
+
+  useEffect(() => {
+    setVideoFailed(false);
+  }, [item.id, videoPreviewSource]);
 
   // C: canvas.w encodes the per-item size set in the Edit tab (S/M/L/XL or masonry resize)
   const emphasis = Math.max(0.55, Math.min(2.2, (item.canvas?.w ?? 240) / 240));
@@ -144,7 +142,7 @@ const GalleryItem = ({
         <video
           // Direct videos animate only their first second in card space, like a
           // lightweight GIF preview. Full playback still belongs to the lightbox.
-          src={`${item.videoUrl}#t=0.1`}
+          src={`${videoPreviewSource}#t=0.1`}
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
           playsInline
           muted
@@ -230,7 +228,7 @@ const GalleryItem = ({
             )}
 
             {/* Play badge on video cards — playback lives in the lightbox */}
-            {item.kind === 'video' && (
+            {showVideoFrame && (
               <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full backdrop-blur-sm pointer-events-none">
                 <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
               </div>
