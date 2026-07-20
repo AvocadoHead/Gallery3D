@@ -60,6 +60,14 @@ const fanDegPerLeaf = (totalPages: number) => Math.min(0.8, 12 / Math.max(1, tot
    to real pages (Page) and baked stubs (FarPage) so the two stay seamless. */
 const curveScaleFor = (totalPages: number) => Math.max(0.4, Math.min(1, 24 / Math.max(1, totalPages)));
 
+/* Spine break: lift each open half off the flat 180° spread so the book arches
+   toward the viewer, like a real book on a stand. 0 = flat (old behaviour). It
+   is a rigid tilt at the hinge (bone 0) so the proven page curl is untouched —
+   the two halves just rotate up. Bonus: angularly separating the two leaf
+   stacks further reduces corner-cutting between leaves. Easy to expose as a
+   user control later (a slider feeding this value). */
+const SPINE_BREAK = degToRad(30);
+
 const pageGeometry = new BoxGeometry(PAGE_WIDTH, PAGE_HEIGHT, PAGE_DEPTH, PAGE_SEGMENTS, 2);
 pageGeometry.translate(PAGE_WIDTH / 2, 0, 0);
 {
@@ -199,6 +207,8 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
         if (i === 0) { rotationAngle = targetRotation; foldRotationAngle = 0; }
         else { rotationAngle = 0; foldRotationAngle = 0; }
       }
+      // Spine break: rigid lift of the whole half at the hinge (bone 0 only).
+      if (i === 0 && !bookClosed) rotationAngle += opened ? -SPINE_BREAK : SPINE_BREAK;
       const foldIntensity = i > 8 ? Math.sin(i * Math.PI * (1 / bones.length) - 0.5) * turningTime : 0;
 
       if (firstFrame.current) {
@@ -341,7 +351,7 @@ const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
   const geometry = bookClosed ? pageGeometry : opened ? rest.opened : rest.closed;
   const rotation = bookClosed
     ? (opened ? -Math.PI / 2 : Math.PI / 2)
-    : degToRad(number * fanDegPerLeaf(totalPages));
+    : degToRad(number * fanDegPerLeaf(totalPages)) + (opened ? -SPINE_BREAK : SPINE_BREAK);
   return (
     <group rotation-y={rotation}>
       <mesh
