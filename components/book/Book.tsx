@@ -50,6 +50,16 @@ const SEGMENT_WIDTH = PAGE_WIDTH / PAGE_SEGMENTS;
    scaled down so a 70-leaf book fans ~12° in total instead of 57°. */
 const fanDegPerLeaf = (totalPages: number) => Math.min(0.8, 12 / Math.max(1, totalPages));
 
+/* Flatten the resting page bow as the book grows. The inside/outside curve
+   that gives an open page its lifelike bow is a FIXED amplitude, but leaves
+   are stacked only PAGE_DEPTH apart — so once dozens of bowed leaves share the
+   spread they slice through each other (vertical strips of the next page show
+   through, edges cross at top/bottom). Small books (≤ the all-real window)
+   keep the full prototype bow; larger books ease toward a flatter page so the
+   bow can never exceed the separation between neighbours. Applied identically
+   to real pages (Page) and baked stubs (FarPage) so the two stay seamless. */
+const curveScaleFor = (totalPages: number) => Math.max(0.4, Math.min(1, 24 / Math.max(1, totalPages)));
+
 const pageGeometry = new BoxGeometry(PAGE_WIDTH, PAGE_HEIGHT, PAGE_DEPTH, PAGE_SEGMENTS, 2);
 pageGeometry.translate(PAGE_WIDTH / 2, 0, 0);
 {
@@ -170,6 +180,10 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
       targetRotation += degToRad(number * fanDegPerLeaf(totalPages));
     }
 
+    // Big books flatten their resting bow so stacked leaves stop crossing.
+    // Only the resting inside/outside curve scales — the page-turn (turning)
+    // bow is left at full strength so flipping still looks alive.
+    const curveScale = curveScaleFor(totalPages);
     const bones = skinnedMeshRef.current.skeleton.bones;
     for (let i = 0; i < bones.length; i++) {
       const target = i === 0 ? group.current : bones[i];
@@ -177,8 +191,8 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
       const outsideCurveIntensity = i >= 8 ? Math.cos(i * 0.3 + 0.09) : 0;
       const turningIntensity = Math.sin(i * Math.PI * (1 / bones.length)) * turningTime;
       let rotationAngle =
-        insideCurveStrength * insideCurveIntensity * targetRotation -
-        outsideCurveStrength * outsideCurveIntensity * targetRotation +
+        curveScale * insideCurveStrength * insideCurveIntensity * targetRotation -
+        curveScale * outsideCurveStrength * outsideCurveIntensity * targetRotation +
         turningCurveStrength * turningIntensity * targetRotation;
       let foldRotationAngle = degToRad(Math.sign(targetRotation) * 2);
       if (bookClosed) {
@@ -286,10 +300,25 @@ const bakeRestGeometry = (T: number, amp = 1) => {
   return geo;
 };
 
-// Baked once at module load: rest curl for unopened (+90°) and opened (−90°).
-// Stubs are baked 10% flatter so they tuck inside the real pages' bow.
-const closedRestGeometry = bakeRestGeometry(Math.PI / 2, 0.9);
-const openedRestGeometry = bakeRestGeometry(-Math.PI / 2, 0.9);
+// Rest curl for unopened (+90°) and opened (−90°). Stubs are baked 10% flatter
+// so they tuck inside the real pages' bow. The bow amplitude tracks the same
+// curveScale the real pages use (flatter on big books), so a stub and the real
+// page it stands in for keep the identical shape. Baked lazily and cached per
+// distinct scale — a book only ever uses one, so this bakes at most twice.
+type RestGeo = ReturnType<typeof bakeRestGeometry>;
+const restGeometryCache = new Map<number, { closed: RestGeo; opened: RestGeo }>();
+const getRestGeometries = (curveScale: number) => {
+  const key = Math.round(curveScale * 100) / 100;
+  let g = restGeometryCache.get(key);
+  if (!g) {
+    g = {
+      closed: bakeRestGeometry(Math.PI / 2, 0.9 * curveScale),
+      opened: bakeRestGeometry(-Math.PI / 2, 0.9 * curveScale),
+    };
+    restGeometryCache.set(key, g);
+  }
+  return g;
+};
 
 /* Stack position of a leaf. The base formula is the prototype's; the cushion
    adds extra clearance for the top few leaves of each stack so the textured
@@ -308,7 +337,8 @@ const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
 }) => {
   // When the book is closed, real pages go FLAT (i=0 takes the full rotation);
   // otherwise they rest in the baked curl, fanned by their static leaf angle.
-  const geometry = bookClosed ? pageGeometry : opened ? openedRestGeometry : closedRestGeometry;
+  const rest = getRestGeometries(curveScaleFor(totalPages));
+  const geometry = bookClosed ? pageGeometry : opened ? rest.opened : rest.closed;
   const rotation = bookClosed
     ? (opened ? -Math.PI / 2 : Math.PI / 2)
     : degToRad(number * fanDegPerLeaf(totalPages));
