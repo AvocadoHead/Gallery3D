@@ -138,31 +138,58 @@ const GalleryItem = ({
         </div>
       );
     }
+    const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
+
     if (showVideoFrame) {
+      // Keep the still thumbnail painted UNDER the video (Drive videos start as
+      // image items, so previewUrl is a real Drive thumbnail). The video fades
+      // in over it once it can play — this is what removes the "blank white
+      // instant" the sphere/carousel showed while the video was still buffering
+      // (Masonry never flashed because it shows the frame straight away).
       return (
-        <video
-          // Direct videos animate only their first second in card space, like a
-          // lightweight GIF preview. Full playback still belongs to the lightbox.
-          src={`${videoPreviewSource}#t=0.1`}
-          className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          playsInline
-          muted
-          autoPlay
-          preload="metadata"
-          onLoadedMetadata={(e) => {
-            const v = e.target as HTMLVideoElement;
-            handleSize(v.videoWidth, v.videoHeight);
-            v.muted = true;
-            void v.play().catch(() => undefined);
-            setLoaded(true);
-          }}
-          onTimeUpdate={(e) => loopVideoFirstSecond(e.currentTarget)}
-          onError={() => setVideoFailed(true)}
-        />
+        <>
+          {thumb && (
+            <img
+              src={thumb}
+              alt={item.title || 'art'}
+              className="absolute inset-0 w-full h-full object-contain rounded-xl"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onLoad={(e) => { const el = e.currentTarget; handleSize(el.naturalWidth, el.naturalHeight); }}
+              draggable={false}
+            />
+          )}
+          <video
+            // Animate only the first second in card space, like a lightweight
+            // GIF preview. Full playback still belongs to the lightbox.
+            src={`${videoPreviewSource}#t=0.1`}
+            className={`absolute inset-0 w-full h-full object-contain rounded-xl transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+            playsInline
+            muted
+            autoPlay
+            preload="metadata"
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              handleSize(v.videoWidth, v.videoHeight);
+              v.muted = true;
+              void v.play().catch(() => undefined);
+            }}
+            // canplay is the reliable "first frame is decodable" signal — only
+            // reveal (and (re)start) the video then, so it never shows blank.
+            onCanPlay={(e) => {
+              const v = e.currentTarget;
+              v.muted = true;
+              void v.play().catch(() => undefined);
+              setLoaded(true);
+            }}
+            onTimeUpdate={(e) => loopVideoFirstSecond(e.currentTarget)}
+            onError={() => setVideoFailed(true)}
+          />
+        </>
       );
     }
 
-    const thumb = item.fallbackPreview || item.previewUrl || item.fullUrl;
     return (
       <img
         src={thumb}
@@ -222,7 +249,10 @@ const GalleryItem = ({
         >
           <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 relative">
             {renderMedia()}
-            {!loaded && (
+            {/* Loading spinner for stills only. Video cards keep their still
+                thumbnail visible underneath, so a white spinner would just
+                hide it and re-introduce the blank flash. */}
+            {!loaded && !showVideoFrame && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/40">
                 <div className="w-7 h-7 border-2 border-gray-200 border-t-slate-500 rounded-full animate-spin" />
               </div>
