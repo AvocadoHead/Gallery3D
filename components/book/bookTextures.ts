@@ -53,13 +53,17 @@ const blankTexture = (scale: number, color = '#f5f5f5'): string => {
 };
 
 /** Route a URL through weserv.nl, which fetches it server-side and serves it
-    back with `Access-Control-Allow-Origin: *` — so the canvas never taints. */
+    back with `Access-Control-Allow-Origin: *` — so the canvas never taints.
+    IMPORTANT: pass the FULL https:// URL. weserv treats a scheme-less `url=`
+    as http, and lh3.googleusercontent.com now rejects http with 400 (weserv
+    then returns 404) — which silently broke every Drive image in the book. */
 const weserv = (url: string) =>
-  `https://images.weserv.nl/?url=${encodeURIComponent(url.replace(/^https?:\/\//i, ''))}`;
+  `https://images.weserv.nl/?url=${encodeURIComponent(url)}`;
 
-/** Load an image with CORS. Drive thumbnails/lh3 already send ACAO:*;
-    loading them through weserv can produce false 404s. Try direct first,
-    then use weserv only as a fallback for other hosts that need a proxy. */
+/** Load an image with CORS. weserv first (its CDN both serves ACAO:* and
+    absorbs the ~100-image burst a big book fires at once — hitting
+    lh3.googleusercontent.com directly for every leaf makes Drive throttle and
+    fail the batch, which blanks the book), then a direct attempt as fallback. */
 const loadImage = (url: string): Promise<HTMLImageElement | null> =>
   new Promise((resolve) => {
     const src = normalizeImageUrl(url) || url;
@@ -74,12 +78,8 @@ const loadImage = (url: string): Promise<HTMLImageElement | null> =>
       attempt(src, () => resolve(null));
       return;
     }
-    const isDriveImage = /(?:drive\.google\.com\/thumbnail|lh3\.googleusercontent\.com\/d\/)/i.test(src);
-    if (isDriveImage) {
-      attempt(src, () => resolve(null));
-      return;
-    }
-    attempt(src, () => attempt(weserv(src), () => resolve(null)));
+    // weserv proxy → direct → give up
+    attempt(weserv(src), () => attempt(src, () => resolve(null)));
   });
 
 const renderLayout = (images: (HTMLImageElement | null)[], slots: Slot[], scale: number): string => {
