@@ -23,7 +23,7 @@ type Box = { x: number; y: number; w: number; h: number };
 const clamp = (min: number, max: number, v: number) => Math.min(max, Math.max(min, v));
 
 /* ---------- media thumb (shared by both modes) ---------- */
-const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewActive?: boolean }> = ({ item, titleDefaults, previewActive = false }) => {
+const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewActive?: boolean; onRatio?: (ratio: number) => void }> = ({ item, titleDefaults, previewActive = false, onRatio }) => {
   const [videoFailed, setVideoFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
   const videoPreviewSource = useAnimatedVideoPreviewSource(item, previewActive || hovered);
@@ -55,7 +55,13 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewA
       onBlur={() => setHovered(false)}
     >
       {showVideoPreview ? (
-        <AnimatedVideoThumbnail item={item} sourceOverride={videoPreviewSource} className="w-full h-full object-cover" onError={() => setVideoFailed(true)} />
+        <AnimatedVideoThumbnail
+          item={item}
+          sourceOverride={videoPreviewSource}
+          className="w-full h-full object-cover"
+          onError={() => setVideoFailed(true)}
+          onLoadedMetadata={(v) => { if (v.videoWidth && v.videoHeight) onRatio?.(v.videoWidth / v.videoHeight); }}
+        />
       ) : (
         <img
           src={thumb}
@@ -65,6 +71,10 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewA
           decoding="async"
           referrerPolicy="no-referrer"
           draggable={false}
+          onLoad={(e) => {
+            const el = e.currentTarget;
+            if (el.naturalWidth && el.naturalHeight) onRatio?.(el.naturalWidth / el.naturalHeight);
+          }}
         />
       )}
       {showVideoPreview && (
@@ -100,6 +110,12 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Natural aspect ratios (w/h) measured as images/videos load. Drive & direct
+  // images ship with aspectRatio undefined, so without this every grid tile
+  // fell back to a square — measuring restores the true-ratio masonry look.
+  const [ratios, setRatios] = useState<Record<string, number>>({});
+  const setRatio = (id: string, r: number) =>
+    setRatios((m) => (Math.abs((m[id] ?? 0) - r) < 0.001 ? m : { ...m, [id]: r }));
   const [view, setView] = useState({ tx: 80, ty: 80, scale: 0.8 });
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [editingText, setEditingText] = useState<string | null>(null);
@@ -117,7 +133,8 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
   const box = (it: MediaItem): Box => {
     const s = seedMap.get(it.id) || { x: 0, y: 0 };
     const w = it.canvas?.w ?? seedW;
-    const h = it.canvas?.h ?? (it.kind === 'text' ? 90 : w / (it.aspectRatio || 1));
+    const ar = it.aspectRatio || ratios[it.id]; // known metadata, else measured
+    const h = it.canvas?.h ?? (it.kind === 'text' ? 90 : w / (ar || 1));
     return { x: it.canvas?.x ?? s.x, y: it.canvas?.y ?? s.y, w, h };
   };
 
@@ -238,7 +255,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
               {editingText === item.id ? (
                 <TextEditor item={item} onCommit={(t) => { setItems((arr) => arr.map((it) => it.id === item.id ? { ...it, text: t } : it)); setEditingText(null); }} />
               ) : (
-                <ItemMedia item={item} titleDefaults={titleDefaults} previewActive={i < 16} />
+                <ItemMedia item={item} titleDefaults={titleDefaults} previewActive={i < 16} onRatio={(r) => setRatio(item.id, r)} />
               )}
               {editable && (
                 <div
@@ -443,7 +460,7 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
                 {editingText === item.id ? (
                   <TextEditor item={item} onCommit={(t) => { setItems((arr) => arr.map((it) => it.id === item.id ? { ...it, text: t } : it)); setEditingText(null); }} />
                 ) : (
-                  <ItemMedia item={item} titleDefaults={titleDefaults} previewActive={i < 16} />
+                  <ItemMedia item={item} titleDefaults={titleDefaults} previewActive={i < 16} onRatio={(r) => setRatio(item.id, r)} />
                 )}
               </div>
             );
@@ -508,9 +525,11 @@ const CanvasGallery: React.FC<CanvasGalleryProps> = ({
     <div className="w-full h-full relative">
       {mode === 'grid' ? renderGrid() : renderFree()}
 
-      {/* zoom controls (free mode) */}
+      {/* zoom controls (free mode) — centered along the bottom so the app's
+          fixed Contact button (bottom-right) and Terms links (bottom-left)
+          never sit on top of them. */}
       {mode === 'free' && (
-        <div className="absolute bottom-6 right-6 z-20 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-slate-200 p-1">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-slate-200 p-1">
           <button onClick={() => setView((v) => ({ ...v, scale: clamp(0.2, 3, v.scale / 1.2) }))} className="w-8 h-8 rounded-full hover:bg-slate-100 text-lg font-bold">−</button>
           <button onClick={() => setView({ tx: 80, ty: 80, scale: 0.8 })} className="px-3 h-8 rounded-full hover:bg-slate-100 text-xs font-bold">Reset</button>
           <button onClick={() => setView((v) => ({ ...v, scale: clamp(0.2, 3, v.scale * 1.2) }))} className="w-8 h-8 rounded-full hover:bg-slate-100 text-lg font-bold">+</button>
