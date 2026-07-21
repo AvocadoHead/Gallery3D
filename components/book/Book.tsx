@@ -73,14 +73,6 @@ export const DEFAULT_SPINE_ANGLE = 28;
    ≤5 leaves, full by ~16. Keeps the owner's chosen angle honest at every size. */
 const spineTaper = (totalPages: number) => Math.min(1, Math.max(0, (totalPages - 5) / 11));
 
-/* Resting bow of a COVER leaf (first/last), relative to a normal page's bow.
-   A cover reads better stiffer than an inner page, but too rigid (near 0) makes
-   it a flat plane that slices through the still-stacked leaves while it swings
-   open — the "first page passes through the stack" glitch. A little bow curls
-   the cover's outer edge away from the stack so it clears the leaves beneath.
-   Single tunable knob: 0.3 = old rigid, 1.0 = a full page's bow. */
-const COVER_BOW = 0.55;
-
 const pageGeometry = new BoxGeometry(PAGE_WIDTH, PAGE_HEIGHT, PAGE_DEPTH, PAGE_SEGMENTS, 2);
 pageGeometry.translate(PAGE_WIDTH / 2, 0, 0);
 {
@@ -209,7 +201,7 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
     // rigid, and it is the one leaf whose bow is exposed when the book is barely
     // open, where the wave crossed the page beneath it.
     const isCover = number === 0 || number === totalPages - 1;
-    const curveScale = curveScaleFor(totalPages) * (isCover ? COVER_BOW : 1);
+    const curveScale = curveScaleFor(totalPages) * (isCover ? 0.3 : 1);
     const bones = skinnedMeshRef.current.skeleton.bones;
     for (let i = 0; i < bones.length; i++) {
       const target = i === 0 ? group.current : bones[i];
@@ -367,7 +359,7 @@ const FarPage = ({ number, opened, page, totalPages, bookClosed, spineRad }: {
   // When the book is closed, real pages go FLAT (i=0 takes the full rotation);
   // otherwise they rest in the baked curl, fanned by their static leaf angle.
   const isCover = number === 0 || number === totalPages - 1;
-  const rest = getRestGeometries(curveScaleFor(totalPages) * (isCover ? COVER_BOW : 1));
+  const rest = getRestGeometries(curveScaleFor(totalPages) * (isCover ? 0.3 : 1));
   const geometry = bookClosed ? pageGeometry : opened ? rest.opened : rest.closed;
   const rotation = bookClosed
     ? (opened ? -Math.PI / 2 : Math.PI / 2)
