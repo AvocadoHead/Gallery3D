@@ -104,11 +104,10 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     const isDrive = artwork.fullUrl.includes('drive.google.com') || (artwork as any).provider === 'gdrive';
     if (!isDrive) { setDriveMode('image'); return; }
 
-    // Already known to be an image — skip the Drive mime probe entirely. That
-    // round-trip was adding a loading flash to every image open/toggle. (An
-    // onError on the <img> still falls back to the iframe preview.)
-    if (artwork.kind === 'image') { setDriveMode('image'); return; }
-
+    // NOTE: every Drive item is parsed as kind:'image' upstream (the real type
+    // isn't known without asking Drive), so we must ALWAYS run the mime probe
+    // here to tell images from videos. The loading flash it used to cause is
+    // now hidden by the preview thumbnail shown during the 'loading' state.
     const id = extractDriveId(artwork.fullUrl) || extractDriveId((artwork as any).embedUrl);
     if (!id) { setDriveMode('iframe'); return; }
 
@@ -321,9 +320,25 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
           {config.type !== 'loading' && !mediaReady &&
             !(config.type === 'image' && artwork.previewUrl) && <LoadingSpinner />}
           {config.type === 'loading' ? (
-            <div className="relative flex h-40 w-64 items-center justify-center text-white/80">
-              <LoadingSpinner />
-            </div>
+            artwork.previewUrl ? (
+              // While the Drive mime probe runs, show the preview thumbnail (a
+              // poster frame for videos) so the open never blanks to a spinner.
+              <div className="relative flex items-center justify-center">
+                <img
+                  src={artwork.previewUrl}
+                  alt=""
+                  aria-hidden
+                  className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl block select-none"
+                  style={{ filter: 'blur(6px)' }}
+                  draggable={false}
+                />
+                <LoadingSpinner />
+              </div>
+            ) : (
+              <div className="relative flex h-40 w-64 items-center justify-center text-white/80">
+                <LoadingSpinner />
+              </div>
+            )
           ) : config.type === 'iframe' ? (
             <div
               className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-[90vw] max-w-7xl aspect-video max-h-[80vh]' : 'w-[90vw] h-[80vh] max-w-7xl'}`}
