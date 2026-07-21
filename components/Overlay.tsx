@@ -26,23 +26,6 @@ const extractDriveId = (url: string): string | null => {
   return null;
 };
 
-/* The full-resolution image URL the overlay actually displays. Kept as a shared
-   helper (not just inline in the config memo) so neighbour preloading warms the
-   exact same URL the browser will request on the next toggle → a cache hit. */
-const fullImageSrc = (item: MediaItem): string => {
-  const url = item.fullUrl;
-  const isDrive = url.includes('drive.google.com') || (item as any).provider === 'gdrive';
-  if (isDrive) {
-    const id = extractDriveId(url) || extractDriveId((item as any).embedUrl);
-    if (id) {
-      return GOOGLE_API_KEY
-        ? `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${GOOGLE_API_KEY}`
-        : `https://drive.google.com/uc?export=view&id=${id}`;
-    }
-  }
-  return url;
-};
-
 const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
   const [visible, setVisible] = useState(false);
   const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'video' | 'iframe'>('loading');
@@ -70,16 +53,19 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     if (items[index] && onNavigate) onNavigate(items[index]);
   }, [items, onNavigate]);
 
-  // Preload the neighbours so the next/prev toggle is already decoded in the
-  // browser cache. Warm the small preview (instant) AND the full-res URL (the
-  // slow Drive fetch), for images only — video/embed handle their own loading.
+  // Preload ONLY the neighbours' lightweight preview thumbnail so the next/prev
+  // toggle shows instantly. We deliberately do NOT prefetch the full-res image:
+  // that goes through the metered Google API key endpoint, and prefetching it
+  // eagerly drained the same quota the gallery's animated video thumbnails rely
+  // on — starving them until the GIF loops died and videos hung. The preview
+  // uses Drive's free thumbnail service, so warming it is cheap and safe.
   useEffect(() => {
     if (currentIndex < 0) return;
     const warm = (item?: MediaItem) => {
-      if (!item || item.kind !== 'image') return;
-      if (item.previewUrl) { const p = new Image(); p.src = item.previewUrl; }
-      const full = fullImageSrc(item);
-      if (full) { const f = new Image(); f.src = full; }
+      if (item && item.kind === 'image' && item.previewUrl) {
+        const p = new Image();
+        p.src = item.previewUrl;
+      }
     };
     warm(items[currentIndex - 1]);
     warm(items[currentIndex + 1]);
