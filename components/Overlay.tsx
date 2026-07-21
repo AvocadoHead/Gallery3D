@@ -26,6 +26,23 @@ const extractDriveId = (url: string): string | null => {
   return null;
 };
 
+/* The full-resolution image URL the overlay actually displays. Kept as a shared
+   helper (not just inline in the config memo) so neighbour preloading warms the
+   exact same URL the browser will request on the next toggle → a cache hit. */
+const fullImageSrc = (item: MediaItem): string => {
+  const url = item.fullUrl;
+  const isDrive = url.includes('drive.google.com') || (item as any).provider === 'gdrive';
+  if (isDrive) {
+    const id = extractDriveId(url) || extractDriveId((item as any).embedUrl);
+    if (id) {
+      return GOOGLE_API_KEY
+        ? `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${GOOGLE_API_KEY}`
+        : `https://drive.google.com/uc?export=view&id=${id}`;
+    }
+  }
+  return url;
+};
+
 const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
   const [visible, setVisible] = useState(false);
   const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'video' | 'iframe'>('loading');
@@ -53,6 +70,21 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     if (items[index] && onNavigate) onNavigate(items[index]);
   }, [items, onNavigate]);
 
+  // Preload the neighbours so the next/prev toggle is already decoded in the
+  // browser cache. Warm the small preview (instant) AND the full-res URL (the
+  // slow Drive fetch), for images only — video/embed handle their own loading.
+  useEffect(() => {
+    if (currentIndex < 0) return;
+    const warm = (item?: MediaItem) => {
+      if (!item || item.kind !== 'image') return;
+      if (item.previewUrl) { const p = new Image(); p.src = item.previewUrl; }
+      const full = fullImageSrc(item);
+      if (full) { const f = new Image(); f.src = full; }
+    };
+    warm(items[currentIndex - 1]);
+    warm(items[currentIndex + 1]);
+  }, [currentIndex, items]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' && hasPrev) goTo(currentIndex - 1);
@@ -71,6 +103,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
 
     const isDrive = artwork.fullUrl.includes('drive.google.com') || (artwork as any).provider === 'gdrive';
     if (!isDrive) { setDriveMode('image'); return; }
+
+    // Already known to be an image — skip the Drive mime probe entirely. That
+    // round-trip was adding a loading flash to every image open/toggle. (An
+    // onError on the <img> still falls back to the iframe preview.)
+    if (artwork.kind === 'image') { setDriveMode('image'); return; }
 
     const id = extractDriveId(artwork.fullUrl) || extractDriveId((artwork as any).embedUrl);
     if (!id) { setDriveMode('iframe'); return; }
@@ -281,7 +318,8 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
           style={{ maxWidth: '95vw', maxHeight: '85vh' }}
           onClick={(e) => e.stopPropagation()}
         >
-          {config.type !== 'loading' && !mediaReady && <LoadingSpinner />}
+          {config.type !== 'loading' && !mediaReady &&
+            !(config.type === 'image' && artwork.previewUrl) && <LoadingSpinner />}
           {config.type === 'loading' ? (
             <div className="relative flex h-40 w-64 items-center justify-center text-white/80">
               <LoadingSpinner />
@@ -306,7 +344,9 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
               onError={() => { setMediaReady(false); if ((artwork as any).provider === 'gdrive') setDriveMode('iframe'); }}
             />
           ) : (
-            /* Zoomable image */
+            /* Zoomable image — low-res preview shows instantly (usually already
+               cached from the grid); the full-res image fades in over it once
+               decoded, so toggling never blanks to a spinner. */
             <div
               ref={imgWrapRef}
               onMouseDown={handleMouseDown}
@@ -315,25 +355,42 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               style={{
-                ...mediaRevealStyle,
                 cursor: isZoomed ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
                 touchAction: 'none',
                 userSelect: 'none',
               }}
             >
-              <img
-                src={config.src}
-                alt={artwork.title || 'Artwork'}
-                className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl block"
+              <div
+                className="relative"
                 style={{
                   transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
                   transformOrigin: 'center center',
                   transition: isDragging ? 'none' : 'transform 0.12s ease-out',
                 }}
-                draggable={false}
-                onLoad={() => setMediaReady(true)}
-                onError={() => { setMediaReady(false); setDriveMode('iframe'); }}
-              />
+              >
+                {/* Low-res preview: instant, and sizes the box */}
+                <img
+                  src={artwork.previewUrl || config.src}
+                  alt=""
+                  aria-hidden
+                  className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl block select-none"
+                  draggable={false}
+                  style={{
+                    filter: mediaReady ? 'blur(0px)' : 'blur(6px)',
+                    transition: 'filter 300ms ease-out',
+                  }}
+                />
+                {/* Full-res: fades in over the preview once decoded */}
+                <img
+                  src={config.src}
+                  alt={artwork.title || 'Artwork'}
+                  className="absolute inset-0 w-full h-full object-contain rounded-lg block select-none"
+                  draggable={false}
+                  style={{ opacity: mediaReady ? 1 : 0, transition: 'opacity 400ms ease-out' }}
+                  onLoad={() => setMediaReady(true)}
+                  onError={() => { setMediaReady(false); setDriveMode('iframe'); }}
+                />
+              </div>
             </div>
           )}
         </div>
