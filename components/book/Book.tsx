@@ -64,9 +64,14 @@ const curveScaleFor = (totalPages: number) => Math.max(0.4, Math.min(1, 24 / Mat
    toward the viewer, like a real book on a stand. 0 = flat (old behaviour). It
    is a rigid tilt at the hinge (bone 0) so the proven page curl is untouched —
    the two halves just rotate up. Bonus: angularly separating the two leaf
-   stacks further reduces corner-cutting between leaves. Easy to expose as a
-   user control later (a slider feeding this value). */
-const SPINE_BREAK = degToRad(30);
+   stacks further reduces corner-cutting between leaves. The angle (degrees) is
+   a per-gallery setting the owner controls; this is the default. */
+export const DEFAULT_SPINE_ANGLE = 28;
+
+/* A thin book already opens to a nearly-flat spread, so the full break tips it
+   past flat ("flipped inside out"). Ease the break in with leaf count: none at
+   ≤5 leaves, full by ~16. Keeps the owner's chosen angle honest at every size. */
+const spineTaper = (totalPages: number) => Math.min(1, Math.max(0, (totalPages - 5) / 11));
 
 const pageGeometry = new BoxGeometry(PAGE_WIDTH, PAGE_HEIGHT, PAGE_DEPTH, PAGE_SEGMENTS, 2);
 pageGeometry.translate(PAGE_WIDTH / 2, 0, 0);
@@ -105,11 +110,12 @@ interface PageProps {
   bookClosed: boolean;
   totalPages: number;
   riffle: boolean;
+  spineRad: number;
   setPage: (n: number) => void;
   [key: string]: any;
 }
 
-const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffle, setPage, ...props }: PageProps) => {
+const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffle, spineRad, setPage, ...props }: PageProps) => {
   const [picture, picture2] = useTexture([front, back]);
   useMemo(() => {
     picture.colorSpace = picture2.colorSpace = SRGBColorSpace;
@@ -191,7 +197,11 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
     // Big books flatten their resting bow so stacked leaves stop crossing.
     // Only the resting inside/outside curve scales — the page-turn (turning)
     // bow is left at full strength so flipping still looks alive.
-    const curveScale = curveScaleFor(totalPages);
+    // Covers (first/last leaf) are stiffened: a full-bleed cover reads better
+    // rigid, and it is the one leaf whose bow is exposed when the book is barely
+    // open, where the wave crossed the page beneath it.
+    const isCover = number === 0 || number === totalPages - 1;
+    const curveScale = curveScaleFor(totalPages) * (isCover ? 0.3 : 1);
     const bones = skinnedMeshRef.current.skeleton.bones;
     for (let i = 0; i < bones.length; i++) {
       const target = i === 0 ? group.current : bones[i];
@@ -208,7 +218,7 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
         else { rotationAngle = 0; foldRotationAngle = 0; }
       }
       // Spine break: rigid lift of the whole half at the hinge (bone 0 only).
-      if (i === 0 && !bookClosed) rotationAngle += opened ? -SPINE_BREAK : SPINE_BREAK;
+      if (i === 0 && !bookClosed) rotationAngle += opened ? -spineRad : spineRad;
       const foldIntensity = i > 8 ? Math.sin(i * Math.PI * (1 / bones.length) - 0.5) * turningTime : 0;
 
       if (firstFrame.current) {
@@ -247,6 +257,7 @@ interface BookProps {
   pages: BookLeaf[];
   page: number;
   setPage: (n: number) => void;
+  spineAngle?: number; // degrees; owner-controlled per gallery
   [key: string]: any;
 }
 
@@ -342,16 +353,17 @@ const leafZ = (number: number, page: number) => {
   return number >= page ? stackZ - cushion : stackZ + cushion;
 };
 
-const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
-  number: number; opened: boolean; page: number; totalPages: number; bookClosed: boolean;
+const FarPage = ({ number, opened, page, totalPages, bookClosed, spineRad }: {
+  number: number; opened: boolean; page: number; totalPages: number; bookClosed: boolean; spineRad: number;
 }) => {
   // When the book is closed, real pages go FLAT (i=0 takes the full rotation);
   // otherwise they rest in the baked curl, fanned by their static leaf angle.
-  const rest = getRestGeometries(curveScaleFor(totalPages));
+  const isCover = number === 0 || number === totalPages - 1;
+  const rest = getRestGeometries(curveScaleFor(totalPages) * (isCover ? 0.3 : 1));
   const geometry = bookClosed ? pageGeometry : opened ? rest.opened : rest.closed;
   const rotation = bookClosed
     ? (opened ? -Math.PI / 2 : Math.PI / 2)
-    : degToRad(number * fanDegPerLeaf(totalPages)) + (opened ? -SPINE_BREAK : SPINE_BREAK);
+    : degToRad(number * fanDegPerLeaf(totalPages)) + (opened ? -spineRad : spineRad);
   return (
     <group rotation-y={rotation}>
       <mesh
@@ -365,8 +377,11 @@ const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
   );
 };
 
-export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
+export const Book = ({ pages, page, setPage, spineAngle = DEFAULT_SPINE_ANGLE, ...props }: BookProps) => {
   const [delayedPage, setDelayedPage] = useState(page);
+
+  // Owner's spine angle (degrees) → radians, eased in for thin books.
+  const spineRad = degToRad(spineAngle * spineTaper(pages.length));
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
@@ -409,6 +424,7 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
             page={delayedPage}
             totalPages={pages.length}
             bookClosed={bookClosed}
+            spineRad={spineRad}
           />
         );
         if (!near) return <React.Fragment key={index}>{stub}</React.Fragment>;
@@ -426,6 +442,7 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
               bookClosed={bookClosed}
               totalPages={pages.length}
               riffle={riffle}
+              spineRad={spineRad}
               setPage={setPage}
             />
           </Suspense>

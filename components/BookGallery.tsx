@@ -43,7 +43,8 @@ const BookScene: React.FC<{
   page: number;
   setPage: (n: number) => void;
   onReady: () => void;
-}> = ({ pages, page, setPage, onReady }) => {
+  spineAngle: number;
+}> = ({ pages, page, setPage, onReady, spineAngle }) => {
   const controlsRef = useRef<any>(null);
   return (
     <>
@@ -56,7 +57,7 @@ const BookScene: React.FC<{
         floatingRange={[-0.02, 0.02]}
       >
         <Suspense fallback={null}>
-          <Book pages={pages} page={page} setPage={setPage} />
+          <Book pages={pages} page={page} setPage={setPage} spineAngle={spineAngle} />
         </Suspense>
       </Float>
       <OrbitControls
@@ -90,6 +91,7 @@ interface BookGalleryProps {
   items: MediaItem[];
   onSelect: (item: MediaItem) => void;
   perPage: BookPerPage;
+  spineAngle?: number; // degrees; owner-controlled per gallery
   title?: string;
   titleDefaults: TitleStyle;
 }
@@ -102,7 +104,7 @@ interface BookGalleryProps {
    "Context Lost" console log) and keeps every layout's controls untouched.
    Do NOT re-merge the canvases unless the camera handoff is solved without
    any per-frame camera writes. */
-const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
+const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title, spineAngle = 28 }) => {
   const [leaves, setLeaves] = useState<BookLeaf[] | null>(null);
   const [page, setPage] = useState(0);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -175,6 +177,7 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title }) => {
             page={page}
             setPage={setPage}
             onReady={() => setFirstFrameReady(true)}
+            spineAngle={spineAngle}
           />
         </Canvas>
       )}

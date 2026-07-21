@@ -130,6 +130,7 @@ const App: React.FC = () => {
   const [canvasMode, setCanvasMode] = useState<'grid' | 'free'>('grid');
   // Book layout: items per page (Phase 7).
   const [bookPerPage, setBookPerPage] = useState<1 | 2 | 4>(2);
+  const [bookSpineAngle, setBookSpineAngle] = useState(28); // book spine "break" angle (deg)
 
   // Arrange mode only makes sense in the editable (Masonry) layout.
   useEffect(() => {
@@ -247,6 +248,7 @@ const App: React.FC = () => {
         const vm = record.settings.viewMode === 'canvas' ? 'tile' : record.settings.viewMode; // legacy
         if (vm === 'sphere' || vm === 'tile' || vm === 'carousel' || vm === 'book') setViewMode(vm);
         if (record.settings.bookPerPage) setBookPerPage(record.settings.bookPerPage);
+        if (record.settings.bookSpineAngle != null) setBookSpineAngle(record.settings.bookSpineAngle);
         if (record.settings.mediaScale) setMediaScale(record.settings.mediaScale);
         if (record.settings.sphereBase) setSphereBase(record.settings.sphereBase);
         if (record.settings.tileGap != null) setTileGap(record.settings.tileGap);
@@ -289,6 +291,8 @@ const App: React.FC = () => {
       if (gap) setTileGap(Math.min(80, Math.max(0, parseInt(gap, 10))));
       const perpage = parseInt(p.get('perpage') || '', 10);
       if (perpage === 1 || perpage === 2 || perpage === 4) setBookPerPage(perpage);
+      const spine = parseInt(p.get('spine') || '', 10);
+      if (!Number.isNaN(spine)) setBookSpineAngle(Math.min(45, Math.max(0, spine)));
       const mode = p.get('mode');
       if (mode === 'grid' || mode === 'free') setCanvasMode(mode);
     };
@@ -378,6 +382,7 @@ const App: React.FC = () => {
     setTitleSize('M');
     setCanvasMode('grid');
     setBookPerPage(2);
+    setBookSpineAngle(28);
     setCanvasEdit(false);
 
     window.history.replaceState(null, '', window.location.pathname);
@@ -441,6 +446,7 @@ const App: React.FC = () => {
             viewMode,
             canvasMode,
             bookPerPage,
+            bookSpineAngle,
             mediaScale,
             sphereBase,
             tileGap,
@@ -481,14 +487,17 @@ const App: React.FC = () => {
     url.searchParams.set('layout', viewMode);
     url.searchParams.set('scale', Math.round(mediaScale * 100).toString());
     if (viewMode === 'sphere' || viewMode === 'carousel') url.searchParams.set('radius', sphereBase.toString());
-    if (viewMode === 'book') url.searchParams.set('perpage', String(bookPerPage));
+    if (viewMode === 'book') {
+      url.searchParams.set('perpage', String(bookPerPage));
+      url.searchParams.set('spine', String(bookSpineAngle));
+    }
     if (viewMode === 'tile') {
       url.searchParams.set('mode', canvasMode);
       url.searchParams.set('gap', String(tileGap));
     }
 
     return url.toString();
-  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap, bookPerPage, canvasMode]);
+  }, [shareBase, savedGalleryId, galleryItems, displayName, contactWhatsapp, contactEmail, viewMode, mediaScale, sphereBase, tileGap, bookPerPage, bookSpineAngle, canvasMode]);
 
   const handleCopyLink = async () => {
     // A big unsaved gallery would base64-encode into a multi-10KB URL that
@@ -582,6 +591,7 @@ const App: React.FC = () => {
             items={galleryItems}
             onSelect={setSelectedItem}
             perPage={bookPerPage}
+            spineAngle={bookSpineAngle}
             title={displayName}
             titleDefaults={{ font: titleFont, size: titleSize }}
           />
@@ -852,6 +862,8 @@ const App: React.FC = () => {
         setCanvasMode={setCanvasMode}
         bookPerPage={bookPerPage}
         setBookPerPage={setBookPerPage}
+        bookSpineAngle={bookSpineAngle}
+        setBookSpineAngle={setBookSpineAngle}
         onEditLayout={() => { setViewMode('tile'); setCanvasEdit(true); setBuilderOpen(false); }}
         mediaScale={mediaScale}
         setMediaScale={setMediaScale}

@@ -53,6 +53,8 @@ interface BuilderModalProps {
   setCanvasMode: (val: 'grid' | 'free') => void;
   bookPerPage: 1 | 2 | 4;
   setBookPerPage: (val: 1 | 2 | 4) => void;
+  bookSpineAngle: number;
+  setBookSpineAngle: (val: number) => void;
   onEditLayout: () => void;
   mediaScale: number;
   setMediaScale: (val: number) => void;
@@ -855,6 +857,24 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                         <button key={n} onClick={() => props.setBookPerPage(n)} className={`px-3 py-1 text-xs font-bold rounded-md transition ${props.bookPerPage === n ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>{n}</button>
                       ))}
                     </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Spine angle</span>
+                      <span className="text-xs font-bold text-slate-500 tabular-nums">{props.bookSpineAngle}°</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={45}
+                      step={1}
+                      value={props.bookSpineAngle}
+                      onChange={(e) => props.setBookSpineAngle(parseInt(e.target.value, 10))}
+                      className="w-full accent-amber-600"
+                    />
+                    <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                      How far the book “breaks” open at the spine. 0° lies flat; higher tilts both pages up toward the viewer.
+                    </p>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
                     The book paginates your items in order. To reorder or resize them, arrange them in <b>Masonry</b>. The book follows that order.

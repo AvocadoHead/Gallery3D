@@ -8,6 +8,7 @@ export interface LayoutSettings {
   viewMode?: 'sphere' | 'tile' | 'carousel' | 'canvas' | 'book';
   canvasMode?: 'grid' | 'free';
   bookPerPage?: 1 | 2 | 4;
+  bookSpineAngle?: number;
   mediaScale?: number;
   sphereBase?: number;
   tileGap?: number;
