@@ -607,6 +607,14 @@ const App: React.FC = () => {
               dpr={[1, 1.5]}
               gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
               className="bg-transparent"
+              // Freeze the render loop whenever a full-screen layer is open. The
+              // modals blur the gallery behind them (backdrop-blur); with the
+              // loop running, the browser re-blurred a live auto-rotating scene
+              // every frame — cheap on small galleries but on 250+ cards it made
+              // the menu flicker (carousel) or never composite its panel at all,
+              // leaving just a blur (sphere). Frozen, backdrop-blur samples one
+              // static frame. Resumes the instant the layer closes.
+              frameloop={builderOpen || termsOpen || noteFormOpen || !!selectedItem ? 'never' : 'always'}
             >
               <GalleryScene
                 onSelect={setSelectedItem}
