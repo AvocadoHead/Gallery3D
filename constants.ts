@@ -8,6 +8,9 @@ export const DEMO_DISPLAY_NAME = 'The Watercolor Series | En Masse';
 export const DEMO_CONTACT_EMAIL = 'eyalizenman@gmail.com';
 export const DEMO_CONTACT_WHATSAPP = '97236030603';
 
+/** Where visitor issue reports from the Support tab are sent. */
+export const SUPPORT_EMAIL = 'eyalizenman@gmail.com';
+
 /* ============================================================
    🔹 DEFAULT LINKS (PASTE YOUR OWN HERE)
    ============================================================ */

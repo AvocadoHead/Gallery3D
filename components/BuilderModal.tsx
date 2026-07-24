@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote, deleteGalleryNote, checkMediaVisibility } from '../supabaseClient';
-import { MediaItem, CURATED_FONTS, getDriveId } from '../constants';
+import { MediaItem, CURATED_FONTS, getDriveId, SUPPORT_EMAIL } from '../constants';
 
 const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
   { value: 'private', label: 'Private', icon: '🔒', hint: 'Only you can open it.' },
@@ -95,6 +95,30 @@ interface BuilderModalProps {
 
 const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'content' | 'appearance' | 'galleries' | 'support'>('galleries');
+  // Support tab: short issue report → the maintainer's inbox (mailto, so no
+  // backend/secret is needed and it lands straight in Gmail). The current page
+  // URL is attached automatically so a report is reproducible.
+  const [issueText, setIssueText] = useState('');
+  const [issueEmail, setIssueEmail] = useState('');
+  const [issueSent, setIssueSent] = useState(false);
+  const sendIssue = useCallback(() => {
+    const body = issueText.trim();
+    if (!body) return;
+    const lines = [
+      body,
+      '',
+      '— — —',
+      issueEmail.trim() ? `Reply-to: ${issueEmail.trim()}` : '',
+      `Page: ${typeof window !== 'undefined' ? window.location.href : ''}`,
+    ].filter(Boolean);
+    const href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
+      'Aether Gallery — issue report',
+    )}&body=${encodeURIComponent(lines.join('\n'))}`;
+    if (typeof window !== 'undefined') window.location.href = href;
+    setIssueSent(true);
+    setIssueText('');
+    setIssueEmail('');
+  }, [issueText, issueEmail]);
   const [shareMenuOpen, setShareMenuOpen] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -958,10 +982,46 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
           {/* TAB 4: SUPPORT */}
           {activeTab === 'support' && (
             <div className="space-y-6 text-center pb-6">
+               {/* Report an issue — mailto to the maintainer, no backend needed. */}
+               <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm text-left">
+                  <h3 className="font-bold text-lg text-slate-800">Found a problem?</h3>
+                  <p className="text-slate-500 text-xs mt-1 mb-3">
+                    Tell us what went wrong in a sentence or two. The page link is
+                    attached automatically so we can reproduce it.
+                  </p>
+                  <textarea
+                    value={issueText}
+                    onChange={(e) => { setIssueText(e.target.value); setIssueSent(false); }}
+                    rows={3}
+                    maxLength={1000}
+                    placeholder="e.g. The book layout flickers on my phone when I turn a page…"
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <input
+                    type="email"
+                    value={issueEmail}
+                    onChange={(e) => setIssueEmail(e.target.value)}
+                    placeholder="Your email (optional, so we can reply)"
+                    className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      onClick={sendIssue}
+                      disabled={!issueText.trim()}
+                      className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold shadow hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition"
+                    >
+                      Send report
+                    </button>
+                    {issueSent && (
+                      <span className="text-xs font-medium text-green-600">Thanks — your mail app should open.</span>
+                    )}
+                  </div>
+               </div>
+
                <div className="bg-indigo-600 text-white p-5 rounded-2xl shadow-lg">
                   <h3 className="font-bold text-lg">Support the Aether Gallery Project</h3>
                   <p className="text-indigo-200 text-xs mt-1">
-                    This is an independent project relying on self-funding. 
+                    This is an independent project relying on self-funding.
                     Your contribution helps keep it alive.
                   </p>
                </div>
