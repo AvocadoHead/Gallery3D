@@ -641,7 +641,7 @@ const App: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className={`fixed top-8 left-8 z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed top-[max(2rem,env(safe-area-inset-top))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => openBuilder('galleries')}
@@ -733,14 +733,14 @@ const App: React.FC = () => {
       </div>
 
       {/* Footer left — Terms + Accessibility */}
-      <div className={`fixed bottom-8 left-8 z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Terms</button>
         <span className="text-slate-300 text-[10px]">·</span>
         <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Accessibility</button>
       </div>
 
       {/* Footer right — Comment + Contact */}
-      <div className={`fixed bottom-8 right-8 z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] right-[max(2rem,env(safe-area-inset-right))] z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         {COMMENTING_ENABLED && galleryDbId && (
           <button
             onClick={() => { setNoteFormItemId(undefined); setNoteFormItemTitle(undefined); setNoteFormOpen(true); }}
