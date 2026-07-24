@@ -566,11 +566,11 @@ const App: React.FC = () => {
     }
   }, [applyLoadedRecord]);
 
+  // h-full (not h-screen/100vh): #root is height:100% of the real viewport, so
+  // h-full tracks the *visible* area. On iOS Safari 100vh is taller than the
+  // visible viewport while the address bar shows, which pushed the bottom UI
+  // behind the browser chrome.
   return (
-    {/* h-full (not h-screen/100vh): #root is height:100% of the real viewport,
-        so h-full tracks the *visible* area. On iOS Safari 100vh is taller than
-        the visible viewport while the address bar shows, which pushed the bottom
-        UI behind the browser chrome. */}
     <div className="w-full h-full relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
       {/* 3D Scene (always mounted — it doubles as the living backdrop behind the landing) */}
