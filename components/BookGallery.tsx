@@ -76,8 +76,10 @@ const BookScene: React.FC<{
         position={[2, 5, 2]}
         intensity={1}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        // 1024² is plenty for a single book's soft ground shadow and halves the
+        // shadow-pass cost vs 2048² — a free win on mobile with no visible loss.
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-bias={-0.0001}
       />
       <mesh position-y={-1.5} rotation-x={-Math.PI / 2} receiveShadow>
@@ -194,7 +196,18 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, onSelect, perPage, tit
   return (
     <div className="w-full h-full relative">
       {leaves && (
-        <Canvas shadows camera={{ position: [-0.3, 0.8, 2.8], fov: 45 }} className="bg-transparent">
+        <Canvas
+          shadows
+          camera={{ position: [-0.3, 0.8, 2.8], fov: 45 }}
+          className="bg-transparent"
+          // Cap the resolution the book renders at. Without this the book Canvas
+          // renders at the raw device pixel ratio — up to 3× on phone retina —
+          // which (with shadows) is the single biggest source of judder on
+          // mobile. [1, 1.5] matches the main gallery Canvas: crisp on desktop,
+          // capped on high-DPR phones. high-performance asks for the discrete GPU.
+          dpr={[1, 1.5]}
+          gl={{ powerPreference: 'high-performance' }}
+        >
           <BookScene
             pages={leaves}
             page={page}
