@@ -668,6 +668,40 @@ export const decodeGalleryParam = (
 };
 
 /* ============================================================
+   🔹 GALLERY RADIUS (shared by sphere + carousel)
+   ============================================================ */
+
+/**
+ * The world-space radius a sphere/carousel is built at. Derived from the user's
+ * sphereBase, but — critically — never allowed to fall below a floor set by the
+ * item count, so a small base can't collapse hundreds of cards into a clump.
+ *
+ * Why the floor exists: the surface a sphere offers grows with r², so to keep
+ * card density constant as the gallery grows, r must grow like √count. Without
+ * the floor, `sphereBase * 2 * scale` let a 284-item gallery with sphereBase 10
+ * render at radius 16 — cards overlapped into "clumps and holes", their tied
+ * depths flickered, and hundreds of DOM billboards stacked on one spot
+ * overwhelmed the compositor so the menu's backdrop-blur couldn't even paint.
+ * (Its twin gallery at sphereBase 30 → radius 48 was fine, which is exactly why
+ * the *same* items looked broken in one gallery and healthy in the other.)
+ *
+ * Pure and exported so the invariant "N cards always get enough room" is unit
+ * tested directly — see constants.radius.test.ts.
+ */
+export const getGalleryRadius = (count: number, sphereBase: number, cardScale: number): number => {
+  const scale = Math.max(0.6, cardScale || 1);
+  const n = Math.max(1, count);
+  // Density floor: enough radius that N billboards of ~this scale don't overlap.
+  // The 2.2 coefficient was tuned so the known-good 284-item gallery lands near
+  // its healthy radius (~42) and small galleries are untouched.
+  const densityFloor = 12 + Math.sqrt(n) * 2.2 * scale;
+  // The user's requested size (kept, but capped so a huge base can't fling cards
+  // past the camera's reach).
+  const requested = (sphereBase || 62) * (1 + Math.min(1, n * 0.004)) * scale;
+  return Math.max(10, densityFloor, Math.min(240, requested));
+};
+
+/* ============================================================
    🔹 SPHERE LAYOUT
    ============================================================ */
 

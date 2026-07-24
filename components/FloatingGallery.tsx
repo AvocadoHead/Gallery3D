@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import {
   getSphereCoordinates,
   getCarouselCoordinates,
+  getGalleryRadius,
   MediaItem,
   TITLE_SIZE_PX,
 } from '../constants';
@@ -349,10 +350,10 @@ const GalleryScene: React.FC<GallerySceneProps> = ({
   layout = 'sphere',
   titleDefaults = {},
 }) => {
-  const radius = Math.max(
-    10,
-    Math.min(200, (radiusBase || 62) * (1 + Math.min(1, items.length * 0.004)) * Math.max(0.6, cardScale)),
-  );
+  // Count-aware radius: never lets a small sphereBase collapse many cards into a
+  // clump (see getGalleryRadius). This is the root fix for the gallery that
+  // rendered clumps/flicker and a menu that wouldn't paint.
+  const radius = getGalleryRadius(items.length, radiusBase, cardScale);
 
   // Density-based perf gate: 200+ independent float animations cost more
   // than they add visually.
