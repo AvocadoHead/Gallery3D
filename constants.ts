@@ -741,11 +741,19 @@ export const getCarouselCoordinates = (count: number, radius: number) => {
   }
 
   // 🔹 LARGE: helix — stack multiple rings with a small vertical pitch.
-  const ringRadius = maxRing;
   const perRing = fitAtMaxRing;
   const ringCount = Math.ceil(safeCount / perRing);
   const pitch = CAROUSEL_MIN_SPACING * 0.95; // vertical gap between rings
   const totalHeight = (ringCount - 1) * pitch;
+  // Give every card a slightly distinct radius (within a sub-2% band) so no two
+  // ever sit at the same distance from the camera. On a single-radius cylinder
+  // the whole front arc is equidistant, so drei's distance-based DOM z-index
+  // tied and dithered every frame as the camera auto-rotated — the "cards
+  // flicker over each other" glitch, worst on big many-ring galleries (the
+  // sphere never showed it precisely because its depths already vary). The
+  // pseudo-random offset per card is far too small to see but stabilises the
+  // z-order. See FloatingGallery's zIndexRange note.
+  const depthBand = CAROUSEL_MIN_SPACING * 0.5;
 
   for (let i = 0; i < count; i++) {
     const ring = Math.floor(i / perRing);
@@ -755,6 +763,7 @@ export const getCarouselCoordinates = (count: number, radius: number) => {
     // rather than reading as separate stacked hoops.
     const theta = (idxInRing / itemsThisRing) * Math.PI * 2 + ring * 0.35;
     const y = totalHeight / 2 - ring * pitch;
+    const ringRadius = maxRing - depthBand * (0.5 + 0.5 * Math.sin(i * 1.3));
 
     points.push({
       position: [
