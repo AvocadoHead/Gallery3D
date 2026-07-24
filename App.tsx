@@ -567,7 +567,11 @@ const App: React.FC = () => {
   }, [applyLoadedRecord]);
 
   return (
-    <div className="w-full h-screen relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
+    {/* h-full (not h-screen/100vh): #root is height:100% of the real viewport,
+        so h-full tracks the *visible* area. On iOS Safari 100vh is taller than
+        the visible viewport while the address bar shows, which pushed the bottom
+        UI behind the browser chrome. */}
+    <div className="w-full h-full relative bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] overflow-hidden">
       
       {/* 3D Scene (always mounted — it doubles as the living backdrop behind the landing) */}
       <div className={`absolute inset-0 transition-opacity duration-700 ease-out z-0 ${selectedItem ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
