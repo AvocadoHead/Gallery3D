@@ -10,6 +10,15 @@ import {
 } from '../constants';
 import { loopVideoFirstSecond, useAnimatedVideoPreviewSource, getYouTubeId, youTubePreviewSrc } from './VideoThumbnail';
 
+// How many cards auto-stream their video preview on load (the rest wait for
+// hover). Each stream goes through the single rate-limited Google API key, so
+// phones — bandwidth-metered AND hoverless, so this eager set is the ONLY motion
+// a touch user ever sees — get a tighter budget: 6 parallel streams there tend to
+// all stall and fall back to static, whereas 2 actually load and loop reliably.
+// Evaluated once at module load; the eager count doesn't need to react to resize.
+const EAGER_PREVIEW_COUNT =
+  typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches ? 2 : 6;
+
 export interface TitleStyle {
   font?: string;
   size?: 'S' | 'M' | 'L' | 'XL';
@@ -66,7 +75,7 @@ const GalleryItem = ({
   // video preview streams through the single rate-limited Google API key, so a
   // big initial burst (was 12) tipped the key over and ALL loops fell back to
   // static. Fewer concurrent streams = the loops that do run actually load.
-  const previewActive = hovered || index < 6;
+  const previewActive = hovered || index < EAGER_PREVIEW_COUNT;
   const videoPreviewSource = useAnimatedVideoPreviewSource(item, previewActive);
   // YouTube: real motion via a muted embed, but ONLY while actually hovered —
   // never auto-mounted for the first-N, so we never spin up a wall of iframes.
