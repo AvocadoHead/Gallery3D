@@ -44,7 +44,9 @@ const BookScene: React.FC<{
   setPage: (n: number) => void;
   onReady: () => void;
   spineAngle: number;
-}> = ({ pages, page, setPage, onReady, spineAngle }) => {
+  perPage: BookPerPage;
+  onOpenItem: (item: MediaItem) => void;
+}> = ({ pages, page, setPage, onReady, spineAngle, perPage, onOpenItem }) => {
   const controlsRef = useRef<any>(null);
   return (
     <>
@@ -57,7 +59,7 @@ const BookScene: React.FC<{
         floatingRange={[-0.02, 0.02]}
       >
         <Suspense fallback={null}>
-          <Book pages={pages} page={page} setPage={setPage} spineAngle={spineAngle} />
+          <Book pages={pages} page={page} setPage={setPage} spineAngle={spineAngle} perPage={perPage} onOpenItem={onOpenItem} />
         </Suspense>
       </Float>
       <OrbitControls
@@ -94,6 +96,9 @@ interface BookGalleryProps {
   spineAngle?: number; // degrees; owner-controlled per gallery
   title?: string;
   titleDefaults: TitleStyle;
+  /** True while the lightbox is open — pause the book's own flip keys/zones so
+      they don't fight the lightbox's arrow-key item navigation. */
+  paused?: boolean;
 }
 
 /* Self-contained book view: own Canvas (and WebGL context), own build state.
@@ -104,7 +109,7 @@ interface BookGalleryProps {
    "Context Lost" console log) and keeps every layout's controls untouched.
    Do NOT re-merge the canvases unless the camera handoff is solved without
    any per-frame camera writes. */
-const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title, spineAngle = 28 }) => {
+const BookGallery: React.FC<BookGalleryProps> = ({ items, onSelect, perPage, title, spineAngle = 28, paused = false }) => {
   const [leaves, setLeaves] = useState<BookLeaf[] | null>(null);
   const [page, setPage] = useState(0);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -115,16 +120,18 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title, spineA
   const leavesRef = useRef<BookLeaf[] | null>(null);
   leavesRef.current = leaves;
 
-  const urls = useMemo(
+  // Each renderable item paired with the URL it's drawn from, so a click on a
+  // baked page can be mapped back to the real MediaItem and opened.
+  const entries = useMemo(
     () =>
       items
         .filter((i) => i.kind !== 'text' && !(i.kind === 'video' && !i.previewUrl && !i.fallbackPreview))
-        .map(bookUrl)
-        .filter(Boolean),
+        .map((item) => ({ url: bookUrl(item), item }))
+        .filter((e) => Boolean(e.url)),
     [items],
   );
 
-  const urlKey = useMemo(() => urls.join('|'), [urls]);
+  const urlKey = useMemo(() => entries.map((e) => e.url).join('|'), [entries]);
 
   useEffect(() => {
     let alive = true;
@@ -142,7 +149,7 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title, spineA
       if (!isFirstBuild) setRebuilding(true);
       setProgress({ done: 0, total: 0 });
 
-      buildBookLeaves(urls, perPage, title || 'Gallery', (loaded, total) => {
+      buildBookLeaves(entries, perPage, title || 'Gallery', (loaded, total) => {
         if (alive) setProgress({ done: loaded, total });
       }).then(({ leaves: l, skipped: s }) => {
         if (!alive) return;
@@ -159,6 +166,22 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title, spineA
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlKey, perPage, title]);
+
+  const flip = (dir: 1 | -1) =>
+    setPage((p) => Math.max(0, Math.min(leavesRef.current?.length ?? 0, p + dir)));
+
+  // Keyboard flipping — disabled while the lightbox is open (it owns ←/→ there
+  // for item navigation, so the book must not also react and double-advance).
+  useEffect(() => {
+    if (paused) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') flip(1);
+      else if (e.key === 'ArrowLeft') flip(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paused]);
 
   if (!items.length) {
     return <div className="w-full h-full flex items-center justify-center text-slate-400">Add media to build your book.</div>;
@@ -178,8 +201,39 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title, spineA
             setPage={setPage}
             onReady={() => setFirstFrameReady(true)}
             spineAngle={spineAngle}
+            perPage={perPage}
+            onOpenItem={onSelect}
           />
         </Canvas>
+      )}
+
+      {/* Screen-edge flip zones: click the far-left / far-right of the viewport
+          to turn pages (like a comic reader), leaving the centre free for the
+          3D book — where clicking an item opens it. Hidden while the lightbox
+          is open so its own controls receive the clicks. */}
+      {!showOverlay && !paused && (
+        <>
+          <button
+            onClick={() => flip(-1)}
+            disabled={page <= 0}
+            aria-label="Previous page"
+            className="group absolute left-0 top-16 bottom-24 w-[14%] z-[5] flex items-center justify-start pl-2 disabled:opacity-0 disabled:pointer-events-none"
+          >
+            <span className="opacity-0 group-hover:opacity-100 transition text-slate-400">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </span>
+          </button>
+          <button
+            onClick={() => flip(1)}
+            disabled={page >= (leaves?.length ?? 0)}
+            aria-label="Next page"
+            className="group absolute right-0 top-16 bottom-24 w-[14%] z-[5] flex items-center justify-end pr-2 disabled:opacity-0 disabled:pointer-events-none"
+          >
+            <span className="opacity-0 group-hover:opacity-100 transition text-slate-400">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            </span>
+          </button>
+        </>
       )}
 
       {showOverlay && (
@@ -213,24 +267,29 @@ const BookGallery: React.FC<BookGalleryProps> = ({ items, perPage, title, spineA
             </div>
           )}
 
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page <= 0}
-              className="w-11 h-11 rounded-full bg-white/90 backdrop-blur shadow-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white transition flex items-center justify-center"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <span className="px-3 py-1.5 rounded-full bg-white/90 backdrop-blur shadow text-xs font-semibold text-slate-600 tabular-nums">
-              {page === 0 ? 'Cover' : page >= (leaves?.length ?? 0) ? 'End' : `${page} / ${leaves?.length ?? 0}`}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => flip(-1)}
+                disabled={page <= 0}
+                className="w-11 h-11 rounded-full bg-white/90 backdrop-blur shadow-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white transition flex items-center justify-center"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <span className="px-3 py-1.5 rounded-full bg-white/90 backdrop-blur shadow text-xs font-semibold text-slate-600 tabular-nums">
+                {page === 0 ? 'Cover' : page >= (leaves?.length ?? 0) ? 'End' : `${page} / ${leaves?.length ?? 0}`}
+              </span>
+              <button
+                onClick={() => flip(1)}
+                disabled={page >= (leaves?.length ?? 0)}
+                className="w-11 h-11 rounded-full bg-white/90 backdrop-blur shadow-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white transition flex items-center justify-center"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-white/70 backdrop-blur text-[10px] font-medium text-slate-500 shadow-sm">
+              Tap an item to open · tap a page edge or use the arrows to turn
             </span>
-            <button
-              onClick={() => setPage((p) => Math.min(leaves?.length ?? 0, p + 1))}
-              disabled={page >= (leaves?.length ?? 0)}
-              className="w-11 h-11 rounded-full bg-white/90 backdrop-blur shadow-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white transition flex items-center justify-center"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </button>
           </div>
         </>
       )}

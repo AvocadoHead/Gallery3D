@@ -8,7 +8,7 @@ import {
   MediaItem,
   TITLE_SIZE_PX,
 } from '../constants';
-import { loopVideoFirstSecond, useAnimatedVideoPreviewSource } from './VideoThumbnail';
+import { loopVideoFirstSecond, useAnimatedVideoPreviewSource, getYouTubeId, youTubePreviewSrc } from './VideoThumbnail';
 
 export interface TitleStyle {
   font?: string;
@@ -62,8 +62,16 @@ const GalleryItem = ({
   const [loaded, setLoaded] = useState(item.kind === 'text');
   const [mounted, setMounted] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
-  const previewActive = hovered || index < 12;
+  // Auto-animate only the first few cards; the rest animate on hover. Each Drive
+  // video preview streams through the single rate-limited Google API key, so a
+  // big initial burst (was 12) tipped the key over and ALL loops fell back to
+  // static. Fewer concurrent streams = the loops that do run actually load.
+  const previewActive = hovered || index < 6;
   const videoPreviewSource = useAnimatedVideoPreviewSource(item, previewActive);
+  // YouTube: real motion via a muted embed, but ONLY while actually hovered —
+  // never auto-mounted for the first-N, so we never spin up a wall of iframes.
+  const youTubeId = getYouTubeId(item);
+  const ytPreview = hovered && youTubeId ? youTubePreviewSrc(youTubeId) : '';
 
   // Direct videos and detected Google Drive videos render as a short muted
   // loop in card space, like a lightweight GIF preview. Full playback still
@@ -191,21 +199,35 @@ const GalleryItem = ({
     }
 
     return (
-      <img
-        src={thumb}
-        alt={item.title || 'art'}
-        className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        onLoad={(e) => {
-          const el = e.target as HTMLImageElement;
-          handleSize(el.naturalWidth, el.naturalHeight);
-          setLoaded(true);
-        }}
-        onError={() => setLoaded(true)}
-        draggable={false}
-      />
+      <>
+        <img
+          src={thumb}
+          alt={item.title || 'art'}
+          className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onLoad={(e) => {
+            const el = e.target as HTMLImageElement;
+            handleSize(el.naturalWidth, el.naturalHeight);
+            setLoaded(true);
+          }}
+          onError={() => setLoaded(true)}
+          draggable={false}
+        />
+        {ytPreview && (
+          // Muted autoplay embed layered over the poster while hovered. It's
+          // pointer-events:none so a click still reaches the card and opens the
+          // lightbox rather than being swallowed by the iframe.
+          <iframe
+            src={ytPreview}
+            title={item.title || 'YouTube preview'}
+            className="absolute inset-0 w-full h-full rounded-xl pointer-events-none border-0"
+            allow="autoplay; encrypted-media"
+            loading="lazy"
+          />
+        )}
+      </>
     );
   };
 
@@ -259,7 +281,7 @@ const GalleryItem = ({
             )}
 
             {/* Play badge on video cards — playback lives in the lightbox */}
-            {showVideoFrame && (
+            {(showVideoFrame || item.kind === 'embed') && (
               <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full backdrop-blur-sm pointer-events-none">
                 <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
               </div>

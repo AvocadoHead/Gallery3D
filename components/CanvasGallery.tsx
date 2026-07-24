@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MediaItem, TITLE_SIZE_PX, createTextItem } from '../constants';
 import type { TitleStyle } from './FloatingGallery';
-import AnimatedVideoThumbnail, { useAnimatedVideoPreviewSource } from './VideoThumbnail';
+import AnimatedVideoThumbnail, { useAnimatedVideoPreviewSource, getYouTubeId, youTubePreviewSrc } from './VideoThumbnail';
 
 export type CanvasMode = 'grid' | 'free';
 
@@ -26,7 +26,12 @@ const clamp = (min: number, max: number, v: number) => Math.min(max, Math.max(mi
 const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewActive?: boolean; onRatio?: (ratio: number) => void }> = ({ item, titleDefaults, previewActive = false, onRatio }) => {
   const [videoFailed, setVideoFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const videoPreviewSource = useAnimatedVideoPreviewSource(item, previewActive || hovered);
+  const active = previewActive || hovered;
+  const videoPreviewSource = useAnimatedVideoPreviewSource(item, active);
+  // YouTube: real motion via a muted embed on hover only (see VideoThumbnail.tsx
+  // for why an animated thumbnail isn't reliable).
+  const youTubeId = getYouTubeId(item);
+  const ytPreview = hovered && youTubeId ? youTubePreviewSrc(youTubeId) : '';
 
   useEffect(() => {
     setVideoFailed(false);
@@ -77,7 +82,18 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewA
           }}
         />
       )}
-      {showVideoPreview && (
+      {ytPreview && (
+        // Muted autoplay embed over the poster on hover; pointer-events:none so
+        // the click still selects the card and opens the lightbox.
+        <iframe
+          src={ytPreview}
+          title={item.title || 'YouTube preview'}
+          className="absolute inset-0 w-full h-full pointer-events-none border-0"
+          allow="autoplay; encrypted-media"
+          loading="lazy"
+        />
+      )}
+      {(showVideoPreview || item.kind === 'embed') && (
         <div className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full backdrop-blur-sm pointer-events-none">
           <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
         </div>

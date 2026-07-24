@@ -22,7 +22,18 @@ const GRID_LAYOUTS: Record<1 | 2 | 4, Slot[]> = {
   ],
 };
 
-export type BookLeaf = { front: string; back: string };
+import type { MediaItem } from '../../constants';
+
+// A leaf carries its two textures AND the items that were composited onto each
+// side, in slot order, so a click on a page can be resolved back to the real
+// MediaItem and opened in the lightbox (where video actually plays — the book
+// itself only ever shows baked still frames).
+export type BookLeaf = {
+  front: string;
+  back: string;
+  frontItems: MediaItem[];
+  backItems: MediaItem[];
+};
 
 const extractDriveId = (input: string): string | null => {
   const m = input.match(/(?:file\/d\/|\/d\/|open\?id=|uc\?export=view&id=|uc\?id=|[?&]id=)([a-zA-Z0-9_-]{25,})/);
@@ -176,52 +187,81 @@ const chunk = <T,>(arr: T[], size: number): T[][] => {
   return out;
 };
 
-/** Build book leaves (front/back texture pairs) from item image URLs. */
+/** One item plus the URL used to render it into the book. */
+export type BookEntry = { url: string; item: MediaItem };
+
+/** Build book leaves (front/back texture pairs) from gallery items. Each side
+    also carries the items composited onto it, in slot order, so a click can be
+    mapped back to a MediaItem and opened in the lightbox. */
 export const buildBookLeaves = async (
-  urls: string[],
+  entries: BookEntry[],
   perPage: 1 | 2 | 4,
   title: string,
   onProgress?: (loaded: number, total: number) => void,
 ): Promise<{ leaves: BookLeaf[]; skipped: number }> => {
-  const normalized = urls.map(normalizeImageUrl).filter((u): u is string => !!u);
+  // Normalize URLs but keep each paired with its item so alignment survives the
+  // load-failure filtering below.
+  const normalized = entries
+    .map((e) => ({ url: normalizeImageUrl(e.url), item: e.item }))
+    .filter((e): e is { url: string; item: MediaItem } => !!e.url);
 
   // Scale canvas resolution down for large books to limit GPU memory usage
   const sides = Math.ceil(normalized.length / perPage) + 2;
   const scale = sides <= 24 ? 1 : sides <= 80 ? 0.75 : 0.5;
 
   let done = 0;
-  const images = await Promise.all(
-    normalized.map((u) =>
-      loadImage(u).then((img) => {
+  const loaded = await Promise.all(
+    normalized.map((e) =>
+      loadImage(e.url).then((img) => {
         done += 1;
         onProgress?.(done, normalized.length);
-        return img;
+        return { img, item: e.item };
       }),
     ),
   );
 
-  const valid = images.filter((i): i is HTMLImageElement => !!i);
+  const valid = loaded.filter((e): e is { img: HTMLImageElement; item: MediaItem } => !!e.img);
   const skipped = normalized.length - valid.length;
 
   // First item → front cover, last item → back cover (need ≥3 so interior is non-empty)
-  const coverImg = valid.length >= 1 ? valid[0] : null;
-  const backImg = valid.length >= 3 ? valid[valid.length - 1] : null;
-  const interior = backImg ? valid.slice(1, -1) : valid.slice(coverImg ? 1 : 0);
+  const coverE = valid.length >= 1 ? valid[0] : null;
+  const backE = valid.length >= 3 ? valid[valid.length - 1] : null;
+  const interior = backE ? valid.slice(1, -1) : valid.slice(coverE ? 1 : 0);
 
-  const frontCover = coverImg ? imageCoverTexture(coverImg, scale, title) : coverTexture(title, scale);
-  const backCover = backImg ? imageCoverTexture(backImg, scale) : blankTexture(scale);
-  const contentSides = chunk(interior, perPage).map((group) =>
-    renderLayout(group, GRID_LAYOUTS[perPage], scale),
+  const frontCover = coverE ? imageCoverTexture(coverE.img, scale, title) : coverTexture(title, scale);
+  const backCover = backE ? imageCoverTexture(backE.img, scale) : blankTexture(scale);
+
+  const interiorGroups = chunk(interior, perPage);
+  const contentSides = interiorGroups.map((group) =>
+    renderLayout(group.map((g) => g.img), GRID_LAYOUTS[perPage], scale),
   );
+  const contentItems = interiorGroups.map((group) => group.map((g) => g.item));
+
   // Back cover must land on a leaf BACK — pad to keep contentSides even
-  if (contentSides.length % 2 === 1) contentSides.push(blankTexture(scale));
+  if (contentSides.length % 2 === 1) {
+    contentSides.push(blankTexture(scale));
+    contentItems.push([]);
+  }
+
   const allSides = [frontCover, ...contentSides, backCover];
+  const allSideItems: MediaItem[][] = [
+    coverE ? [coverE.item] : [],
+    ...contentItems,
+    backE ? [backE.item] : [],
+  ];
 
   const leaves: BookLeaf[] = [];
   for (let i = 0; i < allSides.length; i += 2) {
-    leaves.push({ front: allSides[i], back: allSides[i + 1] || blankTexture(scale) });
+    leaves.push({
+      front: allSides[i],
+      back: allSides[i + 1] || blankTexture(scale),
+      frontItems: allSideItems[i] || [],
+      backItems: allSideItems[i + 1] || [],
+    });
   }
   // Ensure at least a cover + back leaf so the book is never degenerate.
-  if (leaves.length === 0) leaves.push({ front: coverTexture(title, scale), back: blankTexture(scale) });
+  if (leaves.length === 0) {
+    leaves.push({ front: coverTexture(title, scale), back: blankTexture(scale), frontItems: [], backItems: [] });
+  }
   return { leaves, skipped };
 };

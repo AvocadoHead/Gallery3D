@@ -594,6 +594,7 @@ const App: React.FC = () => {
             spineAngle={bookSpineAngle}
             title={displayName}
             titleDefaults={{ font: titleFont, size: titleSize }}
+            paused={!!selectedItem}
           />
         ) : (
           <Suspense fallback={<Loader />}>

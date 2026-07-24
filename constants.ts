@@ -339,6 +339,25 @@ const getVimeoId = (url: string) => {
   return m?.[1] || '';
 };
 
+// Only the canonical desktop video-page URL (…/@user/video/1234567890) encodes
+// the numeric id TikTok's embed player needs. The short share links people get
+// from the mobile "Share" sheet (vm.tiktok.com/xxxxx, tiktok.com/t/xxxxx)
+// resolve to that URL only after a redirect we can't follow client-side, so
+// those intentionally fall through unrecognized rather than creating a dead item.
+const getTikTokId = (url: string) => {
+  const m = url.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
+  return m?.[1] || '';
+};
+
+// TikTok's oEmbed thumbnail requires a network round-trip per link (no
+// formulaic CDN URL like YouTube's), which would make pasting links an async
+// operation. Rather than block on that, cards get a static branded card —
+// still clearly a video, playable for real once opened.
+const tiktokPlaceholder = () =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="#010101"/><text x="50%" y="47%" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">TikTok</text><text x="50%" y="60%" font-family="Arial, sans-serif" font-size="20" fill="#25F4EE" text-anchor="middle" dominant-baseline="middle">▶</text></svg>',
+  )}`;
+
 const isDirectVideo = (url: string) =>
   /\.(mp4|mov|webm|m4v|ogg)(\?|$)/i.test(url);
 
@@ -350,7 +369,7 @@ const isImage = (url: string) =>
    ============================================================ */
 
 export type MediaKind = 'image' | 'video' | 'embed' | 'text';
-export type MediaProvider = 'gdrive' | 'youtube' | 'vimeo' | 'html5' | 'unknown';
+export type MediaProvider = 'gdrive' | 'youtube' | 'vimeo' | 'tiktok' | 'html5' | 'unknown';
 
 export interface MediaItem {
   id: string;
@@ -479,6 +498,21 @@ export const createMediaItem = (raw: string): MediaItem | null => {
       fullUrl: `https://player.vimeo.com/video/${vimeo}`,
       embedUrl: `https://player.vimeo.com/video/${vimeo}`,
       aspectRatio: 16 / 9,
+    };
+  }
+
+  // 🔹 TikTok — only the long-form video-page URL resolves (see getTikTokId).
+  const tiktok = getTikTokId(input);
+  if (tiktok) {
+    return {
+      id: uniqueId(),
+      originalUrl: input,
+      kind: 'embed',
+      provider: 'tiktok',
+      previewUrl: tiktokPlaceholder(),
+      fullUrl: `https://www.tiktok.com/embed/v2/${tiktok}`,
+      embedUrl: `https://www.tiktok.com/embed/v2/${tiktok}`,
+      aspectRatio: 9 / 16,
     };
   }
 

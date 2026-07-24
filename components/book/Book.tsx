@@ -23,7 +23,6 @@ import {
   BoxGeometry,
   Color,
   Float32BufferAttribute,
-  MathUtils,
   MeshStandardMaterial,
   Skeleton,
   SkinnedMesh,
@@ -33,6 +32,7 @@ import {
 } from 'three';
 import { degToRad } from 'three/src/math/MathUtils.js';
 import type { BookLeaf } from './bookTextures';
+import type { MediaItem } from '../../constants';
 
 // Prototype-identical constants
 const easingFactor = 0.5;
@@ -100,16 +100,69 @@ interface PageProps {
   number: number;
   front: string;
   back: string;
+  frontItems: MediaItem[];
+  backItems: MediaItem[];
   page: number;
   opened: boolean;
   bookClosed: boolean;
   totalPages: number;
+  perPage: 1 | 2 | 4;
   riffle: boolean;
+  onOpenItem: (item: MediaItem) => void;
   setPage: (n: number) => void;
   [key: string]: any;
 }
 
-const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffle, setPage, ...props }: PageProps) => {
+type Slot = { x: number; y: number; w: number; h: number };
+// MUST mirror GRID_LAYOUTS in bookTextures.ts (normalized, y=0 at top). A page
+// composited at perPage=4 always uses the 4 quadrant slots even when the final
+// page holds fewer items, so slot geometry is keyed on perPage — never on how
+// many items happen to be on the page.
+const SLOTS: Record<1 | 2 | 4, Slot[]> = {
+  1: [{ x: 0, y: 0, w: 1, h: 1 }],
+  2: [
+    { x: 0, y: 0, w: 1, h: 0.5 },
+    { x: 0, y: 0.5, w: 1, h: 0.5 },
+  ],
+  4: [
+    { x: 0, y: 0, w: 0.5, h: 0.5 },
+    { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+    { x: 0, y: 0.5, w: 0.5, h: 0.5 },
+    { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+  ],
+};
+
+// Fraction of a slot (centred) treated as "open this item"; the surrounding
+// border, and the margins between slots, are the page-turn zone. So clicking an
+// item opens it, and clicking the outer edge of a page turns it — the fuzzy
+// split the gallery owner asked for.
+const ITEM_HIT_INSET = 0.1; // central 80% (0.1 … 0.9)
+
+// Which slot, and is the hit in that slot's central item zone? Normalize UV
+// into canvas space first: renderLayout draws slot x=0 at canvas-left and y=0 at
+// canvas-top, a texture's top edge is v=1, and the box BACK face mirrors u — so
+// a page turned open (back face showing) has its u flipped. ux runs 0→1
+// left→right, vy runs 0→1 top→bottom, both in the same space the slots use.
+const hitTest = (
+  perPage: 1 | 2 | 4,
+  uv: { x: number; y: number } | undefined,
+  isBackFace: boolean,
+): { slot: number; central: boolean } => {
+  if (!uv) return { slot: -1, central: false };
+  const ux = isBackFace ? 1 - uv.x : uv.x;
+  const vy = 1 - uv.y;
+  const slots = SLOTS[perPage];
+  const idx = slots.findIndex((s) => ux >= s.x && ux <= s.x + s.w && vy >= s.y && vy <= s.y + s.h);
+  if (idx < 0) return { slot: -1, central: false };
+  const s = slots[idx];
+  const lu = (ux - s.x) / s.w;
+  const lv = (vy - s.y) / s.h;
+  const central =
+    lu >= ITEM_HIT_INSET && lu <= 1 - ITEM_HIT_INSET && lv >= ITEM_HIT_INSET && lv <= 1 - ITEM_HIT_INSET;
+  return { slot: idx, central };
+};
+
+const Page = ({ number, front, back, frontItems, backItems, page, opened, bookClosed, totalPages, perPage, riffle, onOpenItem, setPage, ...props }: PageProps) => {
   const [picture, picture2] = useTexture([front, back]);
   useMemo(() => {
     picture.colorSpace = picture2.colorSpace = SRGBColorSpace;
@@ -120,8 +173,13 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
   const lastOpened = useRef(opened);
   const skinnedMeshRef = useRef<any>(null);
   const firstFrame = useRef(true);
-  const [highlighted, setHighlighted] = useState(false);
-  useCursor(highlighted);
+  // The face you see on a page depends on whether it's been turned: an un-opened
+  // page (right of the spread) shows its FRONT, an opened page (turned left)
+  // shows its BACK. That's both which items are clickable and whether u is
+  // mirrored for slot math.
+  const visibleItems = opened ? backItems : frontItems;
+  const [hovered, setHovered] = useState(false);
+  useCursor(hovered);
 
   // R1: only the two pages adjacent to the current spread are interactive
   const clickable = number === page || number === page - 1;
@@ -166,13 +224,8 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
   useFrame((_, delta) => {
     if (!skinnedMeshRef.current) return;
 
-    const emissiveIntensity = highlighted ? 0.1 : 0;
-    skinnedMeshRef.current.material[4].emissiveIntensity =
-      skinnedMeshRef.current.material[5].emissiveIntensity = MathUtils.lerp(
-        skinnedMeshRef.current.material[4].emissiveIntensity,
-        emissiveIntensity,
-        0.1,
-      );
+    // No hover highlight — the page shows its texture plainly; the cursor is the
+    // only affordance. (Emissive is left at its constructed 0.)
 
     if (lastOpened.current !== opened) {
       turnedAt.current = +new Date();
@@ -228,14 +281,21 @@ const Page = ({ number, front, back, page, opened, bookClosed, totalPages, riffl
     <group
       {...props}
       ref={group}
-      // R1: only highlight/click pages adjacent to the current spread
-      onPointerEnter={(e: any) => { e.stopPropagation(); if (clickable) setHighlighted(true); }}
-      onPointerLeave={(e: any) => { e.stopPropagation(); setHighlighted(false); }}
+      // R1: only the two pages adjacent to the current spread are interactive.
+      onPointerEnter={(e: any) => { e.stopPropagation(); if (clickable) setHovered(true); }}
+      onPointerLeave={(e: any) => { e.stopPropagation(); setHovered(false); }}
       onClick={(e: any) => {
         e.stopPropagation();
         if (!clickable) return;
-        setPage(opened ? number : number + 1);
-        setHighlighted(false);
+        // Fuzzy split: a click inside the central 80% of an item opens it in the
+        // lightbox; anywhere else on the page — the item's border, the gutter
+        // between items, the page margin — turns the page, exactly as the whole
+        // page used to. When UV is somehow unavailable we default to the turn so
+        // paging never feels broken.
+        const { slot, central } = hitTest(perPage, e.uv, opened);
+        const item = slot >= 0 ? visibleItems[slot] : undefined;
+        if (central && item) onOpenItem(item);
+        else setPage(opened ? number : number + 1);
       }}
     >
       <primitive object={manualSkinnedMesh} ref={skinnedMeshRef} position-z={leafZ(number, page)} />
@@ -247,6 +307,8 @@ interface BookProps {
   pages: BookLeaf[];
   page: number;
   setPage: (n: number) => void;
+  perPage: 1 | 2 | 4;
+  onOpenItem: (item: MediaItem) => void;
   [key: string]: any;
 }
 
@@ -365,7 +427,7 @@ const FarPage = ({ number, opened, page, totalPages, bookClosed }: {
   );
 };
 
-export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
+export const Book = ({ pages, page, setPage, perPage, onOpenItem, ...props }: BookProps) => {
   const [delayedPage, setDelayedPage] = useState(page);
 
   useEffect(() => {
@@ -422,10 +484,14 @@ export const Book = ({ pages, page, setPage, ...props }: BookProps) => {
               number={index}
               front={leaf.front}
               back={leaf.back}
+              frontItems={leaf.frontItems}
+              backItems={leaf.backItems}
               opened={delayedPage > index}
               bookClosed={bookClosed}
               totalPages={pages.length}
+              perPage={perPage}
               riffle={riffle}
+              onOpenItem={onOpenItem}
               setPage={setPage}
             />
           </Suspense>

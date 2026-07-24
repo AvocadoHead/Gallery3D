@@ -26,6 +26,10 @@ const extractDriveId = (url: string): string | null => {
   return null;
 };
 
+// Remember each Drive file's resolved kind so re-opening never re-probes the
+// (rate-limited) Drive API. Only real probe results are cached — never timeouts.
+const driveKindCache = new Map<string, 'image' | 'iframe'>();
+
 const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onClose, titleDefaults = {}, galleryId, onCommentItem }) => {
   const [visible, setVisible] = useState(false);
   const [driveMode, setDriveMode] = useState<'loading' | 'image' | 'video' | 'iframe'>('loading');
@@ -91,24 +95,40 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     if (!isDrive) { setDriveMode('image'); return; }
 
     // NOTE: every Drive item is parsed as kind:'image' upstream (the real type
-    // isn't known without asking Drive), so we must ALWAYS run the mime probe
-    // here to tell images from videos. The loading flash it used to cause is
-    // now hidden by the preview thumbnail shown during the 'loading' state.
+    // isn't known without asking Drive), so we resolve it here — from the cache
+    // if we've probed this file before, otherwise via the mime probe below. The
+    // loading flash it used to cause is now hidden by the preview thumbnail
+    // shown during the 'loading' state.
     const id = extractDriveId(artwork.fullUrl) || extractDriveId((artwork as any).embedUrl);
     if (!id) { setDriveMode('iframe'); return; }
 
-    // No API key — use direct Drive URL; falls back to iframe on load error
+    // No API key, or we already know this file — resolve instantly, no probe.
+    const known = driveKindCache.get(id);
+    if (known) { setDriveMode(known); return; }
     if (!GOOGLE_API_KEY) { setDriveMode('image'); return; }
 
+    // Probe the Drive mime type to tell images from videos — but the API key is
+    // rate-limited and the request can stall for 15s+, hanging the open on a
+    // spinner. So we CAP it: whichever comes first wins, and we never wait past
+    // the timeout. Videos (and any non-image) resolve to Drive's embedded
+    // /preview player, which starts fast and needs no API key — much snappier
+    // than streaming the raw file through the metered endpoint.
+    setDriveMode('loading');
+    let settled = false;
+    const timer = setTimeout(() => { if (!settled) { settled = true; setDriveMode('iframe'); } }, 2500);
     fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=mimeType&key=${GOOGLE_API_KEY}`)
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`Drive mime probe failed: ${r.status}`)))
       .then((d) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         const mime = typeof d.mimeType === 'string' ? d.mimeType : '';
-        if (mime.startsWith('image/')) setDriveMode('image');
-        else if (mime.startsWith('video/')) setDriveMode('video');
-        else setDriveMode('iframe');
+        const kind: 'image' | 'iframe' = mime.startsWith('image/') ? 'image' : 'iframe';
+        driveKindCache.set(id, kind);
+        setDriveMode(kind);
       })
-      .catch(() => setDriveMode('iframe'));
+      .catch(() => { if (!settled) { settled = true; clearTimeout(timer); setDriveMode('iframe'); } });
+    return () => { settled = true; clearTimeout(timer); };
   }, [artwork]);
 
   // Non-passive wheel listener — useLayoutEffect fires synchronously after DOM
@@ -196,16 +216,34 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
       if (videoId) return { type: 'iframe', src: `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0`, ratio: 'fixed' };
     }
 
+    if (url.includes('tiktok.com')) {
+      // fullUrl is already the embed URL (see constants.ts) — TikTok's tall
+      // aspect ratio needs its own frame instead of the 16:9 'fixed' box.
+      return { type: 'iframe', src: url, ratio: 'tiktok' };
+    }
+
     const isDrive = url.includes('drive.google.com') || (artwork as any).provider === 'gdrive';
     if (isDrive) {
       const id = extractDriveId(url) || extractDriveId((artwork as any).embedUrl);
       if (id) {
         if (driveMode === 'loading') return { type: 'loading' };
-        if (driveMode === 'image' || driveMode === 'video') {
+        if (driveMode === 'video') {
+            // Actual video bytes have no fast free equivalent — this has to go
+            // through the metered API key (or the /preview iframe below, if
+            // there's no key at all).
             const src = GOOGLE_API_KEY
               ? `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${GOOGLE_API_KEY}`
               : `https://drive.google.com/uc?export=view&id=${id}`;
-            return driveMode === 'video' ? { type: 'video', src } : { type: 'image', src };
+            return { type: 'video', src };
+          }
+        if (driveMode === 'image') {
+            // Drive's free CDN-backed thumbnail endpoint, capped at 4000px —
+            // the same one gallery cards already use. This used to stream the
+            // ORIGINAL file through the metered API key instead, which is why
+            // opening a big Drive photo could take far longer than everything
+            // else in the gallery (and burned the same rate-limited quota the
+            // video preview loops depend on). 4000px is plenty for the lightbox.
+            return { type: 'image', src: `https://drive.google.com/thumbnail?id=${id}&sz=s4000` };
           }
         return { type: 'iframe', src: `https://drive.google.com/file/d/${id}/preview`, ratio: 'flexible' };
       }
@@ -229,12 +267,13 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     transition: 'opacity 650ms cubic-bezier(0.16, 1, 0.3, 1), transform 650ms cubic-bezier(0.16, 1, 0.3, 1), filter 650ms cubic-bezier(0.16, 1, 0.3, 1)',
     willChange: 'opacity, transform, filter',
   };
+  // Small, non-obscuring loader: sits at the bottom so the frame that's already
+  // coming up (preview poster / first paint) stays fully visible behind it,
+  // instead of a big centered spinner blotting out the image.
   const LoadingSpinner = () => (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 text-white/82 pointer-events-none">
-      <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-      <div className="w-48 h-1.5 bg-white/15 rounded-full overflow-hidden">
-        <div className="h-full w-1/3 bg-white/70 rounded-full animate-pulse" />
-      </div>
+    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 backdrop-blur-sm text-white/85 pointer-events-none">
+      <div className="w-3.5 h-3.5 border-2 border-white/25 border-t-white rounded-full animate-spin" />
+      <span className="text-[11px] font-medium tracking-wide">Loading…</span>
     </div>
   );
 
@@ -315,7 +354,7 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
                   alt=""
                   aria-hidden
                   className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl block select-none"
-                  style={{ filter: 'blur(6px)' }}
+                  style={{ filter: 'blur(2px)' }}
                   draggable={false}
                 />
                 <LoadingSpinner />
@@ -327,7 +366,13 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
             )
           ) : config.type === 'iframe' ? (
             <div
-              className={`bg-black shadow-2xl rounded-lg overflow-hidden ${config.ratio === 'fixed' ? 'w-[90vw] max-w-7xl aspect-video max-h-[80vh]' : 'w-[90vw] h-[80vh] max-w-7xl'}`}
+              className={`bg-black shadow-2xl rounded-lg overflow-hidden ${
+                config.ratio === 'fixed'
+                  ? 'w-[90vw] max-w-7xl aspect-video max-h-[80vh]'
+                  : config.ratio === 'tiktok'
+                  ? 'w-auto h-[85vh] aspect-[9/16] max-w-[90vw]'
+                  : 'w-[90vw] h-[80vh] max-w-7xl'
+              }`}
               style={mediaRevealStyle}
             >
               <iframe src={config.src} title="Content" className="w-full h-full border-0" allow="autoplay; encrypted-media; fullscreen" allowFullScreen onLoad={() => setMediaReady(true)} />

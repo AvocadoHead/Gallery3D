@@ -20,6 +20,34 @@ export const loopVideoFirstSecond = (video: HTMLVideoElement) => {
   if (video.currentTime > 1.35) video.currentTime = 0.1;
 };
 
+export const getYouTubeId = (item: MediaItem): string | null => {
+  if (item.provider !== 'youtube') return null;
+  for (const url of [item.embedUrl, item.originalUrl, item.fullUrl]) {
+    if (!url) continue;
+    const m = url.match(/(?:embed\/|v=|youtu\.be\/|shorts\/)([\w-]{11})/);
+    if (m) return m[1];
+  }
+  return null;
+};
+
+// Real motion for a YouTube card. YouTube has no public equivalent of Drive's
+// "give me the raw file bytes" API, and its undocumented animated-thumbnail
+// endpoint (i.ytimg.com/an_webp/…) silently returns a gray "no preview"
+// placeholder for a large share of videos — which is exactly the ugly frame
+// this replaces. So instead of a fake GIF, we mount a muted, chromeless,
+// autoplaying embed ON HOVER only (one at a time, never a wall of autoplaying
+// iframes), which plays the actual start of the clip. The static thumbnail
+// stays underneath as the poster. `loop=1&playlist=<id>` makes a short clip
+// repeat like a preview.
+export const youTubePreviewSrc = (id: string): string =>
+  `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${id}` +
+  `&modestbranding=1&playsinline=1&rel=0&disablekb=1&fs=0&iv_load_policy=3`;
+
+// Cache each Drive file's "is it a video?" answer so re-mounts, hovers, and
+// layout switches (sphere ↔ carousel ↔ masonry) never re-probe the rate-limited
+// Drive API. Failures are NOT cached, so a throttled probe can still retry later.
+const driveVideoMimeCache = new Map<string, boolean>();
+
 export const useAnimatedVideoPreviewSource = (item: MediaItem, enabled = true) => {
   const directSource = useMemo(() => {
     if (item.videoUrl && isDirectVideoUrl(item.videoUrl)) return item.videoUrl;
@@ -41,12 +69,21 @@ export const useAnimatedVideoPreviewSource = (item: MediaItem, enabled = true) =
 
     if (!enabled || directSource || !isDrive || !driveId || !GOOGLE_API_KEY) return;
 
+    const streamUrl = `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media&key=${GOOGLE_API_KEY}`;
+
+    // Known already? Resolve instantly without touching the (throttled) API.
+    const cached = driveVideoMimeCache.get(driveId);
+    if (cached !== undefined) {
+      if (cached) setDriveSource(streamUrl);
+      return;
+    }
+
     fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=mimeType&key=${GOOGLE_API_KEY}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Drive mime probe failed: ${r.status}`))))
       .then((d) => {
-        if (alive && typeof d.mimeType === 'string' && d.mimeType.startsWith('video/')) {
-          setDriveSource(`https://www.googleapis.com/drive/v3/files/${driveId}?alt=media&key=${GOOGLE_API_KEY}`);
-        }
+        const isVideo = typeof d.mimeType === 'string' && d.mimeType.startsWith('video/');
+        driveVideoMimeCache.set(driveId, isVideo);
+        if (alive && isVideo) setDriveSource(streamUrl);
       })
       .catch(() => {
         if (alive) setDriveSource('');
