@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Session } from '@supabase/supabase-js';
 import { GallerySummary, Visibility, GalleryNote, listGalleryNotes, markNotesRead, publishNote, deleteGalleryNote, checkMediaVisibility } from '../supabaseClient';
 import { MediaItem, CURATED_FONTS, getDriveId, SUPPORT_EMAIL } from '../constants';
+import EmbedSnippet from './EmbedSnippet';
 
 const VIS_OPTIONS: { value: Visibility; label: string; icon: string; hint: string }[] = [
   { value: 'private', label: 'Private', icon: '🔒', hint: 'Only you can open it.' },
@@ -120,6 +121,8 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     setIssueEmail('');
   }, [issueText, issueEmail]);
   const [shareMenuOpen, setShareMenuOpen] = useState<string | null>(null);
+  // Which saved gallery slug (if any) the Embed-code panel is open for.
+  const [embedSlug, setEmbedSlug] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [visMenuOpen, setVisMenuOpen] = useState<string | null>(null);
@@ -452,6 +455,9 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                                            </button>
                                            <button onClick={() => handleWhatsAppRow(g.slug || g.id)} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 font-medium border-t border-slate-50">
                                               WhatsApp
+                                           </button>
+                                           <button onClick={() => { setEmbedSlug(g.slug || g.id); setShareMenuOpen(null); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 font-medium border-t border-slate-50">
+                                              Embed
                                            </button>
                                         </div>
                                      )}
@@ -1087,12 +1093,26 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
                     <button onClick={() => { const link = props.getShareLink(); window.open(`https://wa.me/?text=${encodeURIComponent(link)}`); setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100">
                         <span className="text-[#25D366] text-lg">📱</span> WhatsApp
                     </button>
-                    <button onClick={() => { const link = props.getShareLink(); window.location.href = `mailto:?subject=Gallery&body=${encodeURIComponent(link)}`; setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3">
+                    <button onClick={() => { const link = props.getShareLink(); window.location.href = `mailto:?subject=Gallery&body=${encodeURIComponent(link)}`; setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100">
                         <span className="text-blue-600 text-lg">✉️</span> Email
                     </button>
+                    {(() => {
+                        // Embed needs a persistent short-slug link; the encoded
+                        // fallback link (unsaved gallery) can't be framed, so only
+                        // offer Embed once the gallery is saved.
+                        let gid = '';
+                        try { gid = new URL(props.getShareLink()).searchParams.get('gallery') || ''; } catch { gid = ''; }
+                        return gid && gid.length <= 20 ? (
+                            <button onClick={() => { setEmbedSlug(gid); setShareMenuOpen(null); }} className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3">
+                                <span className="text-slate-700 text-lg">🔗</span> Embed
+                            </button>
+                        ) : null;
+                    })()}
                 </div>
             </>
         )}
+
+        {embedSlug && <EmbedSnippet slug={embedSlug} onClose={() => setEmbedSlug(null)} />}
       </div>
     </div>
   );

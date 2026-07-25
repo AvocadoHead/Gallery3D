@@ -10,6 +10,8 @@ import Landing from './components/Landing';
 import Explore from './components/Explore';
 import TermsModal from './components/TermsModal';
 import NoteForm from './components/NoteForm';
+import { useEmbedMode, useEmbedActivation } from './hooks/useEmbed';
+import EmbedBadge from './components/EmbedBadge';
 import {
   GalleryRecord,
   GallerySummary,
@@ -160,6 +162,10 @@ const App: React.FC = () => {
   const [isLoadingMyGalleries, setIsLoadingMyGalleries] = useState(false);
 
   const authProcessing = useRef(false);
+
+  // --- Embed mode (opt-in via ?embed=1; inert otherwise) ---
+  const isEmbed = useEmbedMode();
+  const { overlay: embedOverlay } = useEmbedActivation(isEmbed);
 
   // --- AUTH LOGIC ---
   useEffect(() => {
@@ -631,6 +637,11 @@ const App: React.FC = () => {
         {loadingRemote && <Loader />}
       </div>
 
+      {/* Embed mode: click-to-activate gate (keeps the host page scrollable
+          until first tap) + attribution badge, both over the canvas. */}
+      {isEmbed && embedOverlay}
+      {isEmbed && <EmbedBadge />}
+
       <Overlay
         artwork={selectedItem}
         items={galleryItems}
@@ -653,7 +664,7 @@ const App: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className={`fixed top-[max(2rem,env(safe-area-inset-top))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed top-[max(2rem,env(safe-area-inset-top))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => openBuilder('galleries')}
@@ -745,14 +756,14 @@ const App: React.FC = () => {
       </div>
 
       {/* Footer left — Terms + Accessibility */}
-      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
         <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Terms</button>
         <span className="text-slate-300 text-[10px]">·</span>
         <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Accessibility</button>
       </div>
 
       {/* Footer right — Comment + Contact */}
-      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] right-[max(2rem,env(safe-area-inset-right))] z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] right-[max(2rem,env(safe-area-inset-right))] z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
         {COMMENTING_ENABLED && galleryDbId && (
           <button
             onClick={() => { setNoteFormItemId(undefined); setNoteFormItemTitle(undefined); setNoteFormOpen(true); }}
@@ -789,7 +800,7 @@ const App: React.FC = () => {
       {/* DONATION TOAST — sits below the header/toast row, clear of the bottom
           Terms/Contact pills and the builder modal's own footer buttons
           (both of which live at bottom-8 and used to collide with this). */}
-      {donationToast && view === 'gallery' && !builderOpen && (
+      {!isEmbed && donationToast && view === 'gallery' && !builderOpen && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-in slide-in-from-top-4 fade-in duration-500">
            <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-white/10">
               <div className="text-sm">
@@ -812,7 +823,7 @@ const App: React.FC = () => {
       )}
 
       {/* Landing hero — living 3D sphere behind it */}
-      {view === 'landing' && (
+      {!isEmbed && view === 'landing' && (
         <Landing
           session={session}
           onBuild={() => {
