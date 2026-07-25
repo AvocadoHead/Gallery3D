@@ -41,6 +41,16 @@ body {
   .explore-cta { animation: none; }
 }
 
+/* Typographic tone — the Aether wordmark's light Inter weight, applied
+   site-wide with no bold anywhere. Every weight utility (and semantic
+   emphasis) is capped to a light scale; `font-light` stays 300, everything
+   else lands at 400 (normal). Retune the whole site from these lines. */
+body { font-weight: 300; }
+.font-medium,
+.font-semibold,
+.font-bold { font-weight: 400 !important; }
+b, strong { font-weight: 400 !important; }
+
 /* Modal styles */
 @media (max-width: 640px) {
   .modal-container {

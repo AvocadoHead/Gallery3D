@@ -85,6 +85,9 @@ const App: React.FC = () => {
   const [exploreOrigin, setExploreOrigin] = useState<'landing' | 'gallery'>('landing');
 
   // --- UI State ---
+  // Minimal view: hides the header/footer chrome so the 3D gallery fills the
+  // screen unobstructed. Toggled from the top-right control.
+  const [minimalUi, setMinimalUi] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<BuilderTab>('galleries');
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
@@ -663,8 +666,25 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Minimal-view toggle — hides all chrome for an unobstructed gallery.
+          Stays visible (top-right) so the user can toggle back. */}
+      {!isEmbed && view === 'gallery' && !selectedItem && (
+        <button
+          onClick={() => setMinimalUi((v) => !v)}
+          className="fixed top-[max(2rem,env(safe-area-inset-top))] right-[max(2rem,env(safe-area-inset-right))] z-[110] p-2 rounded-full bg-white/50 hover:bg-white/80 backdrop-blur-md shadow-sm text-slate-600 transition"
+          aria-label={minimalUi ? 'Show controls' : 'Minimal view'}
+          title={minimalUi ? 'Show controls' : 'Minimal view'}
+        >
+          {minimalUi ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 9L4 4m0 0v4m0-4h4m6 5l5-5m0 0v4m0-4h-4M9 15l-5 5m0 0v-4m0 4h4m6-5l5 5m0 0v-4m0 4h-4" /></svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 012-2h2m8 0h2a2 2 0 012 2v2m0 8v2a2 2 0 01-2 2h-2m-8 0H6a2 2 0 01-2-2v-2" /></svg>
+          )}
+        </button>
+      )}
+
       {/* Header */}
-      <div className={`fixed top-[max(2rem,env(safe-area-inset-top))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
+      <div className={`fixed top-[max(2rem,env(safe-area-inset-top))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex flex-col items-start gap-3 ${selectedItem || view !== 'gallery' || minimalUi ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => openBuilder('galleries')}
@@ -727,6 +747,16 @@ const App: React.FC = () => {
                 Book<sup className="ml-0.5 text-[8px] font-bold text-amber-500">beta</sup>
               </button>
           </div>
+        </div>
+
+        {/* Gallery name + Explore share a row — the name uses the Aether
+            wordmark treatment (Inter, light, tight) two steps larger. */}
+        <div className="flex flex-wrap items-center gap-3 max-w-[calc(100vw-4rem)]">
+          {displayName && (
+             <div className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-lg text-slate-800 font-light tracking-tighter">
+               {displayName}
+             </div>
+          )}
           <button
             onClick={() => {
               setExploreOrigin('gallery');
@@ -734,22 +764,12 @@ const App: React.FC = () => {
             }}
             // Primary CTA: uses the existing slate-900 token (same as the active
             // layout pill), a real ≥48px tap target, and a subtle finite pulse
-            // (see index.css, disabled under prefers-reduced-motion). Lives in
-            // the header row, which now wraps so this never clips on the right.
+            // (see index.css, disabled under prefers-reduced-motion).
             className="explore-cta inline-flex items-center justify-center gap-1.5 px-5 min-h-[48px] text-sm font-bold rounded-full bg-slate-900 text-white shadow-md hover:bg-slate-800 active:scale-95 transition"
           >
             Explore
           </button>
         </div>
-
-        {displayName && (
-           <div 
-             className="px-3 py-1 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm text-sm text-slate-800 font-bold tracking-tight"
-             style={{ fontFamily: 'Heebo, sans-serif' }}
-           >
-             {displayName}
-           </div>
-        )}
         
         {toastVisible && (
           <div className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg animate-bounce flex items-center gap-2">
@@ -760,14 +780,14 @@ const App: React.FC = () => {
       </div>
 
       {/* Footer left — Terms + Accessibility */}
-      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
+      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] left-[max(2rem,env(safe-area-inset-left))] z-[100] transition-opacity duration-500 flex items-center gap-3 ${selectedItem || view !== 'gallery' || minimalUi ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
         <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Terms</button>
         <span className="text-slate-300 text-[10px]">·</span>
         <button onClick={() => setTermsOpen(true)} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition">Accessibility</button>
       </div>
 
       {/* Footer right — Comment + Contact */}
-      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] right-[max(2rem,env(safe-area-inset-right))] z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
+      <div className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom))] right-[max(2rem,env(safe-area-inset-right))] z-[100] transition-opacity duration-500 flex items-center gap-2 ${selectedItem || view !== 'gallery' || minimalUi ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isEmbed ? 'hidden' : ''}`}>
         {COMMENTING_ENABLED && galleryDbId && (
           <button
             onClick={() => { setNoteFormItemId(undefined); setNoteFormItemTitle(undefined); setNoteFormOpen(true); }}

@@ -43,7 +43,7 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewA
     return (
       <div
         className="w-full h-full flex items-center justify-center text-center p-2 leading-tight break-words"
-        style={{ fontFamily: `'${font}', sans-serif`, fontSize: size, color, fontWeight: 700 }}
+        style={{ fontFamily: `'${font}', sans-serif`, fontSize: size, color, fontWeight: 400 }}
       >
         {item.text || 'Text'}
       </div>
