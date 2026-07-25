@@ -207,7 +207,11 @@ const Overlay: React.FC<OverlayProps> = ({ artwork, items = [], onNavigate, onCl
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = url.split('v=')[1] || url.split('/').pop();
       const cleanId = videoId?.split('&')[0].split('?')[0];
-      return { type: 'iframe', src: `https://www.youtube.com/embed/${cleanId}?autoplay=1&rel=0`, ratio: 'fixed' };
+      // controls=0 (+ modest chrome) so YouTube's own center play/pause button
+      // and scrubber don't linger over the piece the way the default player did
+      // (Drive's player auto-hides; YouTube's didn't). Mirrors the hover-thumb
+      // params. Click still toggles play/pause.
+      return { type: 'iframe', src: `https://www.youtube.com/embed/${cleanId}?autoplay=1&rel=0&controls=0&modestbranding=1&playsinline=1&disablekb=1&fs=0&iv_load_policy=3`, ratio: 'fixed' };
     }
 
     if (url.includes('vimeo.com')) {

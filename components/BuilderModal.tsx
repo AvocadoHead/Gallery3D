@@ -127,6 +127,36 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [visMenuOpen, setVisMenuOpen] = useState<string | null>(null);
 
+  // Desktop: the panel floats over the (now visible) gallery and can be dragged
+  // aside by its top bar so it never permanently obscures what you're styling.
+  // Mobile keeps the full-screen sheet; drag is a no-op there.
+  const [drag, setDrag] = useState({ x: 0, y: 0 });
+  const dragState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+
+  const onHeaderPointerDown = (e: React.PointerEvent) => {
+    if (typeof window !== 'undefined' && window.innerWidth < 640) return; // desktop only
+    if ((e.target as HTMLElement).closest('button, input, a, select, textarea')) return;
+    dragState.current = { startX: e.clientX, startY: e.clientY, baseX: drag.x, baseY: drag.y };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onHeaderPointerMove = (e: React.PointerEvent) => {
+    if (!dragState.current) return;
+    setDrag({
+      x: dragState.current.baseX + (e.clientX - dragState.current.startX),
+      y: dragState.current.baseY + (e.clientY - dragState.current.startY),
+    });
+  };
+  const onHeaderPointerUp = (e: React.PointerEvent) => {
+    dragState.current = null;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* no-op */ }
+  };
+
+  // Reset the dragged position each time the modal opens, so it never reopens
+  // stranded off-screen from a previous session.
+  useEffect(() => {
+    if (!props.isOpen) setDrag({ x: 0, y: 0 });
+  }, [props.isOpen]);
+
   // Sharing check — flags Google Drive items that look private (see
   // supabaseClient.checkMediaVisibility for why this can't run client-only).
   const [sharingCheck, setSharingCheck] = useState<{
@@ -315,12 +345,27 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
     setActiveTab('content');
   };
 
+  const isAppearance = activeTab === 'appearance';
+
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
-        
-        {/* Top Bar */}
-        <div className="flex items-center justify-between border-b border-slate-100 bg-white z-10 pt-2 px-2 pb-0">
+    <>
+    {/* Desktop: transparent + click-through backdrop so the gallery stays
+        visible and interactive behind the floating panel. Mobile: keeps the
+        dimmed sheet, except on the Look tab where it goes clear so the
+        translucent panel reveals the live gallery being styled. */}
+    <div className={`fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-4 sm:pointer-events-none sm:bg-transparent sm:backdrop-blur-none ${isAppearance ? 'bg-transparent' : 'bg-slate-900/40 backdrop-blur-sm'}`}>
+      <div
+        className={`bg-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative sm:pointer-events-auto ${isAppearance ? 'max-sm:opacity-90 max-sm:backdrop-blur-md' : ''}`}
+        style={{ transform: (drag.x || drag.y) ? `translate(${drag.x}px, ${drag.y}px)` : undefined }}
+      >
+
+        {/* Top Bar — doubles as the drag handle on desktop (see onHeader*). */}
+        <div
+          className="flex items-center justify-between border-b border-slate-100 bg-white z-10 pt-2 px-2 pb-0 select-none sm:cursor-move"
+          onPointerDown={onHeaderPointerDown}
+          onPointerMove={onHeaderPointerMove}
+          onPointerUp={onHeaderPointerUp}
+        >
           <div className="flex overflow-x-auto no-scrollbar flex-1 gap-4 px-2">
             <button 
               onClick={() => setActiveTab('galleries')} 
@@ -1112,9 +1157,13 @@ const BuilderModal: React.FC<BuilderModalProps> = (props) => {
             </>
         )}
 
-        {embedSlug && <EmbedSnippet slug={embedSlug} onClose={() => setEmbedSlug(null)} />}
       </div>
     </div>
+    {/* Rendered outside the panel so the desktop drag transform never clips
+        this full-screen modal (a transformed ancestor becomes the containing
+        block for fixed children). */}
+    {embedSlug && <EmbedSnippet slug={embedSlug} onClose={() => setEmbedSlug(null)} />}
+    </>
   );
 };
 
