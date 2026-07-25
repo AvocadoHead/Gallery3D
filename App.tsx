@@ -692,7 +692,7 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-w-[calc(100vw-4rem)]">
           <div className="inline-flex items-center rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm">
               <button
                 className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
@@ -732,7 +732,11 @@ const App: React.FC = () => {
               setExploreOrigin('gallery');
               setView('explore');
             }}
-            className="px-3 py-1 text-xs font-semibold rounded-full bg-white/80 shadow-sm border border-slate-200 backdrop-blur-sm text-slate-600 hover:text-slate-900 transition"
+            // Primary CTA: uses the existing slate-900 token (same as the active
+            // layout pill), a real ≥48px tap target, and a subtle finite pulse
+            // (see index.css, disabled under prefers-reduced-motion). Lives in
+            // the header row, which now wraps so this never clips on the right.
+            className="explore-cta inline-flex items-center justify-center gap-1.5 px-5 min-h-[48px] text-sm font-bold rounded-full bg-slate-900 text-white shadow-md hover:bg-slate-800 active:scale-95 transition"
           >
             Explore
           </button>

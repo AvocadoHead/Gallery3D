@@ -28,6 +28,19 @@ body {
   box-sizing: border-box;
 }
 
+/* Explore CTA — subtle attention pulse, derived from the slate-900 token.
+   Finite (2 cycles), and fully disabled under reduced-motion. */
+@keyframes explore-pulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25); }
+  50% { box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25), 0 0 0 6px rgba(15, 23, 42, 0.10); }
+}
+.explore-cta {
+  animation: explore-pulse 2.4s ease-in-out 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .explore-cta { animation: none; }
+}
+
 /* Modal styles */
 @media (max-width: 640px) {
   .modal-container {
