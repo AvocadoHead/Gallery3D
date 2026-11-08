@@ -1,3 +1,4 @@
+import ResilientImage from './ResilientImage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MediaItem, TITLE_SIZE_PX, createTextItem } from '../constants';
 import type { TitleStyle } from './FloatingGallery';
@@ -68,7 +69,7 @@ const ItemMedia: React.FC<{ item: MediaItem; titleDefaults: TitleStyle; previewA
           onLoadedMetadata={(v) => { if (v.videoWidth && v.videoHeight) onRatio?.(v.videoWidth / v.videoHeight); }}
         />
       ) : (
-        <img
+        <ResilientImage
           src={thumb}
           alt={item.title || 'art'}
           className="w-full h-full object-cover"

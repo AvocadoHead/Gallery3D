@@ -1,6 +1,7 @@
+import ResilientImage from './ResilientImage';
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, Float, Html } from '@react-three/drei';
+import { OrbitControls, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import {
   getSphereCoordinates,
@@ -167,11 +168,11 @@ const GalleryItem = ({
       return (
         <>
           {thumb && (
-            <img
+            <ResilientImage
               src={thumb}
               alt={item.title || 'art'}
               className="absolute inset-0 w-full h-full object-contain rounded-xl"
-              loading="lazy"
+              loading={index < 6 ? "eager" : "lazy"}
               decoding="async"
               referrerPolicy="no-referrer"
               onLoad={(e) => { const el = e.currentTarget; handleSize(el.naturalWidth, el.naturalHeight); }}
@@ -210,11 +211,11 @@ const GalleryItem = ({
 
     return (
       <>
-        <img
+        <ResilientImage
           src={thumb}
           alt={item.title || 'art'}
           className={`w-full h-full object-contain rounded-xl ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          loading="lazy"
+          loading={index < 6 ? "eager" : "lazy"}
           decoding="async"
           referrerPolicy="no-referrer"
           onLoad={(e) => {
@@ -370,7 +371,7 @@ const GalleryScene: React.FC<GallerySceneProps> = ({
   return (
     <>
       <ambientLight intensity={1} />
-      <Environment preset="city" />
+      {/* Cards are HTML, not lit meshes. An external HDR must never gate them. */}
 
       <group frustumCulled={false}>
         {items.map((item, i) => (
